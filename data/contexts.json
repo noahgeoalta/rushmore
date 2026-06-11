@@ -1,0 +1,130 @@
+{
+  "_readme": "RUSHMORE's single source of truth. Every context, tile source, and launchpad link lives here. Adding a new venture = adding a context object. Replace every REPLACE_ME with the real URL (open the page once, copy from the address bar).",
+  "contexts": [
+    {
+      "id": "geoalta",
+      "name": "GeoAlta",
+      "initials": "GA",
+      "accent": "#D9A441",
+      "mail": { "mailbox": "noah@geoalta.com" },
+      "sharepoint": [
+        { "label": "GeoAlta Team Site", "url": "REPLACE_ME" }
+      ],
+      "github": {
+        "account": "work",
+        "boards": [
+          { "label": "GeoAlta Board", "url": "REPLACE_ME" }
+        ],
+        "repos": [
+          { "label": "GeoAlta Repo", "url": "REPLACE_ME" }
+        ]
+      },
+      "launchpad": [
+        { "label": "Claude: GeoAlta Priv", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: GeoAlta Website", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: Meeting Organizer", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: QuestLog Project Creator", "url": "REPLACE_ME", "group": "Claude" }
+      ]
+    },
+    {
+      "id": "geocomforter",
+      "name": "GeoComforter",
+      "initials": "GC",
+      "accent": "#5BA8A0",
+      "mail": { "mailbox": "noah@geoalta.com", "note": "GeoComforter mail flows through the GeoAlta inbox" },
+      "sharepoint": [
+        { "label": "Business Growth Site", "url": "REPLACE_ME" },
+        { "label": "Business Development Site", "url": "REPLACE_ME" }
+      ],
+      "github": {
+        "account": "work",
+        "boards": [
+          { "label": "Development Board", "url": "REPLACE_ME" },
+          { "label": "Business Board", "url": "REPLACE_ME" }
+        ],
+        "repos": [
+          { "label": "GeoComforter Repo", "url": "REPLACE_ME" }
+        ]
+      },
+      "launchpad": [
+        { "label": "Claude: Riipen Overlord", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: GeoComforter QuestLog", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Riipen platform", "url": "https://app.riipen.com", "group": "Web" }
+      ]
+    },
+    {
+      "id": "nmgco",
+      "name": "NMGCO",
+      "initials": "NM",
+      "accent": "#B0653A",
+      "mail": null,
+      "sharepoint": [
+        { "label": "NMGCO Site", "url": "REPLACE_ME" }
+      ],
+      "github": {
+        "account": "work",
+        "boards": [
+          { "label": "NMGCO Board", "url": "REPLACE_ME" }
+        ],
+        "repos": [
+          { "label": "NMGCO Repo", "url": "REPLACE_ME" }
+        ]
+      },
+      "launchpad": [
+        { "label": "Claude: NMGCO QuestLog", "url": "REPLACE_ME", "group": "Claude" }
+      ]
+    },
+    {
+      "id": "chronoslate",
+      "name": "ChronoSlate",
+      "initials": "CS",
+      "accent": "#7D8CC4",
+      "mail": { "mailbox": "noah@geoalta.com", "note": "ChronoSlate mail flows through the GeoAlta inbox" },
+      "sharepoint": [
+        { "label": "ChronoSlate folder (GeoAlta Team Site)", "url": "REPLACE_ME" }
+      ],
+      "github": {
+        "account": "work",
+        "boards": [
+          { "label": "Development Board", "url": "REPLACE_ME" },
+          { "label": "Business Board", "url": "REPLACE_ME" }
+        ],
+        "repos": [
+          { "label": "ChronoSlate Repo", "url": "REPLACE_ME" }
+        ]
+      },
+      "launchpad": [
+        { "label": "Claude: ChronoSlate QuestLog", "url": "REPLACE_ME", "group": "Claude" }
+      ]
+    },
+    {
+      "id": "personal",
+      "name": "Personal",
+      "initials": "P",
+      "accent": "#9B7BB8",
+      "mail": null,
+      "sharepoint": [],
+      "onedrive": { "label": "Personal OneDrive", "url": "https://onedrive.live.com" },
+      "github": {
+        "account": "personal",
+        "boards": [
+          { "label": "The Order Board", "url": "REPLACE_ME" },
+          { "label": "TheGame Development Board", "url": "REPLACE_ME" }
+        ],
+        "repos": [
+          { "label": "The Order Repo", "url": "REPLACE_ME" },
+          { "label": "TheGame Development Repo", "url": "REPLACE_ME" }
+        ]
+      },
+      "launchpad": [
+        { "label": "Claude: TheGame Development", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: Doctrine and Order", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: Life", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: Helforge", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Gmail", "url": "https://mail.google.com", "group": "Web" },
+        { "label": "NoahTube", "url": "https://studio.youtube.com", "group": "Web" },
+        { "label": "RBC", "url": "https://www.rbcroyalbank.com", "group": "Web" }
+      ]
+    }
+  ]
+}
