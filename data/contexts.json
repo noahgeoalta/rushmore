@@ -108,19 +108,20 @@
       "github": {
         "account": "personal",
         "boards": [
-          { "label": "The Order Board", "url": "https://github.com/noahgeoalta/The-Order" },
-          { "label": "TheGame Development Board", "url": "REPLACE_ME" }
+          { "label": "The Order Board", "url": "https://github.com/users/noahgeoalta/projects/4" },
+          { "label": "TheGame Development Board", "url": "https://github.com/users/noahgeoalta/projects/2" }
         ],
         "repos": [
-          { "label": "The Order Repo", "url": "REPLACE_ME" },
-          { "label": "TheGame Development Repo", "url": "REPLACE_ME" }
+          { "label": "The Order Repo", "url": "https://github.com/noahgeoalta/The-Order" },
+          { "label": "TheGame Development Repo", "url": "https://github.com/noahgeoalta/TheGame" }
         ]
       },
       "launchpad": [
-        { "label": "Claude: TheGame Development", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: Doctrine and Order", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: Life", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: Helforge", "url": "REPLACE_ME", "group": "Claude" },
+        { "label": "Claude: TheGame Development", "url": "https://claude.ai/project/019e4c88-bb37-757c-9641-1f749649c6ba", "group": "Claude" },
+        { "label": "Claude: Gaming", "url": "https://claude.ai/project/019e999d-a513-7596-b006-f7e46b9b1b4a", "group": "Claude" },
+        { "label": "Claude: Doctrine and Order", "url": "https://claude.ai/project/019e7648-3eb7-7486-a193-0abd64fe3aeb", "group": "Claude" },
+        { "label": "Claude: Life", "url": "https://claude.ai/project/019e999b-6b94-727f-9569-ea07f188c22b", "group": "Claude" },
+        { "label": "Claude: Helforge", "url": "https://claude.ai/project/019e999a-5542-7048-8c0a-87808f862ea4", "group": "Claude" },
         { "label": "Gmail", "url": "https://mail.google.com", "group": "Web" },
         { "label": "NoahTube", "url": "https://studio.youtube.com", "group": "Web" },
         { "label": "RBC", "url": "https://www.rbcroyalbank.com", "group": "Web" }
