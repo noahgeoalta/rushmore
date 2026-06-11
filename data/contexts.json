@@ -8,22 +8,22 @@
       "accent": "#D9A441",
       "mail": { "mailbox": "noah@geoalta.com" },
       "sharepoint": [
-        { "label": "GeoAlta Team Site", "url": "REPLACE_ME" }
+        { "label": "GeoAlta Team Site", "url": "https://geoalta.sharepoint.com/Shared%20Documents/Forms/AllItems.aspx?id=%2FShared%20Documents%2FGeoAlta&viewid=81b6eca8%2Dbc4d%2D47ad%2D9697%2D2d88ee5ffe27" }
       ],
       "github": {
         "account": "work",
         "boards": [
-          { "label": "GeoAlta Board", "url": "REPLACE_ME" }
+          { "label": "GeoAlta Board", "url": "https://github.com/GeoAltaSolutions/GeoAlta-QuestLog/projects?query=is%3Aopen" }
         ],
         "repos": [
-          { "label": "GeoAlta Repo", "url": "REPLACE_ME" }
+          { "label": "GeoAlta Repo", "url": "https://github.com/GeoAltaSolutions/GeoAlta-QuestLog" }
         ]
       },
       "launchpad": [
-        { "label": "Claude: GeoAlta Priv", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: GeoAlta Website", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: Meeting Organizer", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: QuestLog Project Creator", "url": "REPLACE_ME", "group": "Claude" }
+        { "label": "Claude: GeoAlta Priv", "url": "https://claude.ai/project/019d4049-52da-76a2-84a0-899b1afac517", "group": "Claude" },
+        { "label": "Claude: GeoAlta Website", "url": "https://claude.ai/project/019c97fb-5fad-73ef-acb5-0ba5ad7a9d3c", "group": "Claude" },
+        { "label": "Claude: Meeting Organizer", "url": "https://claude.ai/project/019e8555-1dfd-7065-8a5e-80994b92d1cb", "group": "Claude" },
+        { "label": "Claude: QuestLog Project Creator", "url": "https://claude.ai/project/019e3c62-974d-74d0-8034-b18fdefb3837", "group": "Claude" }
       ]
     },
     {
@@ -33,23 +33,23 @@
       "accent": "#5BA8A0",
       "mail": { "mailbox": "noah@geoalta.com", "note": "GeoComforter mail flows through the GeoAlta inbox" },
       "sharepoint": [
-        { "label": "Business Growth Site", "url": "REPLACE_ME" },
-        { "label": "Business Development Site", "url": "REPLACE_ME" }
+        { "label": "Business Growth Site", "url": "https://geoalta.sharepoint.com/sites/GeoAltaBusinessGrowth/SitePages/ProjectHome.aspx" },
+        { "label": "Comforter Development", "url": "https://geoalta.sharepoint.com/sites/ComforterDevelopmentTeam/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FComforterDevelopmentTeam%2FShared%20Documents%2FGeoComforter%20Development&viewid=07cff1dd%2Daf08%2D480b%2Dabba%2D0c24c23f2b16" }
       ],
       "github": {
         "account": "work",
         "boards": [
-          { "label": "Development Board", "url": "REPLACE_ME" },
-          { "label": "Business Board", "url": "REPLACE_ME" }
+          { "label": "Development Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/22/views/1" },
+          { "label": "Business Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/23/views/1" }
         ],
         "repos": [
-          { "label": "GeoComforter Repo", "url": "REPLACE_ME" }
+          { "label": "GeoComforter Repo", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog" }
         ]
       },
       "launchpad": [
-        { "label": "Claude: Riipen Overlord", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Claude: GeoComforter QuestLog", "url": "REPLACE_ME", "group": "Claude" },
-        { "label": "Riipen platform", "url": "https://app.riipen.com", "group": "Web" }
+        { "label": "Claude: Riipen Overlord", "url": "https://claude.ai/project/019eb41b-8b12-7374-b999-1d56201a08bb", "group": "Claude" },
+        { "label": "Claude: GeoComforter QuestLog", "url": "https://claude.ai/project/019e7b93-37d0-738f-b073-9d8a557cfcd6", "group": "Claude" },
+        { "label": "Riipen platform", "url": "https://app.riipen.com/emp/dashboard", "group": "Web" }
       ]
     },
     {
@@ -59,19 +59,19 @@
       "accent": "#B0653A",
       "mail": null,
       "sharepoint": [
-        { "label": "NMGCO Site", "url": "REPLACE_ME" }
+        { "label": "NMGCO Site", "url": "https://geoalta.sharepoint.com/sites/NMGCO-Internal/Shared%20Documents/Forms/AllItems.aspx" }
       ],
       "github": {
         "account": "work",
         "boards": [
-          { "label": "NMGCO Board", "url": "REPLACE_ME" }
+          { "label": "NMGCO Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/21" }
         ],
         "repos": [
-          { "label": "NMGCO Repo", "url": "REPLACE_ME" }
+          { "label": "NMGCO Repo", "url": "https://github.com/GeoAltaSolutions/NMGCO-QuestLog" }
         ]
       },
       "launchpad": [
-        { "label": "Claude: NMGCO QuestLog", "url": "REPLACE_ME", "group": "Claude" }
+        { "label": "Claude: NMGCO QuestLog", "url": "https://claude.ai/project/019e7b93-adbd-7118-b9a0-9782a89db928", "group": "Claude" }
       ]
     },
     {
@@ -81,20 +81,20 @@
       "accent": "#7D8CC4",
       "mail": { "mailbox": "noah@geoalta.com", "note": "ChronoSlate mail flows through the GeoAlta inbox" },
       "sharepoint": [
-        { "label": "ChronoSlate folder (GeoAlta Team Site)", "url": "REPLACE_ME" }
+        { "label": "ChronoSlate folder (GeoAlta Team Site)", "url": "https://geoalta.sharepoint.com/Shared%20Documents/Forms/AllItems.aspx?id=%2FShared%20Documents%2FGeoAlta%2FProjects%2FGeoTime&viewid=81b6eca8%2Dbc4d%2D47ad%2D9697%2D2d88ee5ffe27" }
       ],
       "github": {
         "account": "work",
         "boards": [
-          { "label": "Development Board", "url": "REPLACE_ME" },
-          { "label": "Business Board", "url": "REPLACE_ME" }
+          { "label": "Development Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/19/views/1" },
+          { "label": "Business Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/20" }
         ],
         "repos": [
-          { "label": "ChronoSlate Repo", "url": "REPLACE_ME" }
+          { "label": "ChronoSlate Repo", "url": "https://github.com/GeoAltaSolutions/ChronoSlate-QuestLog" }
         ]
       },
       "launchpad": [
-        { "label": "Claude: ChronoSlate QuestLog", "url": "REPLACE_ME", "group": "Claude" }
+        { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude" }
       ]
     },
     {
@@ -108,7 +108,7 @@
       "github": {
         "account": "personal",
         "boards": [
-          { "label": "The Order Board", "url": "REPLACE_ME" },
+          { "label": "The Order Board", "url": "https://github.com/noahgeoalta/The-Order" },
           { "label": "TheGame Development Board", "url": "REPLACE_ME" }
         ],
         "repos": [
