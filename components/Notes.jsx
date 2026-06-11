@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const KEY = "rushmore-notes-v2";
-const MAX_HISTORY = 60;
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const blankNode = (bullet = false) => ({ id: uid(), text: "", bullet, collapsed: false, fontSize: 14, children: [] });
 
 function seedTree() {
   return [
-    { id: uid(), text: "Hours — June 2026", bullet: false, collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Jun 11 — ", bullet: true, collapsed: false, fontSize: 14, children: [] },
+    { id: uid(), text: "Hours \u2014 June 2026", bullet: false, collapsed: false, fontSize: 18, children: [
+      { id: uid(), text: "Jun 11 \u2014 ", bullet: true, collapsed: false, fontSize: 14, children: [] },
     ]},
     { id: uid(), text: "Next steps", bullet: false, collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Enter = plain line · Ctrl+. = toggle bullet · indented line inherits bullet", bullet: true, collapsed: false, fontSize: 14, children: [] },
+      { id: uid(), text: "Enter = plain line  \u00b7  Ctrl+. = toggle bullet  \u00b7  indented line inherits bullet", bullet: true, collapsed: false, fontSize: 14, children: [] },
     ]},
   ];
 }
@@ -44,32 +43,29 @@ function visibleIds(nodes, out = []) {
 
 function serializeNode(node, depth = 0) {
   const indent = "  ".repeat(depth);
-  const prefix = node.bullet ? "\u2022 " : "";
-  const lines = [`${indent}${prefix}${node.text}`];
+  const prefix = node.bullet ? "* " : "";
+  const lines = [indent + prefix + node.text];
   for (const c of node.children) lines.push(...serializeNode(c, depth + 1));
   return lines;
 }
 
-function parseLines(lines, parentBullet = false) {
+function parseLines(lines) {
   const nodes = [];
   let i = 0;
   while (i < lines.length) {
     const raw = lines[i];
     const spaces = raw.match(/^( *)/)[1].length;
-    const depth = Math.floor(spaces / 2);
-    if (depth > 0) { i++; continue; }
+    if (spaces > 0) { i++; continue; }
     const content = raw.trimStart();
-    const isBullet = content.startsWith("\u2022 ") || parentBullet;
-    const text = content.startsWith("\u2022 ") ? content.slice(2) : content;
+    const isBullet = content.startsWith("* ");
+    const text = isBullet ? content.slice(2) : content;
     const childLines = [];
     let j = i + 1;
-    while (j < lines.length) {
-      const s = lines[j].match(/^( *)/)[1].length;
-      if (s === 0) break;
+    while (j < lines.length && lines[j].match(/^( *)/)[1].length > 0) {
       childLines.push(lines[j].slice(2));
       j++;
     }
-    nodes.push({ id: uid(), text, bullet: isBullet, collapsed: false, fontSize: 14, children: parseLines(childLines, isBullet) });
+    nodes.push({ id: uid(), text, bullet: isBullet, collapsed: false, fontSize: 14, children: parseLines(childLines) });
     i = j;
   }
   return nodes;
@@ -82,6 +78,7 @@ export default function Notes() {
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [focusId, setFocusId] = useState(null);
+  const [focusCaret, setFocusCaret] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [dragPageId, setDragPageId] = useState(null);
   const [overPageId, setOverPageId] = useState(null);
@@ -91,8 +88,7 @@ export default function Notes() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      const s = raw ? JSON.parse(raw) : defaultState();
-      setState(s); setHistory([]); setFuture([]);
+      setState(raw ? JSON.parse(raw) : defaultState());
     } catch { setState(defaultState()); }
   }, []);
 
@@ -101,15 +97,23 @@ export default function Notes() {
   }, [state]);
 
   useEffect(() => {
-    if (focusId && inputs.current[focusId]) { inputs.current[focusId].focus(); setFocusId(null); }
-  }, [focusId, state]);
+    if (focusId && inputs.current[focusId]) {
+      const el = inputs.current[focusId];
+      el.focus();
+      if (focusCaret !== null) {
+        el.setSelectionRange(focusCaret, focusCaret);
+        setFocusCaret(null);
+      }
+      setFocusId(null);
+    }
+  }, [focusId, focusCaret, state]);
 
   if (!state) return null;
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
 
-  const mutate = (fn, recordHistory = true) => {
+  const mutate = (fn, record = true) => {
     setState((s) => {
-      if (recordHistory) { setHistory((h) => [...h.slice(-60), s]); setFuture([]); }
+      if (record) { setHistory((h) => [...h.slice(-60), s]); setFuture([]); }
       const next = structuredClone(s);
       const pg = next.pages.find((p) => p.id === next.activeId) || next.pages[0];
       fn(pg);
@@ -138,7 +142,7 @@ export default function Notes() {
   };
   const deletePage = (id) => {
     const pg = state.pages.find((p) => p.id === id);
-    if (!confirm(`Delete "${pg.name}"?`)) return;
+    if (!confirm('Delete "' + pg.name + '"?')) return;
     setState((s) => {
       const pages = s.pages.filter((p) => p.id !== id);
       const safe = pages.length ? pages : [{ id: uid(), name: "Main", tree: [blankNode()] }];
@@ -150,7 +154,6 @@ export default function Notes() {
     const name = prompt("Rename:", pg.name);
     if (name) setState((s) => ({ ...s, pages: s.pages.map((p) => p.id === id ? { ...p, name } : p) }));
   };
-
   const onPageDragStart = (id) => setDragPageId(id);
   const onPageDrop = (targetId) => {
     if (!dragPageId || dragPageId === targetId) return;
@@ -209,16 +212,39 @@ export default function Notes() {
     h.parentList.splice(h.parentIndex + 1, 0, node);
   });
 
-  const removeNode = (id) => {
-    let ft = null;
-    mutate((pg) => {
-      const order = visibleIds(pg.tree); const pos = order.indexOf(id);
-      ft = order[pos - 1] || order[pos + 1] || null;
-      const h = locate(pg.tree, id); if (!h) return;
-      h.list.splice(h.index, 1);
-      if (!pg.tree.length) pg.tree.push(blankNode());
-    });
-    if (ft) setFocusId(ft);
+  const backspaceNode = (id, curText, caretPos) => {
+    if (caretPos > 0) return false;
+    if (curText === "") {
+      let ft = null;
+      mutate((pg) => {
+        const order = visibleIds(pg.tree);
+        const pos = order.indexOf(id);
+        ft = order[pos - 1] || null;
+        const h = locate(pg.tree, id); if (!h) return;
+        h.list.splice(h.index, 1);
+        if (!pg.tree.length) pg.tree.push(blankNode());
+      });
+      if (ft) setFocusId(ft);
+      return true;
+    } else {
+      const order = visibleIds(page.tree);
+      const pos = order.indexOf(id);
+      if (pos === 0) return false;
+      const prevId = order[pos - 1];
+      let prevLen = 0;
+      mutate((pg) => {
+        const prev = locate(pg.tree, prevId);
+        const curr = locate(pg.tree, id);
+        if (!prev || !curr) return;
+        prevLen = prev.node.text.length;
+        prev.node.text += curr.node.text;
+        curr.list.splice(curr.index, 1);
+        if (!pg.tree.length) pg.tree.push(blankNode());
+      });
+      setFocusId(prevId);
+      setFocusCaret(prevLen);
+      return true;
+    }
   };
 
   const moveVert = (id, dir) => mutate((pg) => {
@@ -284,7 +310,7 @@ export default function Notes() {
 
   const onKeyDown = (e, id) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
-    if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "z"))) { e.preventDefault(); redo(); return; }
+    if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "c" && e.target.selectionStart === e.target.selectionEnd) { e.preventDefault(); copyNode(id); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAtNode(id); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); toggleBullet(id); return; }
@@ -294,11 +320,16 @@ export default function Notes() {
     if (e.shiftKey && e.altKey && e.key === "ArrowLeft") { e.preventDefault(); outdent(id); return; }
     if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(id) : indent(id); return; }
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addLine(id); return; }
-    if (e.key === "Backspace" && e.target.value === "") { e.preventDefault(); removeNode(id); return; }
+    if (e.key === "Backspace") {
+      const handled = backspaceNode(id, e.target.value, e.target.selectionStart);
+      if (handled) e.preventDefault();
+      return;
+    }
     if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); moveVert(id, -1); return; }
     if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); moveVert(id, 1); return; }
     if (!e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      const order = visibleIds(page.tree); const pos = order.indexOf(id);
+      const order = visibleIds(page.tree);
+      const pos = order.indexOf(id);
       const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)];
       if (next) { e.preventDefault(); inputs.current[next]?.focus(); }
     }
@@ -319,28 +350,30 @@ export default function Notes() {
             onDrop={(e) => onDrop(e, n.id)}
           >
             <button
-              className={`ol-caret ${n.children.length?"has-kids":""} ${n.collapsed?"collapsed":""}`}
+              className={"ol-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")}
               onClick={(e) => { e.stopPropagation(); toggle(n.id); }}
               tabIndex={-1}
             >
               {n.children.length ? (n.collapsed ? "\u25b6" : "\u25bc") : ""}
             </button>
             {n.bullet
-              ? <span className={`ol-bullet ${n.collapsed&&n.children.length?"has-hidden":""}`}>\u2022</span>
+              ? <span className={"ol-bullet" + (n.collapsed && n.children.length ? " has-hidden" : "")}>\u2022</span>
               : <span className="ol-bullet-spacer" />
             }
             <input
               className="ol-input"
               ref={(el) => (inputs.current[n.id] = el)}
-              style={{ fontSize: `${n.fontSize||14}px` }}
+              style={{ fontSize: (n.fontSize || 14) + "px" }}
               value={n.text}
-              placeholder="\u2026"
+              placeholder="..."
               onChange={(e) => setText(n.id, e.target.value)}
               onKeyDown={(e) => onKeyDown(e, n.id)}
               onFocus={() => setFocusedId(n.id)}
             />
           </div>
-          {!n.collapsed && n.children.length > 0 && <div className="ol-kids">{renderNodes(n.children)}</div>}
+          {!n.collapsed && n.children.length > 0 && (
+            <div className="ol-kids">{renderNodes(n.children)}</div>
+          )}
         </div>
       );
     });
@@ -351,7 +384,7 @@ export default function Notes() {
         {state.pages.map((p) => (
           <button
             key={p.id}
-            className={`page-tab ${p.id===state.activeId?"active":""} ${overPageId===p.id&&dragPageId!==p.id?"page-drag-over":""}`}
+            className={"page-tab" + (p.id===state.activeId?" active":"") + (overPageId===p.id&&dragPageId!==p.id?" page-drag-over":"")}
             draggable
             onDragStart={() => onPageDragStart(p.id)}
             onDragEnd={() => { setDragPageId(null); setOverPageId(null); }}
@@ -360,23 +393,23 @@ export default function Notes() {
             onDrop={() => onPageDrop(p.id)}
             onClick={() => setState((s) => ({ ...s, activeId: p.id }))}
             onDoubleClick={() => renamePage(p.id)}
-            title="Double-click to rename \u00b7 drag to reorder"
+            title="Double-click to rename, drag to reorder"
           >
             {p.name}
-            {state.pages.length > 1 && <span className="x" onClick={(e) => { e.stopPropagation(); deletePage(p.id); }}>\u00d7</span>}
+            <span className="x" title="Delete page" onClick={(e) => { e.stopPropagation(); deletePage(p.id); }}>x</span>
           </button>
         ))}
         <button className="page-tab new" onClick={addPage}>+ New page</button>
         <div className="notes-toolbar">
-          <button className="notes-btn" title="Undo (Ctrl+Z)" onClick={undo} disabled={!history.length}>\u21a9</button>
-          <button className="notes-btn" title="Redo (Ctrl+Y)" onClick={redo} disabled={!future.length}>\u21aa</button>
+          <button className="notes-btn" title="Undo (Ctrl+Z)" onClick={undo} disabled={!history.length}>Undo</button>
+          <button className="notes-btn" title="Redo (Ctrl+Y)" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
           <button className="notes-btn" title="Font smaller (Ctrl+Shift+-)" onClick={() => focusedId && changeFontSize(focusedId, -2)}>A-</button>
           <button className="notes-btn" title="Font larger (Ctrl+Shift+.)" onClick={() => focusedId && changeFontSize(focusedId, 2)}>A+</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Toggle bullet (Ctrl+.)" onClick={() => focusedId && toggleBullet(focusedId)}>\u2022</button>
+          <button className="notes-btn" title="Toggle bullet (Ctrl+.)" onClick={() => focusedId && toggleBullet(focusedId)}>Bullet</button>
         </div>
-        <span className="notes-hint">Shift+Alt+\u2190/\u2192 indent \u00b7 drag row \u00b7 Ctrl+C/V copies structure</span>
+        <span className="notes-hint">Shift+Alt+left/right indent  |  drag row  |  Ctrl+C/V copies structure</span>
       </div>
       <div className="outliner">{renderNodes(page.tree)}</div>
     </>
