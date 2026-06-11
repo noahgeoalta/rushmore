@@ -2,17 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const KEY = "rushmore-notes-v2";
+const KEY = "rushmore-notes-v3";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-const blankNode = (bullet = false) => ({ id: uid(), text: "", bullet, collapsed: false, fontSize: 14, children: [] });
+
+// type: "none" | "bullet" | "number"
+const blankNode = (type = "none") => ({ id: uid(), text: "", type, collapsed: false, fontSize: 14, children: [] });
+
+const BULLET_CHAR = String.fromCharCode(8226); // •
+const COLLAPSE_CLOSED = String.fromCharCode(9654); // ▶
+const COLLAPSE_OPEN = String.fromCharCode(9660); // ▼
 
 function seedTree() {
   return [
-    { id: uid(), text: "Hours \u2014 June 2026", bullet: false, collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Jun 11 \u2014 ", bullet: true, collapsed: false, fontSize: 14, children: [] },
+    { id: uid(), text: "Hours — June 2026", type: "none", collapsed: false, fontSize: 18, children: [
+      { id: uid(), text: "Jun 11 — ", type: "bullet", collapsed: false, fontSize: 14, children: [] },
     ]},
-    { id: uid(), text: "Next steps", bullet: false, collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Enter = plain line  \u00b7  Ctrl+. = toggle bullet  \u00b7  indented line inherits bullet", bullet: true, collapsed: false, fontSize: 14, children: [] },
+    { id: uid(), text: "Next steps", type: "none", collapsed: false, fontSize: 18, children: [
+      { id: uid(), text: "Enter = plain  ·  Ctrl+. = bullet  ·  Ctrl+/ = numbered  ·  inherits on indent", type: "bullet", collapsed: false, fontSize: 14, children: [] },
     ]},
   ];
 }
@@ -20,6 +26,20 @@ function seedTree() {
 function defaultState() {
   const main = { id: uid(), name: "Main", tree: seedTree() };
   return { pages: [main], activeId: main.id };
+}
+
+function migrateNode(n) {
+  if (typeof n.bullet === "boolean") { n.type = n.bullet ? "bullet" : "none"; delete n.bullet; }
+  if (!n.type) n.type = "none";
+  if (!n.fontSize) n.fontSize = 14;
+  if (!n.children) n.children = [];
+  n.children = n.children.map(migrateNode);
+  return n;
+}
+function migrateState(s) {
+  if (!s || !s.pages) return defaultState();
+  s.pages = s.pages.map((p) => ({ ...p, tree: (p.tree || []).map(migrateNode) }));
+  return s;
 }
 
 function locate(nodes, id) {
@@ -43,7 +63,7 @@ function visibleIds(nodes, out = []) {
 
 function serializeNode(node, depth = 0) {
   const indent = "  ".repeat(depth);
-  const prefix = node.bullet ? "* " : "";
+  const prefix = node.type === "bullet" ? "* " : node.type === "number" ? "1. " : "";
   const lines = [indent + prefix + node.text];
   for (const c of node.children) lines.push(...serializeNode(c, depth + 1));
   return lines;
@@ -57,18 +77,22 @@ function parseLines(lines) {
     const spaces = raw.match(/^( *)/)[1].length;
     if (spaces > 0) { i++; continue; }
     const content = raw.trimStart();
-    const isBullet = content.startsWith("* ");
-    const text = isBullet ? content.slice(2) : content;
+    let type = "none", text = content;
+    if (content.startsWith("* ")) { type = "bullet"; text = content.slice(2); }
+    else if (/^\d+\. /.test(content)) { type = "number"; text = content.replace(/^\d+\. /, ""); }
     const childLines = [];
     let j = i + 1;
-    while (j < lines.length && lines[j].match(/^( *)/)[1].length > 0) {
-      childLines.push(lines[j].slice(2));
-      j++;
-    }
-    nodes.push({ id: uid(), text, bullet: isBullet, collapsed: false, fontSize: 14, children: parseLines(childLines) });
+    while (j < lines.length && lines[j].match(/^( *)/)[1].length > 0) { childLines.push(lines[j].slice(2)); j++; }
+    nodes.push({ id: uid(), text, type, collapsed: false, fontSize: 14, children: parseLines(childLines) });
     i = j;
   }
   return nodes;
+}
+
+function getNumberInList(list, index) {
+  let n = 0;
+  for (let i = 0; i <= index; i++) { if (list[i].type === "number") n++; }
+  return n;
 }
 
 let _dragId = null;
@@ -88,22 +112,19 @@ export default function Notes() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      setState(raw ? JSON.parse(raw) : defaultState());
+      const oldRaw = !raw ? localStorage.getItem("rushmore-notes-v2") : null;
+      const parsed = raw ? JSON.parse(raw) : (oldRaw ? JSON.parse(oldRaw) : null);
+      setState(parsed ? migrateState(parsed) : defaultState());
     } catch { setState(defaultState()); }
   }, []);
 
-  useEffect(() => {
-    if (state) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
-  }, [state]);
+  useEffect(() => { if (state) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} } }, [state]);
 
   useEffect(() => {
     if (focusId && inputs.current[focusId]) {
       const el = inputs.current[focusId];
       el.focus();
-      if (focusCaret !== null) {
-        el.setSelectionRange(focusCaret, focusCaret);
-        setFocusCaret(null);
-      }
+      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
       setFocusId(null);
     }
   }, [focusId, focusCaret, state]);
@@ -121,18 +142,8 @@ export default function Notes() {
     });
   };
 
-  const undo = () => {
-    if (!history.length) return;
-    setFuture((f) => [state, ...f]);
-    setState(history[history.length - 1]);
-    setHistory((h) => h.slice(0, -1));
-  };
-  const redo = () => {
-    if (!future.length) return;
-    setHistory((h) => [...h, state]);
-    setState(future[0]);
-    setFuture((f) => f.slice(1));
-  };
+  const undo = () => { if (!history.length) return; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
+  const redo = () => { if (!future.length) return; setHistory((h) => [...h, state]); setState(future[0]); setFuture((f) => f.slice(1)); };
 
   const addPage = () => {
     const name = prompt("Page name:", "New page");
@@ -154,15 +165,14 @@ export default function Notes() {
     const name = prompt("Rename:", pg.name);
     if (name) setState((s) => ({ ...s, pages: s.pages.map((p) => p.id === id ? { ...p, name } : p) }));
   };
-  const onPageDragStart = (id) => setDragPageId(id);
   const onPageDrop = (targetId) => {
     if (!dragPageId || dragPageId === targetId) return;
     setState((s) => {
       const pages = [...s.pages];
-      const fromIdx = pages.findIndex((p) => p.id === dragPageId);
-      const toIdx = pages.findIndex((p) => p.id === targetId);
-      const [moved] = pages.splice(fromIdx, 1);
-      pages.splice(toIdx, 0, moved);
+      const from = pages.findIndex((p) => p.id === dragPageId);
+      const to = pages.findIndex((p) => p.id === targetId);
+      const [moved] = pages.splice(from, 1);
+      pages.splice(to, 0, moved);
       return { ...s, pages };
     });
     setDragPageId(null); setOverPageId(null);
@@ -171,22 +181,22 @@ export default function Notes() {
   const setText = (id, text) => mutate((pg) => { const h = locate(pg.tree, id); if (h) h.node.text = text; }, false);
 
   const addLine = (id) => {
-    const n = blankNode(false);
+    const n = blankNode("none");
     mutate((pg) => {
-      const h = locate(pg.tree, id);
-      if (!h) return;
-      n.bullet = h.node.bullet;
+      const h = locate(pg.tree, id); if (!h) return;
+      n.type = h.node.type;
       if (h.node.children.length && !h.node.collapsed) {
-        n.bullet = h.node.children[0]?.bullet ?? h.node.bullet;
+        n.type = h.node.children[0]?.type ?? h.node.type;
         h.node.children.unshift(n);
-      } else {
-        h.list.splice(h.index + 1, 0, n);
-      }
+      } else { h.list.splice(h.index + 1, 0, n); }
     });
     setFocusId(n.id);
   };
 
-  const toggleBullet = (id) => mutate((pg) => { const h = locate(pg.tree, id); if (h) h.node.bullet = !h.node.bullet; });
+  const cycleType = (id, targetType) => mutate((pg) => {
+    const h = locate(pg.tree, id); if (!h) return;
+    h.node.type = h.node.type === targetType ? "none" : targetType;
+  });
 
   const indent = (id) => mutate((pg) => {
     const h = locate(pg.tree, id);
@@ -194,7 +204,7 @@ export default function Notes() {
     const prev = h.list[h.index - 1];
     h.list.splice(h.index, 1);
     prev.collapsed = false;
-    h.node.bullet = h.node.bullet || prev.bullet;
+    if (h.node.type === "none") h.node.type = prev.type;
     prev.children.push(h.node);
   });
 
@@ -218,8 +228,7 @@ export default function Notes() {
       let ft = null;
       mutate((pg) => {
         const order = visibleIds(pg.tree);
-        const pos = order.indexOf(id);
-        ft = order[pos - 1] || null;
+        ft = order[order.indexOf(id) - 1] || null;
         const h = locate(pg.tree, id); if (!h) return;
         h.list.splice(h.index, 1);
         if (!pg.tree.length) pg.tree.push(blankNode());
@@ -241,8 +250,7 @@ export default function Notes() {
         curr.list.splice(curr.index, 1);
         if (!pg.tree.length) pg.tree.push(blankNode());
       });
-      setFocusId(prevId);
-      setFocusCaret(prevLen);
+      setFocusId(prevId); setFocusCaret(prevLen);
       return true;
     }
   };
@@ -255,17 +263,12 @@ export default function Notes() {
   });
 
   const toggle = (id) => mutate((pg) => { const h = locate(pg.tree, id); if (h) h.node.collapsed = !h.node.collapsed; }, false);
-
-  const changeFontSize = (id, delta) => mutate((pg) => {
-    const h = locate(pg.tree, id); if (!h) return;
-    h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + delta));
-  });
+  const changeFontSize = (id, delta) => mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + delta)); });
 
   const copyNode = (id) => {
     const h = locate(page.tree, id); if (!h) return;
     navigator.clipboard.writeText(serializeNode(h.node, 0).join("\n")).catch(() => {});
   };
-
   const pasteAtNode = async (id) => {
     try {
       const text = await navigator.clipboard.readText();
@@ -296,12 +299,10 @@ export default function Notes() {
       const dragged = structuredClone(dragH.node);
       dragH.list.splice(dragH.index, 1);
       if (zone === "child") {
-        const tgt = locate(pg.tree, id);
-        if (!tgt) { pg.tree.push(dragged); return; }
+        const tgt = locate(pg.tree, id); if (!tgt) { pg.tree.push(dragged); return; }
         tgt.node.collapsed = false; tgt.node.children.push(dragged);
       } else {
-        const tgt = locate(pg.tree, id);
-        if (!tgt) { pg.tree.push(dragged); return; }
+        const tgt = locate(pg.tree, id); if (!tgt) { pg.tree.push(dragged); return; }
         tgt.list.splice(zone === "before" ? tgt.index : tgt.index + 1, 0, dragged);
       }
     });
@@ -313,18 +314,15 @@ export default function Notes() {
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "c" && e.target.selectionStart === e.target.selectionEnd) { e.preventDefault(); copyNode(id); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAtNode(id); return; }
-    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); toggleBullet(id); return; }
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(id, "bullet"); return; }
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(id, "number"); return; }
     if (e.ctrlKey && e.shiftKey && e.key === ".") { e.preventDefault(); changeFontSize(id, 2); return; }
     if (e.ctrlKey && e.shiftKey && e.key === "-") { e.preventDefault(); changeFontSize(id, -2); return; }
     if (e.shiftKey && e.altKey && e.key === "ArrowRight") { e.preventDefault(); indent(id); return; }
     if (e.shiftKey && e.altKey && e.key === "ArrowLeft") { e.preventDefault(); outdent(id); return; }
     if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(id) : indent(id); return; }
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addLine(id); return; }
-    if (e.key === "Backspace") {
-      const handled = backspaceNode(id, e.target.value, e.target.selectionStart);
-      if (handled) e.preventDefault();
-      return;
-    }
+    if (e.key === "Backspace") { const h = backspaceNode(id, e.target.value, e.target.selectionStart); if (h) e.preventDefault(); return; }
     if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); moveVert(id, -1); return; }
     if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); moveVert(id, 1); return; }
     if (!e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
@@ -336,8 +334,10 @@ export default function Notes() {
   };
 
   const renderNodes = (nodes) =>
-    nodes.map((n) => {
+    nodes.map((n, idx) => {
       const dt = dropTarget?.id === n.id ? dropTarget.zone : null;
+      const num = n.type === "number" ? getNumberInList(nodes, idx) : null;
+      const hasHidden = n.collapsed && n.children.length;
       return (
         <div key={n.id}>
           <div
@@ -354,12 +354,11 @@ export default function Notes() {
               onClick={(e) => { e.stopPropagation(); toggle(n.id); }}
               tabIndex={-1}
             >
-              {n.children.length ? (n.collapsed ? "\u25b6" : "\u25bc") : ""}
+              {n.children.length ? (n.collapsed ? COLLAPSE_CLOSED : COLLAPSE_OPEN) : ""}
             </button>
-            {n.bullet
-              ? <span className={"ol-bullet" + (n.collapsed && n.children.length ? " has-hidden" : "")}>\u2022</span>
-              : <span className="ol-bullet-spacer" />
-            }
+            {n.type === "bullet" && <span className={"ol-marker ol-bullet" + (hasHidden ? " has-hidden" : "")}>{BULLET_CHAR}</span>}
+            {n.type === "number" && <span className={"ol-marker ol-number" + (hasHidden ? " has-hidden" : "")}>{num}.</span>}
+            {n.type === "none" && <span className="ol-marker ol-spacer" />}
             <input
               className="ol-input"
               ref={(el) => (inputs.current[n.id] = el)}
@@ -371,9 +370,7 @@ export default function Notes() {
               onFocus={() => setFocusedId(n.id)}
             />
           </div>
-          {!n.collapsed && n.children.length > 0 && (
-            <div className="ol-kids">{renderNodes(n.children)}</div>
-          )}
+          {!n.collapsed && n.children.length > 0 && <div className="ol-kids">{renderNodes(n.children)}</div>}
         </div>
       );
     });
@@ -386,7 +383,7 @@ export default function Notes() {
             key={p.id}
             className={"page-tab" + (p.id===state.activeId?" active":"") + (overPageId===p.id&&dragPageId!==p.id?" page-drag-over":"")}
             draggable
-            onDragStart={() => onPageDragStart(p.id)}
+            onDragStart={() => setDragPageId(p.id)}
             onDragEnd={() => { setDragPageId(null); setOverPageId(null); }}
             onDragOver={(e) => { e.preventDefault(); setOverPageId(p.id); }}
             onDragLeave={() => setOverPageId(null)}
@@ -404,12 +401,13 @@ export default function Notes() {
           <button className="notes-btn" title="Undo (Ctrl+Z)" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" title="Redo (Ctrl+Y)" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
+          <button className="notes-btn" title="Toggle bullet (Ctrl+.)" onClick={() => focusedId && cycleType(focusedId, "bullet")}>Bullet</button>
+          <button className="notes-btn" title="Toggle numbered (Ctrl+/)" onClick={() => focusedId && cycleType(focusedId, "number")}>1.</button>
+          <span className="notes-sep" />
           <button className="notes-btn" title="Font smaller (Ctrl+Shift+-)" onClick={() => focusedId && changeFontSize(focusedId, -2)}>A-</button>
           <button className="notes-btn" title="Font larger (Ctrl+Shift+.)" onClick={() => focusedId && changeFontSize(focusedId, 2)}>A+</button>
-          <span className="notes-sep" />
-          <button className="notes-btn" title="Toggle bullet (Ctrl+.)" onClick={() => focusedId && toggleBullet(focusedId)}>Bullet</button>
         </div>
-        <span className="notes-hint">Shift+Alt+left/right indent  |  drag row  |  Ctrl+C/V copies structure</span>
+        <span className="notes-hint">Ctrl+. bullet  |  Ctrl+/ number  |  Shift+Alt+left/right indent  |  drag row</span>
       </div>
       <div className="outliner">{renderNodes(page.tree)}</div>
     </>

@@ -112,7 +112,7 @@ a { color: inherit; text-decoration: none; }
 .page-tab { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; background: var(--chip); border: 1px solid var(--chip-edge); border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--dim); cursor: pointer; }
 .page-tab:hover { background: #2e2e2e; color: var(--text); }
 .page-tab.active { background: var(--claude-bg); border-color: var(--claude-edge); color: var(--claude-text); }
-.page-tab .x { color: var(--faint); font-size: 13px; line-height: 1; padding: 0 2px; font-style: normal; }
+.page-tab .x { color: var(--faint); font-size: 13px; line-height: 1; padding: 0 2px; }
 .page-tab .x:hover { color: #ff4444; }
 .page-tab.new { border-style: dashed; color: var(--faint); }
 .page-tab.new:hover { border-style: solid; color: var(--text); }
@@ -134,9 +134,11 @@ a { color: inherit; text-decoration: none; }
 .ol-row:hover .ol-caret.has-kids { visibility: visible; color: var(--dim); }
 .ol-caret.collapsed { visibility: visible; color: var(--claude-text); }
 .ol-caret.has-kids:hover { color: var(--text); }
-.ol-bullet { width: 18px; height: 28px; display: grid; place-items: center; color: var(--faint); font-size: 13px; flex-shrink: 0; user-select: none; }
-.ol-bullet.has-hidden { color: var(--claude-text); text-shadow: 0 0 6px rgba(255,140,58,0.5); }
-.ol-bullet-spacer { width: 18px; height: 28px; flex-shrink: 0; }
+.ol-marker { min-width: 24px; height: 28px; display: grid; place-items: center; flex-shrink: 0; user-select: none; font-size: 13px; }
+.ol-bullet { color: var(--faint); }
+.ol-number { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ol-spacer { min-width: 24px; }
+.ol-bullet.has-hidden, .ol-number.has-hidden { color: var(--claude-text); text-shadow: 0 0 6px rgba(255,140,58,0.5); }
 .ol-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font: inherit; padding: 3px 6px; min-width: 0; cursor: text; }
 .ol-input::placeholder { color: #3a3a3a; }
 .ol-kids { margin-left: 26px; border-left: 1px solid #242424; padding-left: 4px; }
