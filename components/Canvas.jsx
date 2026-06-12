@@ -31,6 +31,7 @@ function numInList(list, idx) {
 }
 
 function parseHtmlToLines(html) {
+  if (typeof document === "undefined") return [];
   const div = document.createElement("div");
   div.innerHTML = html;
   const lines = [];
