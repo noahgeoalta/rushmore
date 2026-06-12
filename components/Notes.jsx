@@ -8,9 +8,9 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 // type: "none" | "bullet" | "number"
 const blankNode = (type = "none") => ({ id: uid(), text: "", type, collapsed: false, fontSize: 14, children: [] });
 
-const BULLET_CHAR = String.fromCharCode(8226); // •
-const COLLAPSE_CLOSED = String.fromCharCode(9654); // ▶
-const COLLAPSE_OPEN = String.fromCharCode(9660); // ▼
+const BULLET_CHAR = String.fromCharCode(8226);
+const COLLAPSE_CLOSED = String.fromCharCode(9654);
+const COLLAPSE_OPEN = String.fromCharCode(9660);
 
 function seedTree() {
   return [
@@ -128,10 +128,7 @@ export default function Notes() {
       const el = inputs.current[focusId];
       if (!el) return;
       el.focus();
-      if (focusCaret !== null) {
-        el.setSelectionRange(focusCaret, focusCaret);
-        setFocusCaret(null);
-      }
+      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
       setFocusId(null);
     };
     tryFocus();
@@ -206,10 +203,7 @@ export default function Notes() {
   };
 
   const cycleType = (id, targetType) => {
-    mutate((pg) => {
-      const h = locate(pg.tree, id); if (!h) return;
-      h.node.type = h.node.type === targetType ? "none" : targetType;
-    });
+    mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.node.type = h.node.type === targetType ? "none" : targetType; });
     setFocusId(id);
   };
 
@@ -245,11 +239,12 @@ export default function Notes() {
   const backspaceNode = (id, curText, caretPos) => {
     if (caretPos > 0) return false;
     if (curText === "") {
-      let ft = null, ftLen = 0;
+      // Capture target BEFORE mutate so setState closure doesn't stale it
+      const order = visibleIds(page.tree);
+      const ft = order[order.indexOf(id) - 1] || null;
+      const fth = ft ? locate(page.tree, ft) : null;
+      const ftLen = fth ? fth.node.text.length : 0;
       mutate((pg) => {
-        const order = visibleIds(pg.tree);
-        ft = order[order.indexOf(id) - 1] || null;
-        if (ft) { const fth = locate(pg.tree, ft); if (fth) ftLen = fth.node.text.length; }
         const h = locate(pg.tree, id); if (!h) return;
         h.list.splice(h.index, 1);
         if (!pg.tree.length) pg.tree.push(blankNode());
@@ -370,9 +365,6 @@ export default function Notes() {
         <div key={n.id}>
           <div
             className={["ol-row", dt==="before"?"drop-before":"", dt==="after"?"drop-after":"", dt==="child"?"drop-child":""].filter(Boolean).join(" ")}
-            draggable
-            onDragStart={() => onDragStart(n.id)}
-            onDragEnd={onDragEnd}
             onDragOver={(e) => onDragOver(e, n.id)}
             onDragLeave={(e) => { e.stopPropagation(); setDropTarget(null); }}
             onDrop={(e) => onDrop(e, n.id)}
@@ -384,9 +376,15 @@ export default function Notes() {
             >
               {n.children.length ? (n.collapsed ? COLLAPSE_CLOSED : COLLAPSE_OPEN) : ""}
             </button>
-            {n.type === "bullet" && <span className={"ol-marker ol-bullet" + (hasHidden ? " has-hidden" : "")}>{BULLET_CHAR}</span>}
-            {n.type === "number" && <span className={"ol-marker ol-number" + (hasHidden ? " has-hidden" : "")}>{num}.</span>}
-            {n.type === "none" && <span className="ol-marker ol-spacer" />}
+            {n.type === "bullet" && (
+              <span className={"ol-marker ol-bullet drag-handle" + (hasHidden ? " has-hidden" : "")} draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move">{BULLET_CHAR}</span>
+            )}
+            {n.type === "number" && (
+              <span className={"ol-marker ol-number drag-handle" + (hasHidden ? " has-hidden" : "")} draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move">{num}.</span>
+            )}
+            {n.type === "none" && (
+              <span className="ol-marker ol-spacer drag-handle" draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move" />
+            )}
             <input
               className="ol-input"
               ref={(el) => (inputs.current[n.id] = el)}
@@ -435,7 +433,7 @@ export default function Notes() {
           <button className="notes-btn" title="Font smaller (Ctrl+Shift+-)" onClick={() => focusedId && changeFontSize(focusedId, -2)}>A-</button>
           <button className="notes-btn" title="Font larger (Ctrl+Shift+.)" onClick={() => focusedId && changeFontSize(focusedId, 2)}>A+</button>
         </div>
-        <span className="notes-hint">Ctrl+. bullet  |  Ctrl+/ number  |  Shift+Alt+left/right indent  |  drag row</span>
+        <span className="notes-hint">Ctrl+. bullet  |  Ctrl+/ number  |  Shift+Alt+left/right indent  |  drag marker</span>
       </div>
       <div className="outliner">{renderNodes(page.tree)}</div>
     </>
