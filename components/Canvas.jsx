@@ -11,6 +11,16 @@ const CO = "\u25bc";
 const newLine = (type = "none") => ({ id: uid(), text: "", type, fontSize: 14, collapsed: false, children: [] });
 const newBox = (x, y) => ({ id: uid(), x, y, w: 340, lines: [newLine()] });
 const emptyState = () => { const p = { id: uid(), name: "Main", boxes: [] }; return { pages: [p], activeId: p.id }; };
+const getCaretPos = (el) => {
+  if (!el || typeof window === "undefined") return 0;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return el.textContent?.length || 0;
+  const range = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length;
+};
 
 function loc(nodes, id) {
   for (let i = 0; i < nodes.length; i++) {
@@ -140,7 +150,17 @@ export default function Canvas() {
     const go = () => {
       const el = inputs.current[focusId]; if (!el) return;
       el.focus();
-      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
+      if (focusCaret !== null) {
+        try {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        } catch {}
+        setFocusCaret(null);
+      }
       setFocusId(null);
     };
     go();
@@ -161,10 +181,7 @@ export default function Canvas() {
 
   useEffect(() => {
     if (!lasso) return;
-    const move = (e) => {
-      const rect = cvRef.current?.getBoundingClientRect(); if (!rect) return;
-      setLasso((l) => l ? ({ ...l, ex: e.clientX - rect.left, ey: e.clientY - rect.top }) : null);
-    };
+    const move = (e) => { const rect = cvRef.current?.getBoundingClientRect(); if (!rect) return; setLasso((l) => l ? ({ ...l, ex: e.clientX - rect.left, ey: e.clientY - rect.top }) : null); };
     const up = (e) => {
       if (lasso && cvRef.current) {
         const rect = cvRef.current.getBoundingClientRect();
@@ -174,7 +191,10 @@ export default function Canvas() {
         if (maxX - minX > 4 || maxY - minY > 4) {
           const pg = state?.pages.find((p) => p.id === state.activeId) || state?.pages[0];
           const hit = new Set();
-          pg?.boxes.forEach((b) => { if (b.x >= minX && b.y >= minY && b.x <= maxX && b.y <= maxY) hit.add(b.id); });
+          pg?.boxes.forEach((b) => {
+            const bh = boxRefs.current[b.id]?.offsetHeight || 80;
+            if (b.x < maxX && b.x + b.w > minX && b.y < maxY && b.y + bh > minY) hit.add(b.id);
+          });
           setSelBoxes(hit);
           if (hit.size === 1) setSelBox([...hit][0]);
         }
@@ -187,15 +207,12 @@ export default function Canvas() {
 
   if (!state) return null;
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
-
   const canvasW = Math.max(800, ...page.boxes.map((b) => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map((b) => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
 
   const mut = (fn, rec = true) => setState((s) => {
     if (rec) { setHistory((h) => [...h.slice(-60), s]); setFuture([]); }
-    const ns = structuredClone(s);
-    const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0];
-    fn(pg); return ns;
+    const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; fn(pg); return ns;
   });
 
   const undo = () => { if (!history.length) return; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
@@ -208,10 +225,7 @@ export default function Canvas() {
 
   const addBox = (x, y) => { const b = newBox(x, y); mut((pg) => pg.boxes.push(b)); setSelBox(b.id); setSelBoxes(new Set([b.id])); setFocusId(b.lines[0].id); setSelLines(new Set()); };
   const delBox = (id) => { mut((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes((prev) => { const s = new Set(prev); s.delete(id); return s; }); };
-  const cleanEmptyBox = (id) => {
-    const box = page.boxes.find((b) => b.id === id); if (!box) return;
-    if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id);
-  };
+  const cleanEmptyBox = (id) => { const box = page.boxes.find((b) => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id); };
 
   const setText = (bid, lid, text) => mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
 
@@ -220,7 +234,8 @@ export default function Canvas() {
     mut((pg) => {
       const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
       const h = loc(b.lines, lid); if (!h) return;
-      n.type = h.node.type; const full = h.node.text;
+      n.type = h.node.type;
+      const full = h.node.text || "";
       h.node.text = full.slice(0, cp); n.text = full.slice(cp);
       if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); }
       else h.list.splice(h.i + 1, 0, n);
@@ -245,7 +260,7 @@ export default function Canvas() {
     if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
     if (cp > 0) return false;
     const box = page.boxes.find((b) => b.id === bid); if (!box) return false;
-    if (cur === "") {
+    if (!cur || cur === "") {
       const order = vids(box.lines); const ft = order[order.indexOf(lid) - 1] || null;
       const fth = ft ? loc(box.lines, ft) : null; const ftLen = fth ? fth.node.text.length : 0;
       mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; if (b.lines.length === 1 && !b.lines[0].children.length) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i, 1); if (!b.lines.length) b.lines.push(newLine()); });
@@ -333,10 +348,10 @@ export default function Canvas() {
     if (e.shiftKey && e.altKey && e.key === "ArrowRight") { e.preventDefault(); indent(bid, lid); return; }
     if (e.shiftKey && e.altKey && e.key === "ArrowLeft") { e.preventDefault(); outdent(bid, lid); return; }
     if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(bid, lid) : indent(bid, lid); return; }
-    if (e.key === "Escape") { e.preventDefault(); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); e.target.blur(); return; }
-    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addAfter(bid, lid, e.target.selectionStart); return; }
+    if (e.key === "Escape") { e.preventDefault(); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); e.currentTarget.blur(); return; }
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addAfter(bid, lid, getCaretPos(e.currentTarget)); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && selLinesRef.current.size > 1) { e.preventDefault(); deleteSelectedLines(bid); return; }
-    if (e.key === "Backspace") { if (bsLine(bid, lid, e.target.value, e.target.selectionStart)) e.preventDefault(); return; }
+    if (e.key === "Backspace") { const el = e.currentTarget; if (bsLine(bid, lid, el.textContent || "", getCaretPos(el))) e.preventDefault(); return; }
     if (e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       const box = page.boxes.find((b) => b.id === bid); if (!box) return;
       const order = vids(box.lines); const pos = order.indexOf(lid);
@@ -358,7 +373,8 @@ export default function Canvas() {
     const isSel = selLines.has(n.id);
     return (
       <div key={n.id}>
-        <div className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
+        <div
+          className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
           onDragOver={(e) => onLineDragOver(e, n.id)}
           onDragLeave={(e) => { e.stopPropagation(); setLineDrop(null); }}
           onDrop={(e) => onLineDrop(e, bid, n.id)}
@@ -368,19 +384,27 @@ export default function Canvas() {
             {n.children.length ? (n.collapsed ? CC : CO) : ""}
           </button>
           {n.type === "image" ? (
-            <img src={n.src} alt="" style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block" }} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />
+            <img src={n.src} alt="" style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block" }}
+              draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />
           ) : (
             <>
               {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{BULLET}</span>}
               {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{num}.</span>}
               {n.type === "none" && <span className="cv-marker cv-spacer" draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />}
-              <input className="cv-input" ref={(el) => (inputs.current[n.id] = el)}
+              <div
+                className="cv-input"
+                ref={(el) => {
+                  inputs.current[n.id] = el;
+                  if (el && el.textContent !== n.text && document.activeElement !== el) el.textContent = n.text;
+                }}
+                contentEditable
+                suppressContentEditableWarning
                 style={{ fontSize: (n.fontSize || 14) + "px" }}
-                value={n.text} placeholder="..."
-                onChange={(e) => setText(bid, n.id, e.target.value)}
+                data-empty={!n.text ? "true" : "false"}
+                onInput={(e) => setText(bid, n.id, e.currentTarget.textContent || "")}
                 onKeyDown={(e) => kd(e, bid, n.id)}
-                onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines((prev) => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine((prev) => prev || n.id); }}
-                onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }}
+                onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); }}
+                onBlur={() => { setTimeout(() => { if (!cvRef.current?.contains(document.activeElement)) cleanEmptyBox(bid); }, 150); }}
               />
             </>
           )}
@@ -424,7 +448,7 @@ export default function Canvas() {
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  drag canvas to select  |  Shift+click lines  |  Ctrl+V paste  |  click outside empty box to remove it</span>
+        <span className="notes-hint">Dbl-click for box  |  drag canvas to select  |  Shift+click lines  |  drag-select text across lines  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef}
         style={{ width: canvasW, minHeight: canvasH }}
@@ -441,7 +465,7 @@ export default function Canvas() {
             style={{ left: box.x, top: box.y, width: box.w }}
             onClick={(e) => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
           >
-            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
+            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG","DIV"].includes(e.target.tagName) && e.target !== e.currentTarget) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
             <div className="cv-body">{renderLines(box.id, box.lines)}</div>
             <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
           </div>
