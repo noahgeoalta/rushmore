@@ -4,7 +4,7 @@ import { useState } from "react";
 import contextsData from "@/data/contexts.json";
 import ContextRail from "@/components/ContextRail";
 import TileGrid from "@/components/TileGrid";
-import Notes from "@/components/Notes";
+import Canvas from "@/components/Canvas";
 import LaunchpadTile from "@/components/tiles/LaunchpadTile";
 import PlaceholderTile from "@/components/tiles/PlaceholderTile";
 
@@ -22,28 +22,37 @@ export default function Home() {
   return (
     <div className="shell">
       <header className="topbar">
-        <span className="wordmark">RUSH<span>MORE</span></span>
+        <span className="wordmark">
+          RUSH<span>MORE</span>
+        </span>
         <span className="date">{today}</span>
       </header>
+
       <ContextRail contexts={contexts} activeId={activeId} onSelect={setActiveId} />
-      <main className="deck">
+
+      <main className={activeId === "notes" ? "deck deck-canvas" : "deck"}>
         {activeId === "all" && (
           <>
             <h1 className="deck-title">Operations</h1>
             <p className="deck-sub">All contexts</p>
             <div className="grid">
-              {contexts.map((c) => (<LaunchpadTile key={c.id} context={c} />))}
+              {contexts.map((c) => (
+                <LaunchpadTile key={c.id} context={c} />
+              ))}
               <PlaceholderTile name="Unread everywhere" milestone="M6" detail="Mail, Teams, and board counts across every context." />
               <PlaceholderTile name="Today" milestone="M6" detail="One combined agenda across all calendars." />
             </div>
           </>
         )}
-        {activeId === "notes" && <Notes />}
+        {activeId === "notes" && <Canvas />}
         {active && (
           <>
-            <h1 className="deck-title" style={{ color: active.accent }}>{active.name}</h1>
+            <h1 className="deck-title" style={{ color: active.accent }}>
+              {active.name}
+            </h1>
             <p className="deck-sub">
-              {active.mail ? `Mail via ${active.mail.mailbox}` : "No mailbox"}{" · "}
+              {active.mail ? `Mail via ${active.mail.mailbox}` : "No mailbox"}
+              {" \u00b7 "}
               {active.github ? `GitHub (${active.github.account})` : "no GitHub"}
             </p>
             <TileGrid context={active} />
