@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const KEY = "rushmore-notes-v3";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -122,13 +122,21 @@ export default function Notes() {
     if (state) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   }, [state]);
 
-  useEffect(() => {
-    if (focusId && inputs.current[focusId]) {
+  useLayoutEffect(() => {
+    if (!focusId) return;
+    const tryFocus = () => {
       const el = inputs.current[focusId];
+      if (!el) return;
       el.focus();
-      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
+      if (focusCaret !== null) {
+        el.setSelectionRange(focusCaret, focusCaret);
+        setFocusCaret(null);
+      }
       setFocusId(null);
-    }
+    };
+    tryFocus();
+    const raf = requestAnimationFrame(tryFocus);
+    return () => cancelAnimationFrame(raf);
   }, [focusId, focusCaret, state]);
 
   if (!state) return null;
