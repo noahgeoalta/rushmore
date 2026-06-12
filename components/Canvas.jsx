@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CKEY = "rushmore-canvas-v1";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -69,7 +69,7 @@ export default function Canvas() {
     if (state) { try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }
   }, [state]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!focusLineId) return;
     const tryFocus = () => {
       const el = inputs.current[focusLineId];
@@ -79,8 +79,8 @@ export default function Canvas() {
       setFocusLineId(null);
     };
     tryFocus();
-    const raf = requestAnimationFrame(tryFocus);
-    return () => cancelAnimationFrame(raf);
+    const raf = typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame(tryFocus) : null;
+    return () => { if (raf) cancelAnimationFrame(raf); };
   }, [focusLineId, focusCaret, state]);
 
   if (!state) return null;
@@ -416,12 +416,7 @@ export default function Canvas() {
         </div>
         <span className="notes-hint">Double-click canvas to create box  |  drag top bar to move  |  drag right edge to resize  |  Esc to deselect</span>
       </div>
-      <div
-        className="cv-canvas"
-        ref={canvasRef}
-        onDoubleClick={onCanvasDoubleClick}
-        onClick={onCanvasClick}
-      >
+      <div className="cv-canvas" ref={canvasRef} onDoubleClick={onCanvasDoubleClick} onClick={onCanvasClick}>
         {page.boxes.map((box) => {
           const isSelected = selectedBoxId === box.id;
           return (
@@ -437,9 +432,7 @@ export default function Canvas() {
             </div>
           );
         })}
-        {page.boxes.length === 0 && (
-          <div className="cv-empty">Double-click anywhere to create a text box</div>
-        )}
+        {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
       </div>
     </>
   );
