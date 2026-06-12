@@ -66,7 +66,7 @@ a { color: inherit; text-decoration: none; }
 .rail-divider { border: 0; border-top: 1px solid var(--panel-edge); margin: 10px 8px; }
 
 .deck { grid-row: 2; padding: 16px 28px 64px; }
-.deck-canvas { padding: 16px 28px 0 28px; display: flex; flex-direction: column; overflow: auto; }
+.deck-canvas { padding: 16px 28px 0 28px; display: flex; flex-direction: column; }
 .deck-title { font-size: 28px; font-weight: 800; letter-spacing: 0.03em; margin-bottom: 4px; }
 .deck-sub { color: var(--faint); font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 24px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; grid-auto-rows: 1fr; }
@@ -133,37 +133,41 @@ a { color: inherit; text-decoration: none; }
 }
 .cv-box {
   position: absolute;
-  min-width: 120px;
+  min-width: 160px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color 0.12s;
 }
-.cv-box:hover { border-color: #2a2a2a; }
-.cv-box.selected { border-color: #343945; background: rgba(26,27,31,0.85); }
+.cv-box:hover { border-color: #282828; }
+.cv-box.selected {
+  border-color: #333;
+  background: transparent;
+}
 .cv-drag-bar {
-  height: 12px;
-  border-radius: 8px 8px 0 0;
+  height: 10px;
   cursor: grab;
+  border-radius: 8px 8px 0 0;
   opacity: 0;
-  transition: opacity 0.1s;
+  transition: opacity 0.12s;
 }
 .cv-box.selected .cv-drag-bar {
   opacity: 1;
-  background: repeating-linear-gradient(90deg, transparent, transparent 3px, #2a2a2a 3px, #2a2a2a 4px);
+  background: repeating-linear-gradient(90deg, transparent, transparent 4px, #2a2a2a 4px, #2a2a2a 5px);
+  cursor: grab;
 }
 .cv-drag-bar:active { cursor: grabbing; }
-.cv-body { padding: 2px 10px 10px 6px; }
+.cv-body { padding: 4px 8px 8px 4px; }
 .cv-resize {
   position: absolute;
-  right: -5px;
-  top: 12px;
-  bottom: 6px;
-  width: 10px;
+  right: -4px;
+  top: 10px;
+  bottom: 4px;
+  width: 8px;
   cursor: ew-resize;
-  border-radius: 5px;
+  border-radius: 4px;
   opacity: 0;
-  transition: opacity 0.1s, background 0.1s;
+  transition: opacity 0.12s;
   background: #2a2a2a;
 }
 .cv-box.selected .cv-resize { opacity: 0.5; }
@@ -175,7 +179,7 @@ a { color: inherit; text-decoration: none; }
   border-radius: 4px;
   padding: 1px 0;
 }
-.cv-line-row.cv-sel { background: rgba(255,140,58,0.10); border-radius: 4px; }
+.cv-line-row.cv-sel { background: transparent; }
 .cv-line-row.cv-drop-before { box-shadow: 0 -2px 0 0 var(--claude-text); }
 .cv-line-row.cv-drop-after  { box-shadow: 0  2px 0 0 var(--claude-text); }
 .cv-line-row.cv-drop-child  { outline: 1px solid var(--claude-text); background: rgba(255,140,58,0.06); }
@@ -194,25 +198,42 @@ a { color: inherit; text-decoration: none; }
   transition: color 0.1s;
 }
 .cv-line-row:hover .cv-caret.has-kids { visibility: visible; color: var(--dim); }
+.cv-caret.has-kids:hover { color: var(--claude-text); }
 .cv-caret.collapsed { visibility: visible; color: var(--claude-text); }
 .cv-marker {
-  width: 24px;
+  width: 28px;
   height: 28px;
   display: grid;
   place-items: center;
-  font-size: 16px;
+  font-size: 20px;
   flex-shrink: 0;
   color: var(--faint);
   cursor: grab;
   user-select: none;
+  transition: color 0.1s;
 }
 .cv-marker:hover { color: var(--dim); }
 .cv-marker:active { cursor: grabbing; }
+.cv-line-row:focus-within .cv-marker { color: var(--claude-text); }
 .cv-bullet.has-hidden, .cv-num.has-hidden { color: var(--claude-text); }
-.cv-num { font-size: 13px; font-weight: 700; width: 28px; }
-.cv-spacer { width: 24px; }
-.cv-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: Arial, sans-serif; font-size: 14px; padding: 2px 4px; min-width: 0; cursor: text; }
-.cv-input::placeholder { color: #2a2a2a; }
+.cv-num { font-size: 15px; font-weight: 700; width: 28px; }
+.cv-spacer { width: 28px; }
+.cv-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  padding: 2px 4px;
+  min-width: 0;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.4em;
+}
+.cv-input[data-empty="true"]::before { content: "..."; color: #333; pointer-events: none; }
 .cv-kids { margin-left: 22px; border-left: 1px solid #222; padding-left: 4px; }
 .cv-del-btn { color: #ff6666 !important; border-color: #3a0000 !important; }
 .cv-del-btn:hover { background: #1a0000 !important; color: #ff4444 !important; }
