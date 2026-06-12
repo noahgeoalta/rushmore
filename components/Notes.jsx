@@ -14,11 +14,11 @@ const COLLAPSE_OPEN = String.fromCharCode(9660); // ▼
 
 function seedTree() {
   return [
-    { id: uid(), text: "Hours — June 2026", type: "none", collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Jun 11 — ", type: "bullet", collapsed: false, fontSize: 14, children: [] },
+    { id: uid(), text: "Hours \u2014 June 2026", type: "none", collapsed: false, fontSize: 18, children: [
+      { id: uid(), text: "Jun 11 \u2014 ", type: "bullet", collapsed: false, fontSize: 14, children: [] },
     ]},
     { id: uid(), text: "Next steps", type: "none", collapsed: false, fontSize: 18, children: [
-      { id: uid(), text: "Enter = plain  ·  Ctrl+. = bullet  ·  Ctrl+/ = numbered  ·  inherits on indent", type: "bullet", collapsed: false, fontSize: 14, children: [] },
+      { id: uid(), text: "Enter = plain  \u00b7  Ctrl+. = bullet  \u00b7  Ctrl+/ = numbered  \u00b7  inherits on indent", type: "bullet", collapsed: false, fontSize: 14, children: [] },
     ]},
   ];
 }
@@ -118,7 +118,9 @@ export default function Notes() {
     } catch { setState(defaultState()); }
   }, []);
 
-  useEffect(() => { if (state) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} } }, [state]);
+  useEffect(() => {
+    if (state) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+  }, [state]);
 
   useEffect(() => {
     if (focusId && inputs.current[focusId]) {
@@ -188,52 +190,63 @@ export default function Notes() {
       if (h.node.children.length && !h.node.collapsed) {
         n.type = h.node.children[0]?.type ?? h.node.type;
         h.node.children.unshift(n);
-      } else { h.list.splice(h.index + 1, 0, n); }
+      } else {
+        h.list.splice(h.index + 1, 0, n);
+      }
     });
     setFocusId(n.id);
   };
 
-  const cycleType = (id, targetType) => mutate((pg) => {
-    const h = locate(pg.tree, id); if (!h) return;
-    h.node.type = h.node.type === targetType ? "none" : targetType;
-  });
+  const cycleType = (id, targetType) => {
+    mutate((pg) => {
+      const h = locate(pg.tree, id); if (!h) return;
+      h.node.type = h.node.type === targetType ? "none" : targetType;
+    });
+    setFocusId(id);
+  };
 
-  const indent = (id) => mutate((pg) => {
-    const h = locate(pg.tree, id);
-    if (!h || h.index === 0) return;
-    const prev = h.list[h.index - 1];
-    h.list.splice(h.index, 1);
-    prev.collapsed = false;
-    if (h.node.type === "none") h.node.type = prev.type;
-    prev.children.push(h.node);
-  });
+  const indent = (id) => {
+    mutate((pg) => {
+      const h = locate(pg.tree, id); if (!h || h.index === 0) return;
+      const prev = h.list[h.index - 1];
+      h.list.splice(h.index, 1);
+      prev.collapsed = false;
+      if (h.node.type === "none") h.node.type = prev.type;
+      prev.children.push(h.node);
+    });
+    setFocusId(id);
+  };
 
-  const outdent = (id) => mutate((pg) => {
-    const find = (nodes) => {
-      for (let i = 0; i < nodes.length; i++) {
-        const idx = nodes[i].children.findIndex((c) => c.id === id);
-        if (idx > -1) return { parentList: nodes, parentIndex: i, idx };
-        const d = find(nodes[i].children); if (d) return d;
-      }
-      return null;
-    };
-    const h = find(pg.tree); if (!h) return;
-    const [node] = h.parentList[h.parentIndex].children.splice(h.idx, 1);
-    h.parentList.splice(h.parentIndex + 1, 0, node);
-  });
+  const outdent = (id) => {
+    mutate((pg) => {
+      const find = (nodes) => {
+        for (let i = 0; i < nodes.length; i++) {
+          const idx = nodes[i].children.findIndex((c) => c.id === id);
+          if (idx > -1) return { parentList: nodes, parentIndex: i, idx };
+          const d = find(nodes[i].children); if (d) return d;
+        }
+        return null;
+      };
+      const h = find(pg.tree); if (!h) return;
+      const [node] = h.parentList[h.parentIndex].children.splice(h.idx, 1);
+      h.parentList.splice(h.parentIndex + 1, 0, node);
+    });
+    setFocusId(id);
+  };
 
   const backspaceNode = (id, curText, caretPos) => {
     if (caretPos > 0) return false;
     if (curText === "") {
-      let ft = null;
+      let ft = null, ftLen = 0;
       mutate((pg) => {
         const order = visibleIds(pg.tree);
         ft = order[order.indexOf(id) - 1] || null;
+        if (ft) { const fth = locate(pg.tree, ft); if (fth) ftLen = fth.node.text.length; }
         const h = locate(pg.tree, id); if (!h) return;
         h.list.splice(h.index, 1);
         if (!pg.tree.length) pg.tree.push(blankNode());
       });
-      if (ft) setFocusId(ft);
+      if (ft) { setFocusId(ft); setFocusCaret(ftLen); }
       return true;
     } else {
       const order = visibleIds(page.tree);
@@ -255,15 +268,22 @@ export default function Notes() {
     }
   };
 
-  const moveVert = (id, dir) => mutate((pg) => {
-    const h = locate(pg.tree, id); if (!h) return;
-    const j = h.index + dir;
-    if (j < 0 || j >= h.list.length) return;
-    [h.list[h.index], h.list[j]] = [h.list[j], h.list[h.index]];
-  });
+  const moveVert = (id, dir) => {
+    mutate((pg) => {
+      const h = locate(pg.tree, id); if (!h) return;
+      const j = h.index + dir;
+      if (j < 0 || j >= h.list.length) return;
+      [h.list[h.index], h.list[j]] = [h.list[j], h.list[h.index]];
+    });
+    setFocusId(id);
+  };
 
   const toggle = (id) => mutate((pg) => { const h = locate(pg.tree, id); if (h) h.node.collapsed = !h.node.collapsed; }, false);
-  const changeFontSize = (id, delta) => mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + delta)); });
+
+  const changeFontSize = (id, delta) => {
+    mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + delta)); });
+    setFocusId(id);
+  };
 
   const copyNode = (id) => {
     const h = locate(page.tree, id); if (!h) return;
