@@ -22,7 +22,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-family: Arial, 'Inter', ui-sans-serif, system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -66,7 +66,7 @@ a { color: inherit; text-decoration: none; }
 .rail-divider { border: 0; border-top: 1px solid var(--panel-edge); margin: 10px 8px; }
 
 .deck { grid-row: 2; padding: 16px 28px 64px; }
-.deck-canvas { padding: 16px 28px 0 28px; display: flex; flex-direction: column; }
+.deck-canvas { padding: 16px 28px 0 28px; display: flex; flex-direction: column; overflow: auto; }
 .deck-title { font-size: 28px; font-weight: 800; letter-spacing: 0.03em; margin-bottom: 4px; }
 .deck-sub { color: var(--faint); font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 24px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; grid-auto-rows: 1fr; }
@@ -116,13 +116,9 @@ a { color: inherit; text-decoration: none; }
 /* ---- Canvas ---- */
 .cv-canvas {
   position: relative;
-  flex: 1;
-  min-height: calc(100vh - 120px);
+  min-height: 400px;
   background: var(--bg);
-  background-image: radial-gradient(circle, #252525 1px, transparent 1px);
-  background-size: 24px 24px;
-  overflow: hidden;
-  border-radius: 8px;
+  overflow: auto;
 }
 .cv-empty {
   position: absolute;
@@ -215,7 +211,7 @@ a { color: inherit; text-decoration: none; }
 .cv-bullet.has-hidden, .cv-num.has-hidden { color: var(--claude-text); }
 .cv-num { font-size: 13px; font-weight: 700; width: 28px; }
 .cv-spacer { width: 24px; }
-.cv-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font: inherit; font-size: 14px; padding: 2px 4px; min-width: 0; cursor: text; }
+.cv-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: Arial, sans-serif; font-size: 14px; padding: 2px 4px; min-width: 0; cursor: text; }
 .cv-input::placeholder { color: #2a2a2a; }
 .cv-kids { margin-left: 22px; border-left: 1px solid #222; padding-left: 4px; }
 .cv-del-btn { color: #ff6666 !important; border-color: #3a0000 !important; }
