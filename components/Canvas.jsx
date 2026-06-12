@@ -30,9 +30,6 @@ function locate(nodes, id) {
   }
   return null;
 }
-function contains(node, id) {
-  return node.id === id || node.children.some((c) => contains(c, id));
-}
 function visibleIds(nodes, out = []) {
   for (const n of nodes) {
     out.push(n.id);
@@ -146,20 +143,6 @@ export default function Canvas() {
     mutate((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== boxId); });
     setSelectedBoxId(null);
     setFocusedLineId(null);
-  };
-
-  const updateBoxPos = (boxId, x, y) => {
-    mutate((pg) => {
-      const b = pg.boxes.find((b) => b.id === boxId);
-      if (b) { b.x = x; b.y = y; }
-    }, false);
-  };
-
-  const updateBoxWidth = (boxId, w) => {
-    mutate((pg) => {
-      const b = pg.boxes.find((b) => b.id === boxId);
-      if (b) b.w = Math.max(160, w);
-    }, false);
   };
 
   const setLineText = (boxId, lineId, text) => {
@@ -332,14 +315,28 @@ export default function Canvas() {
   };
 
   useEffect(() => {
+    if (!dragState && !resizeState) return;
     const onMove = (e) => {
       if (dragState) {
-        const dx = e.clientX - dragState.startX;
-        const dy = e.clientY - dragState.startY;
-        updateBoxPos(dragState.boxId, Math.max(0, dragState.origX + dx), Math.max(0, dragState.origY + dy));
+        const nx = Math.max(0, dragState.origX + (e.clientX - dragState.startX));
+        const ny = Math.max(0, dragState.origY + (e.clientY - dragState.startY));
+        setState((s) => {
+          const next = structuredClone(s);
+          const pg = next.pages.find((p) => p.id === next.activeId) || next.pages[0];
+          const b = pg.boxes.find((b) => b.id === dragState.boxId);
+          if (b) { b.x = nx; b.y = ny; }
+          return next;
+        });
       }
       if (resizeState) {
-        updateBoxWidth(resizeState.boxId, resizeState.origW + (e.clientX - resizeState.startX));
+        const nw = Math.max(160, resizeState.origW + (e.clientX - resizeState.startX));
+        setState((s) => {
+          const next = structuredClone(s);
+          const pg = next.pages.find((p) => p.id === next.activeId) || next.pages[0];
+          const b = pg.boxes.find((b) => b.id === resizeState.boxId);
+          if (b) b.w = nw;
+          return next;
+        });
       }
     };
     const onUp = () => { setDragState(null); setResizeState(null); };
@@ -434,19 +431,9 @@ export default function Canvas() {
               style={{ left: box.x, top: box.y, width: box.w }}
               onClick={(e) => { e.stopPropagation(); setSelectedBoxId(box.id); }}
             >
-              <div
-                className="cv-drag-bar"
-                onMouseDown={(e) => onBoxMouseDown(e, box.id)}
-                title="Drag to move"
-              />
-              <div className="cv-body">
-                {renderLines(box.id, box.lines)}
-              </div>
-              <div
-                className="cv-resize"
-                onMouseDown={(e) => onResizeMouseDown(e, box.id)}
-                title="Drag to resize"
-              />
+              <div className="cv-drag-bar" onMouseDown={(e) => onBoxMouseDown(e, box.id)} title="Drag to move" />
+              <div className="cv-body">{renderLines(box.id, box.lines)}</div>
+              <div className="cv-resize" onMouseDown={(e) => onResizeMouseDown(e, box.id)} title="Drag to resize" />
             </div>
           );
         })}
