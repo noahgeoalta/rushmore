@@ -21,6 +21,17 @@ const getCaretPos = (el) => {
   pre.setEnd(range.startContainer, range.startOffset);
   return pre.toString().length;
 };
+const getSelectedLineIds = (cvEl) => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return [];
+  const range = sel.getRangeAt(0);
+  const inputs = cvEl ? [...cvEl.querySelectorAll('.cv-input')] : [];
+  return inputs
+    .map((el) => ({ el, id: el.getAttribute('data-lid') }))
+    .filter(({ el }) => range.intersectsNode(el))
+    .map(({ id }) => id)
+    .filter(Boolean);
+};
 
 function loc(nodes, id) {
   for (let i = 0; i < nodes.length; i++) {
@@ -133,10 +144,7 @@ export default function Canvas() {
       if (!raw) { setState(emptyState()); return; }
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
-      parsed.pages = parsed.pages.map((p) => ({
-        ...p,
-        boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [],
-      }));
+      parsed.pages = parsed.pages.map((p) => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
       if (!parsed.activeId || !parsed.pages.find((p) => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
       setState(parsed);
     } catch { setState(emptyState()); }
@@ -151,14 +159,7 @@ export default function Canvas() {
       const el = inputs.current[focusId]; if (!el) return;
       el.focus();
       if (focusCaret !== null) {
-        try {
-          const range = document.createRange();
-          const sel = window.getSelection();
-          range.selectNodeContents(el);
-          range.collapse(false);
-          sel?.removeAllRanges();
-          sel?.addRange(range);
-        } catch {}
+        try { const range = document.createRange(); const sel = window.getSelection(); range.selectNodeContents(el); range.collapse(false); sel?.removeAllRanges(); sel?.addRange(range); } catch {}
         setFocusCaret(null);
       }
       setFocusId(null);
@@ -186,17 +187,12 @@ export default function Canvas() {
       if (lasso && cvRef.current) {
         const rect = cvRef.current.getBoundingClientRect();
         const ex = e.clientX - rect.left, ey = e.clientY - rect.top;
-        const minX = Math.min(lasso.sx, ex), maxX = Math.max(lasso.sx, ex);
-        const minY = Math.min(lasso.sy, ey), maxY = Math.max(lasso.sy, ey);
+        const minX = Math.min(lasso.sx, ex), maxX = Math.max(lasso.sx, ex), minY = Math.min(lasso.sy, ey), maxY = Math.max(lasso.sy, ey);
         if (maxX - minX > 4 || maxY - minY > 4) {
           const pg = state?.pages.find((p) => p.id === state.activeId) || state?.pages[0];
           const hit = new Set();
-          pg?.boxes.forEach((b) => {
-            const bh = boxRefs.current[b.id]?.offsetHeight || 80;
-            if (b.x < maxX && b.x + b.w > minX && b.y < maxY && b.y + bh > minY) hit.add(b.id);
-          });
-          setSelBoxes(hit);
-          if (hit.size === 1) setSelBox([...hit][0]);
+          pg?.boxes.forEach((b) => { const bh = boxRefs.current[b.id]?.offsetHeight || 80; if (b.x < maxX && b.x + b.w > minX && b.y < maxY && b.y + bh > minY) hit.add(b.id); });
+          setSelBoxes(hit); if (hit.size === 1) setSelBox([...hit][0]);
         }
       }
       setLasso(null);
@@ -234,8 +230,7 @@ export default function Canvas() {
     mut((pg) => {
       const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
       const h = loc(b.lines, lid); if (!h) return;
-      n.type = h.node.type;
-      const full = h.node.text || "";
+      n.type = h.node.type; const full = h.node.text || "";
       h.node.text = full.slice(0, cp); n.text = full.slice(cp);
       if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); }
       else h.list.splice(h.i + 1, 0, n);
@@ -244,16 +239,9 @@ export default function Canvas() {
   };
 
   const deleteSelectedLines = (bid) => {
-    const ids = new Set(selLinesRef.current);
-    if (ids.size === 0) return false;
-    mut((pg) => {
-      const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
-      function rm(nodes) { return nodes.filter((n) => { n.children = rm(n.children); return !ids.has(n.id); }); }
-      b.lines = rm(b.lines);
-      if (!b.lines.length) b.lines.push(newLine());
-    });
-    setSelLines(new Set()); setLastSelLine(null); setFocusedId(null);
-    return true;
+    const ids = new Set(selLinesRef.current); if (ids.size === 0) return false;
+    mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter((n) => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); });
+    setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true;
   };
 
   const bsLine = (bid, lid, cur, cp) => {
@@ -350,8 +338,37 @@ export default function Canvas() {
     if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(bid, lid) : indent(bid, lid); return; }
     if (e.key === "Escape") { e.preventDefault(); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); e.currentTarget.blur(); return; }
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addAfter(bid, lid, getCaretPos(e.currentTarget)); return; }
-    if ((e.key === "Delete" || e.key === "Backspace") && selLinesRef.current.size > 1) { e.preventDefault(); deleteSelectedLines(bid); return; }
-    if (e.key === "Backspace") { const el = e.currentTarget; if (bsLine(bid, lid, el.textContent || "", getCaretPos(el))) e.preventDefault(); return; }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      // Check for native cross-line text selection first
+      const crossIds = getSelectedLineIds(cvRef.current);
+      if (crossIds.length > 1) {
+        e.preventDefault();
+        const sel = window.getSelection();
+        const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+        if (range) {
+          const firstEl = inputs.current[crossIds[0]];
+          const lastEl = inputs.current[crossIds[crossIds.length - 1]];
+          const firstKeep = firstEl ? firstEl.textContent.slice(0, getCaretPos(firstEl)) : "";
+          let lastKeep = "";
+          if (lastEl && range.endContainer) {
+            try { const lr = document.createRange(); lr.setStart(range.endContainer, range.endOffset); lr.setEnd(lastEl, lastEl.childNodes.length); lastKeep = lr.toString(); } catch {}
+          }
+          sel?.removeAllRanges();
+          mut((pg) => {
+            const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
+            const firstH = loc(b.lines, crossIds[0]);
+            if (firstH) firstH.node.text = firstKeep + lastKeep;
+            const toRemove = new Set(crossIds.slice(1));
+            function rm(nodes) { return nodes.filter((n) => { n.children = rm(n.children); return !toRemove.has(n.id); }); }
+            b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine());
+          });
+          setFocusId(crossIds[0]); setFocusCaret(firstKeep.length);
+        }
+        return;
+      }
+      if (selLinesRef.current.size > 1) { e.preventDefault(); deleteSelectedLines(bid); return; }
+      if (e.key === "Backspace") { const el = e.currentTarget; if (bsLine(bid, lid, el.textContent || "", getCaretPos(el))) e.preventDefault(); return; }
+    }
     if (e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       const box = page.boxes.find((b) => b.id === bid); if (!box) return;
       const order = vids(box.lines); const pos = order.indexOf(lid);
@@ -400,7 +417,8 @@ export default function Canvas() {
                 contentEditable
                 suppressContentEditableWarning
                 style={{ fontSize: (n.fontSize || 14) + "px" }}
-                data-empty={!n.text ? "true" : "false"}
+                data-lid={n.id}
+                data-empty={!n.text}
                 onInput={(e) => setText(bid, n.id, e.currentTarget.textContent || "")}
                 onKeyDown={(e) => kd(e, bid, n.id)}
                 onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); }}
@@ -414,10 +432,7 @@ export default function Canvas() {
     );
   });
 
-  const lassoRect = lasso ? {
-    left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy),
-    width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy),
-  } : null;
+  const lassoRect = lasso ? { left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy), width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy) } : null;
 
   return (
     <>
@@ -430,8 +445,7 @@ export default function Canvas() {
             onDrop={() => dropPage(p.id)}
             onClick={() => { setState((s) => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
             onDoubleClick={() => renamePage(p.id)} title="Double-click to rename">
-            {p.name}
-            <span className="x" onClick={(e) => { e.stopPropagation(); delPage(p.id); }}>x</span>
+            {p.name}<span className="x" onClick={(e) => { e.stopPropagation(); delPage(p.id); }}>x</span>
           </button>
         ))}
         <button className="page-tab new" onClick={addPage}>+ New page</button>
@@ -448,7 +462,7 @@ export default function Canvas() {
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click for box  |  drag canvas to select  |  Shift+click lines  |  drag-select text across lines  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click for box  |  drag-select text across lines then Backspace/Delete  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef}
         style={{ width: canvasW, minHeight: canvasH }}
@@ -456,16 +470,14 @@ export default function Canvas() {
         onMouseDown={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
         onClick={(e) => { if (e.target === cvRef.current) { setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); } }}
       >
-        {lassoRect && lassoRect.width > 2 && (
-          <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />
-        )}
+        {lassoRect && lassoRect.width > 2 && <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />}
         {page.boxes.map((box) => (
           <div key={box.id} ref={(el) => (boxRefs.current[box.id] = el)}
             className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")}
             style={{ left: box.x, top: box.y, width: box.w }}
             onClick={(e) => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
           >
-            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG","DIV"].includes(e.target.tagName) && e.target !== e.currentTarget) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
+            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
             <div className="cv-body">{renderLines(box.id, box.lines)}</div>
             <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
           </div>
