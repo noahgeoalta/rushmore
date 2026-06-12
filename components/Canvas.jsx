@@ -96,6 +96,19 @@ function parsePlainToLines(text) {
   return nodes;
 }
 
+function migrateLine(n) {
+  if (!n || typeof n !== "object") return newLine();
+  return {
+    id: n.id || uid(),
+    text: n.text || "",
+    type: n.type || (n.bullet ? "bullet" : "none"),
+    fontSize: n.fontSize || 14,
+    collapsed: n.collapsed || false,
+    src: n.src,
+    children: Array.isArray(n.children) ? n.children.map(migrateLine) : [],
+  };
+}
+
 export default function Canvas() {
   const [state, setState] = useState(null);
   const [selBox, setSelBox] = useState(null);
@@ -116,8 +129,24 @@ export default function Canvas() {
   const dragLineRef = useRef(null);
 
   useEffect(() => {
-    try { const raw = localStorage.getItem(CKEY); setState(raw ? JSON.parse(raw) : emptyState()); }
-    catch { setState(emptyState()); }
+    try {
+      const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v1");
+      if (!raw) { setState(emptyState()); return; }
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
+      parsed.pages = parsed.pages.map((p) => ({
+        ...p,
+        boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({
+          ...b,
+          kind: b.kind || "text",
+          lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()],
+        })) : [],
+      }));
+      if (!parsed.activeId || !parsed.pages.find((p) => p.id === parsed.activeId)) {
+        parsed.activeId = parsed.pages[0]?.id || uid();
+      }
+      setState(parsed);
+    } catch { setState(emptyState()); }
   }, []);
 
   useEffect(() => {
@@ -410,7 +439,7 @@ export default function Canvas() {
           <span className="notes-sep" />
           {selBox && <button className="notes-btn cv-del-btn" onClick={() => selLines.size > 1 ? deleteSelected(selBox) : delBox(selBox)}>{selLines.size > 1 ? "Del lines" : "Del box"}</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  Shift+click/arrow multi-select  |  drag marker to move  |  Ctrl+V pastes HTML/image</span>
+        <span className="notes-hint">Double-click canvas for box  |  Shift+click/arrow multi-select  |  drag marker to move  |  Ctrl+V pastes HTML/image</span>
       </div>
       <div className="cv-canvas" ref={cvRef}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 160, e.clientY - r.top - 14); }}
