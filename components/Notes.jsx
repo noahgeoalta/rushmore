@@ -8,9 +8,9 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 // type: "none" | "bullet" | "number"
 const blankNode = (type = "none") => ({ id: uid(), text: "", type, collapsed: false, fontSize: 14, children: [] });
 
-const BULLET_CHAR = String.fromCharCode(8226);
-const COLLAPSE_CLOSED = String.fromCharCode(9654);
-const COLLAPSE_OPEN = String.fromCharCode(9660);
+const BULLET_CHAR = String.fromCharCode(8226); // •
+const COLLAPSE_CLOSED = String.fromCharCode(9654); // ▶
+const COLLAPSE_OPEN = String.fromCharCode(9660); // ▼
 
 function seedTree() {
   return [
@@ -187,11 +187,17 @@ export default function Notes() {
 
   const setText = (id, text) => mutate((pg) => { const h = locate(pg.tree, id); if (h) h.node.text = text; }, false);
 
-  const addLine = (id) => {
+  const addLine = (id, caretPos = 0) => {
     const n = blankNode("none");
     mutate((pg) => {
-      const h = locate(pg.tree, id); if (!h) return;
+      const h = locate(pg.tree, id);
+      if (!h) return;
       n.type = h.node.type;
+      // Split text at caret: text before stays, text after goes to new line
+      const before = h.node.text.slice(0, caretPos);
+      const after = h.node.text.slice(caretPos);
+      h.node.text = before;
+      n.text = after;
       if (h.node.children.length && !h.node.collapsed) {
         n.type = h.node.children[0]?.type ?? h.node.type;
         h.node.children.unshift(n);
@@ -200,6 +206,7 @@ export default function Notes() {
       }
     });
     setFocusId(n.id);
+    setFocusCaret(0);
   };
 
   const cycleType = (id, targetType) => {
@@ -344,7 +351,7 @@ export default function Notes() {
     if (e.shiftKey && e.altKey && e.key === "ArrowRight") { e.preventDefault(); indent(id); return; }
     if (e.shiftKey && e.altKey && e.key === "ArrowLeft") { e.preventDefault(); outdent(id); return; }
     if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(id) : indent(id); return; }
-    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addLine(id); return; }
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addLine(id, e.target.selectionStart); return; }
     if (e.key === "Backspace") { const h = backspaceNode(id, e.target.value, e.target.selectionStart); if (h) e.preventDefault(); return; }
     if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); moveVert(id, -1); return; }
     if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); moveVert(id, 1); return; }
