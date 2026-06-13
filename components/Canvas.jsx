@@ -19,7 +19,17 @@ function buildRow(line) {
   row.dataset.type = line.type || "none";
   row.dataset.indent = String(line.indent || 0);
   row.dataset.fs = String(line.fontSize || 14);
+  row.dataset.collapsed = line.collapsed ? "true" : "false";
   row.style.paddingLeft = ((line.indent || 0) * 22) + "px";
+
+  const colBtn = document.createElement("button");
+  colBtn.className = "cv-collapse-btn";
+  colBtn.setAttribute("contenteditable", "false");
+  colBtn.tabIndex = -1;
+  colBtn.style.visibility = "hidden";
+  colBtn.textContent = line.collapsed ? "\u25b6" : "\u25bc";
+  row.appendChild(colBtn);
+
   const marker = document.createElement("span");
   marker.className = "cv-row-marker";
   marker.setAttribute("contenteditable", "false");
@@ -27,12 +37,38 @@ function buildRow(line) {
   else if (line.type === "number") marker.textContent = "1.";
   else marker.style.visibility = "hidden";
   row.appendChild(marker);
+
   const text = document.createElement("span");
   text.className = "cv-text";
   text.style.fontSize = (line.fontSize || 14) + "px";
   text.textContent = line.text || "";
   row.appendChild(text);
   return row;
+}
+
+function updateCollapseButtons(editorEl) {
+  const rows = [...editorEl.querySelectorAll(".cv-row")];
+  rows.forEach((row, i) => {
+    const myIndent = parseInt(row.dataset.indent || "0");
+    const next = rows[i + 1];
+    const hasChildren = next && parseInt(next.dataset.indent || "0") > myIndent;
+    const btn = row.querySelector(".cv-collapse-btn");
+    if (btn) {
+      btn.style.visibility = hasChildren ? "visible" : "hidden";
+      btn.textContent = row.dataset.collapsed === "true" ? "\u25b6" : "\u25bc";
+    }
+  });
+  rows.forEach((row, i) => {
+    const myIndent = parseInt(row.dataset.indent || "0");
+    if (myIndent === 0) { row.style.display = ""; return; }
+    let hidden = false;
+    for (let j = i - 1; j >= 0; j--) {
+      const parent = rows[j];
+      const pIndent = parseInt(parent.dataset.indent || "0");
+      if (pIndent < myIndent) { if (parent.dataset.collapsed === "true") hidden = true; break; }
+    }
+    row.style.display = hidden ? "none" : "";
+  });
 }
 
 function syncMarker(row) {
@@ -171,7 +207,45 @@ export default function Canvas() {
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
     if (e.key === "Escape") { e.preventDefault(); setSelBoxId(null); e.currentTarget.blur(); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); handlePaste(e.currentTarget, boxId); return; }
-    if (e.key === "Tab") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (!row) return; const indent = parseInt(row.dataset.indent || "0", 10); row.dataset.indent = String(e.shiftKey ? Math.max(0, indent - 1) : indent + 1); row.style.paddingLeft = (parseInt(row.dataset.indent) * 22) + "px"; syncEditor(boxId, e.currentTarget); return; }
+
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") {
+      e.preventDefault();
+      const editorEl = e.currentTarget;
+      const row = getCaretRow(editorEl); if (!row) return;
+      const sel = window.getSelection();
+      const textEl = row.querySelector(".cv-text");
+      const caretPos = (() => { if (!sel || !sel.rangeCount || !textEl) return 0; const range = sel.getRangeAt(0); const pre = document.createRange(); pre.selectNodeContents(textEl); try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 0; } return pre.toString().length; })();
+      const fullText = textEl?.textContent || "";
+      const before = fullText.slice(0, caretPos); const after = fullText.slice(caretPos);
+      if (textEl) textEl.textContent = before;
+      const curType = row.dataset.type || "none";
+      const newType = (!before.trim() && (curType === "bullet" || curType === "number")) ? "none" : curType;
+      if (!before.trim() && (curType === "bullet" || curType === "number")) { row.dataset.type = "none"; syncMarker(row); }
+      const newRow = buildRow({ id: uid(), type: newType, text: after, indent: parseInt(row.dataset.indent || "0"), fontSize: parseInt(row.dataset.fs || "14") });
+      row.after(newRow);
+      const newText = newRow.querySelector(".cv-text");
+      if (newText) { newText.focus(); const r = document.createRange(); r.setStart(newText, 0); r.collapse(true); sel?.removeAllRanges(); sel?.addRange(r); }
+      updateCollapseButtons(editorEl); syncEditor(boxId, editorEl); return;
+    }
+
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Backspace") {
+      const editorEl = e.currentTarget;
+      const row = getCaretRow(editorEl); if (!row) return;
+      const sel = window.getSelection();
+      const textEl = row.querySelector(".cv-text");
+      const caretPos = (() => { if (!sel || !sel.rangeCount || !textEl) return 1; const range = sel.getRangeAt(0); const pre = document.createRange(); pre.selectNodeContents(textEl); try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 1; } return pre.toString().length; })();
+      if (caretPos > 0) return;
+      const prevRow = row.previousElementSibling; if (!prevRow) return;
+      e.preventDefault();
+      const prevText = prevRow.querySelector(".cv-text"); const curText = row.querySelector(".cv-text");
+      const prevLen = prevText?.textContent?.length || 0;
+      if (prevText && curText) prevText.textContent += curText.textContent;
+      row.remove();
+      if (prevText) { prevText.focus(); const r = document.createRange(); const tn = prevText.firstChild; if (tn) { try { r.setStart(tn, prevLen); r.collapse(true); sel?.removeAllRanges(); sel?.addRange(r); } catch {} } }
+      updateCollapseButtons(editorEl); syncEditor(boxId, editorEl); return;
+    }
+
+    if (e.key === "Tab") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (!row) return; const indent = parseInt(row.dataset.indent || "0", 10); row.dataset.indent = String(e.shiftKey ? Math.max(0, indent - 1) : indent + 1); row.style.paddingLeft = (parseInt(row.dataset.indent) * 22) + "px"; updateCollapseButtons(e.currentTarget); syncEditor(boxId, e.currentTarget); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === ".") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "bullet" ? "none" : "bullet"; syncMarker(row); syncEditor(boxId, e.currentTarget); } return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "/") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "number" ? "none" : "number"; syncMarker(row); syncEditor(boxId, e.currentTarget); } return; }
     if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { const fs = Math.min(48, parseInt(row.dataset.fs || "14") + 2); row.dataset.fs = String(fs); const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(boxId, e.currentTarget); } return; }
@@ -184,8 +258,8 @@ export default function Canvas() {
       if (items) {
         for (const item of items) {
           const imgType = item.types.find((t) => t.startsWith("image/"));
-          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const img = document.createElement("img"); img.src = reader.result; img.className = "cv-row-img"; const row = document.createElement("div"); row.className = "cv-row"; row.dataset.type = "image"; row.dataset.lid = uid(); row.dataset.indent = "0"; row.dataset.fs = "14"; const m = document.createElement("span"); m.className = "cv-row-marker"; m.style.visibility = "hidden"; m.setAttribute("contenteditable", "false"); row.appendChild(m); row.appendChild(img); const cur = getCaretRow(editorEl) || editorEl.lastElementChild; if (cur) cur.after(row); else editorEl.appendChild(row); syncEditor(boxId, editorEl); }; reader.readAsDataURL(blob); return; }
-          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text()); if (parsed.length) { const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur; for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } syncEditor(boxId, editorEl); return; } }
+          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const img = document.createElement("img"); img.src = reader.result; img.className = "cv-row-img"; const row = buildRow({ id: uid(), type: "image", text: "", indent: 0, fontSize: 14, src: reader.result }); const cur = getCaretRow(editorEl) || editorEl.lastElementChild; if (cur) cur.after(row); else editorEl.appendChild(row); syncEditor(boxId, editorEl); }; reader.readAsDataURL(blob); return; }
+          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text()); if (parsed.length) { const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur; for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } updateCollapseButtons(editorEl); syncEditor(boxId, editorEl); return; } }
         }
       }
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
@@ -205,6 +279,7 @@ export default function Canvas() {
       const frag = document.createDocumentFragment();
       lines.forEach((line) => frag.appendChild(buildRow(line)));
       el.appendChild(frag);
+      updateCollapseButtons(el);
     } else {
       const rows = [...el.querySelectorAll(".cv-row")];
       lines.forEach((line, i) => {
@@ -215,6 +290,7 @@ export default function Canvas() {
         const ind = String(line.indent || 0); if (row.dataset.indent !== ind) { row.dataset.indent = ind; row.style.paddingLeft = (line.indent * 22) + "px"; }
         const fs = String(line.fontSize || 14); if (row.dataset.fs !== fs) { row.dataset.fs = fs; if (textEl) textEl.style.fontSize = fs + "px"; }
       });
+      updateCollapseButtons(el);
     }
   };
 
@@ -241,7 +317,7 @@ export default function Canvas() {
           <span className="notes-sep" />
           {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  drag top bar to move  |  click-drag to select  |  Tab indent  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  Tab indent  |  Ctrl+. bullet  |  Ctrl+/ number  |  click ▼ to collapse  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 180, e.clientY - r.top - 14); }}
@@ -261,7 +337,14 @@ export default function Canvas() {
               contentEditable suppressContentEditableWarning spellCheck={false}
               onFocus={() => setSelBoxId(box.id)}
               onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
-              onInput={(e) => syncEditor(box.id, e.currentTarget)}
+              onInput={(e) => { syncEditor(box.id, e.currentTarget); updateCollapseButtons(e.currentTarget); }}
+              onClick={(e) => {
+                if (e.target.classList?.contains("cv-collapse-btn")) {
+                  e.preventDefault();
+                  const row = e.target.closest(".cv-row");
+                  if (row) { row.dataset.collapsed = row.dataset.collapsed === "true" ? "false" : "true"; updateCollapseButtons(e.currentTarget); syncEditor(box.id, e.currentTarget); }
+                }
+              }}
               onKeyDown={(e) => onEditorKeyDown(e, box.id)}
               onPaste={(e) => e.preventDefault()}
             />
