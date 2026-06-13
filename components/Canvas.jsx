@@ -415,16 +415,19 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "bullet")}>Bullet</button>
-          <button className="notes-btn" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "number")}>1.</button>
+          <button className="notes-btn" title="Bullet (Ctrl+.)" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "bullet")}>{"\u2022"}</button>
+          <button className="notes-btn" title="Number (Ctrl+/)" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "number")}>1.</button>
           <span className="notes-sep" />
-          <button className="notes-btn" onClick={() => selBox && fsize(selBox, focusedId, -2)}>A-</button>
-          <button className="notes-btn" onClick={() => selBox && fsize(selBox, focusedId, 2)}>A+</button>
+          <button className="notes-btn" title="Indent (Tab)" onClick={() => focusedId && selBox && indent(selBox, focusedId)}>{"\u2192"}</button>
+          <button className="notes-btn" title="Outdent (Shift+Tab)" onClick={() => focusedId && selBox && outdent(selBox, focusedId)}>{"\u2190"}</button>
+          <span className="notes-sep" />
+          <button className="notes-btn" title="Smaller" onClick={() => selBox && fsize(selBox, focusedId, -2)}>A-</button>
+          <button className="notes-btn" title="Larger" onClick={() => selBox && fsize(selBox, focusedId, 2)}>A+</button>
           <span className="notes-sep" />
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  drag canvas to select  |  Shift+click lines  |  Ctrl+V paste  |  click outside empty box to remove it</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  Tab / Shift+Tab to indent  |  Shift+click to multi-select  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef}
         style={{ width: canvasW, minHeight: canvasH }}
