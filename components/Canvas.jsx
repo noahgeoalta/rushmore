@@ -134,7 +134,6 @@ export default function Canvas() {
   }, []);
 
   useEffect(() => { setMounted(true); }, []);
-
   useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
 
   useEffect(() => {
@@ -214,13 +213,10 @@ export default function Canvas() {
 
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") {
       e.preventDefault();
-      const editorEl = e.currentTarget;
-      const row = getCaretRow(editorEl); if (!row) return;
-      const sel = window.getSelection();
-      const textEl = row.querySelector(".cv-text");
+      const editorEl = e.currentTarget; const row = getCaretRow(editorEl); if (!row) return;
+      const sel = window.getSelection(); const textEl = row.querySelector(".cv-text");
       const caretPos = (() => { if (!sel || !sel.rangeCount || !textEl) return 0; const range = sel.getRangeAt(0); const pre = document.createRange(); pre.selectNodeContents(textEl); try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 0; } return pre.toString().length; })();
-      const fullText = textEl?.textContent || "";
-      const before = fullText.slice(0, caretPos); const after = fullText.slice(caretPos);
+      const fullText = textEl?.textContent || ""; const before = fullText.slice(0, caretPos); const after = fullText.slice(caretPos);
       if (textEl) textEl.textContent = before;
       const curType = row.dataset.type || "none";
       const newType = (!before.trim() && (curType === "bullet" || curType === "number")) ? "none" : curType;
@@ -233,10 +229,8 @@ export default function Canvas() {
     }
 
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Backspace") {
-      const editorEl = e.currentTarget;
-      const row = getCaretRow(editorEl); if (!row) return;
-      const sel = window.getSelection();
-      const textEl = row.querySelector(".cv-text");
+      const editorEl = e.currentTarget; const row = getCaretRow(editorEl); if (!row) return;
+      const sel = window.getSelection(); const textEl = row.querySelector(".cv-text");
       const caretPos = (() => { if (!sel || !sel.rangeCount || !textEl) return 1; const range = sel.getRangeAt(0); const pre = document.createRange(); pre.selectNodeContents(textEl); try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 1; } return pre.toString().length; })();
       if (caretPos > 0) return;
       const prevRow = row.previousElementSibling; if (!prevRow) return;
@@ -262,8 +256,8 @@ export default function Canvas() {
       if (items) {
         for (const item of items) {
           const imgType = item.types.find((t) => t.startsWith("image/"));
-          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const img = document.createElement("img"); img.src = reader.result; img.className = "cv-row-img"; const row = buildRow({ id: uid(), type: "image", text: "", indent: 0, fontSize: 14, src: reader.result }); const cur = getCaretRow(editorEl) || editorEl.lastElementChild; if (cur) cur.after(row); else editorEl.appendChild(row); syncEditor(boxId, editorEl); }; reader.readAsDataURL(blob); return; }
-          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text()); if (parsed.length) { const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur; for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } updateCollapseButtons(editorEl); syncEditor(boxId, editorEl); return; } }
+          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const row = buildRow({ id: uid(), type: "image", text: "", indent: 0, fontSize: 14 }); const img = document.createElement("img"); img.src = reader.result; img.className = "cv-row-img"; row.appendChild(img); const cur = getCaretRow(editorEl) || editorEl.lastElementChild; if (cur) cur.after(row); else editorEl.appendChild(row); syncEditor(boxId, editorEl); }; reader.readAsDataURL(blob); return; }
+          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text()); if (parsed.length) { const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur; for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } syncEditor(boxId, editorEl); return; } }
         }
       }
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
@@ -273,9 +267,9 @@ export default function Canvas() {
     } catch {}
   };
 
-  const setupEditor = (el, boxId, lines) => {
-    if (!el) return;
-    editorRefs.current[boxId] = el;
+  // Sync state lines → editor DOM. Called from useEffect only, never during render.
+  const syncBoxDom = (boxId, lines) => {
+    const el = editorRefs.current[boxId]; if (!el) return;
     const existingIds = [...el.querySelectorAll(".cv-row")].map((r) => r.dataset.lid).join(",");
     const expectedIds = lines.map((l) => l.id).join(",");
     if (existingIds !== expectedIds) {
@@ -321,7 +315,7 @@ export default function Canvas() {
           <span className="notes-sep" />
           {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  Tab indent  |  Ctrl+. bullet  |  Ctrl+/ number  |  click &#9660; to collapse  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  Tab indent  |  Ctrl+. bullet  |  Ctrl+/ number  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 180, e.clientY - r.top - 14); }}
@@ -329,32 +323,35 @@ export default function Canvas() {
         onClick={(e) => { if (e.target === cvRef.current) setSelBoxId(null); }}
       >
         {lassoRect && lassoRect.width > 4 && <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.05)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />}
-        {page.boxes.map((box) => (
-          <div key={box.id} ref={(el) => (boxRefs.current[box.id] = el)}
-            className={"cv-box" + (selBoxId === box.id ? " selected" : "")}
-            style={{ left: box.x, top: box.y, width: box.w }}
-            onClick={(e) => { e.stopPropagation(); setSelBoxId(box.id); }}
-          >
-            <div className="cv-drag-bar" onMouseDown={(e) => { if (e.target.closest(".cv-editor")) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBoxId(box.id); }} title="Drag to move" />
-            <div className="cv-editor"
-              ref={(el) => setupEditor(el, box.id, box.lines)}
-              contentEditable suppressContentEditableWarning spellCheck={false}
-              onFocus={() => setSelBoxId(box.id)}
-              onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
-              onInput={(e) => { syncEditor(box.id, e.currentTarget); updateCollapseButtons(e.currentTarget); }}
-              onClick={(e) => {
-                if (e.target.classList?.contains("cv-collapse-btn")) {
-                  e.preventDefault();
-                  const row = e.target.closest(".cv-row");
-                  if (row) { row.dataset.collapsed = row.dataset.collapsed === "true" ? "false" : "true"; updateCollapseButtons(e.currentTarget); syncEditor(box.id, e.currentTarget); }
-                }
-              }}
-              onKeyDown={(e) => onEditorKeyDown(e, box.id)}
-              onPaste={(e) => e.preventDefault()}
-            />
-            <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
-          </div>
-        ))}
+        {page.boxes.map((box) => {
+          // Schedule DOM sync after this render
+          setTimeout(() => syncBoxDom(box.id, box.lines), 0);
+          return (
+            <div key={box.id} ref={(el) => (boxRefs.current[box.id] = el)}
+              className={"cv-box" + (selBoxId === box.id ? " selected" : "")}
+              style={{ left: box.x, top: box.y, width: box.w }}
+              onClick={(e) => { e.stopPropagation(); setSelBoxId(box.id); }}
+            >
+              <div className="cv-drag-bar" onMouseDown={(e) => { if (e.target.closest(".cv-editor")) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBoxId(box.id); }} title="Drag to move" />
+              <div className="cv-editor"
+                ref={(el) => { if (el) editorRefs.current[box.id] = el; }}
+                contentEditable suppressContentEditableWarning spellCheck={false}
+                onFocus={() => setSelBoxId(box.id)}
+                onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
+                onInput={(e) => { syncEditor(box.id, e.currentTarget); updateCollapseButtons(e.currentTarget); }}
+                onClick={(e) => {
+                  if (e.target.classList?.contains("cv-collapse-btn")) {
+                    e.preventDefault(); const row = e.target.closest(".cv-row");
+                    if (row) { row.dataset.collapsed = row.dataset.collapsed === "true" ? "false" : "true"; updateCollapseButtons(e.currentTarget); syncEditor(box.id, e.currentTarget); }
+                  }
+                }}
+                onKeyDown={(e) => onEditorKeyDown(e, box.id)}
+                onPaste={(e) => e.preventDefault()}
+              />
+              <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
+            </div>
+          );
+        })}
         {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
       </div>
     </>
