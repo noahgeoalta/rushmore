@@ -1,94 +1,78 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CKEY = "rushmore-canvas-v4";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 const newLine = (type = "none", text = "", indent = 0, fontSize = 14) => ({
-  id: uid(), type, text, indent, fontSize, collapsed: false,
+  id: uid(), type, text, indent, fontSize,
 });
 const newBox = (x, y) => ({ id: uid(), x, y, w: 360, lines: [newLine()] });
 const emptyPage = () => ({ id: uid(), name: "Main", boxes: [] });
 const emptyState = () => { const p = emptyPage(); return { pages: [p], activeId: p.id }; };
 
-function migrateLine(n) {
-  if (!n) return [newLine()];
-  const lines = [];
-  function walk(node, depth) {
-    lines.push(newLine(node.type || (node.bullet ? "bullet" : "none"), node.text || "", depth, node.fontSize || 14));
-    if (Array.isArray(node.children)) node.children.forEach((c) => walk(c, depth + 1));
-  }
-  walk(n, 0);
-  return lines;
+function buildRow(line) {
+  const row = document.createElement("div");
+  row.className = "cv-row";
+  row.dataset.lid = line.id || uid();
+  row.dataset.type = line.type || "none";
+  row.dataset.indent = String(line.indent || 0);
+  row.dataset.fs = String(line.fontSize || 14);
+  row.style.paddingLeft = ((line.indent || 0) * 22) + "px";
+  const marker = document.createElement("span");
+  marker.className = "cv-row-marker";
+  marker.setAttribute("contenteditable", "false");
+  if (line.type === "bullet") marker.textContent = "\u2022";
+  else if (line.type === "number") marker.textContent = "1.";
+  else marker.style.visibility = "hidden";
+  row.appendChild(marker);
+  const text = document.createElement("span");
+  text.className = "cv-text";
+  text.style.fontSize = (line.fontSize || 14) + "px";
+  text.textContent = line.text || "";
+  row.appendChild(text);
+  return row;
 }
 
-function migrateState(raw) {
-  try {
-    const s = JSON.parse(raw);
-    if (!s || !Array.isArray(s.pages)) return emptyState();
-    s.pages = s.pages.map((p) => ({
-      ...p,
-      boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({
-        ...b,
-        lines: Array.isArray(b.lines)
-          ? b.lines.flatMap((l) => Array.isArray(l.children) ? migrateLine(l) : [newLine(l.type || "none", l.text || "", l.indent || 0, l.fontSize || 14)])
-          : [newLine()],
-      })) : [],
-    }));
-    if (!s.activeId || !s.pages.find((p) => p.id === s.activeId)) s.activeId = s.pages[0]?.id;
-    return s;
-  } catch { return emptyState(); }
+function syncMarker(row) {
+  const marker = row.querySelector(".cv-row-marker"); if (!marker) return;
+  const type = row.dataset.type;
+  if (type === "bullet") { marker.textContent = "\u2022"; marker.style.visibility = ""; }
+  else if (type === "number") {
+    let n = 1; let prev = row.previousElementSibling;
+    while (prev) { if (prev.dataset.type === "number" && prev.dataset.indent === row.dataset.indent) n++; prev = prev.previousElementSibling; }
+    marker.textContent = n + "."; marker.style.visibility = "";
+  } else { marker.style.visibility = "hidden"; }
 }
 
 function domToLines(editorEl) {
   const lines = [];
   for (const row of editorEl.querySelectorAll(".cv-row")) {
-    lines.push({
-      id: row.dataset.lid || uid(),
-      type: row.dataset.type || "none",
-      text: row.querySelector(".cv-text")?.textContent || "",
-      indent: parseInt(row.dataset.indent || "0", 10),
-      fontSize: parseInt(row.dataset.fs || "14", 10),
-      collapsed: row.dataset.collapsed === "true",
-    });
+    lines.push({ id: row.dataset.lid || uid(), type: row.dataset.type || "none", text: row.querySelector(".cv-text")?.textContent || "", indent: parseInt(row.dataset.indent || "0", 10), fontSize: parseInt(row.dataset.fs || "14", 10) });
   }
   return lines.length ? lines : [newLine()];
 }
 
 function htmlToLines(html) {
   if (typeof document === "undefined") return [];
-  const div = document.createElement("div");
-  div.innerHTML = html;
+  const div = document.createElement("div"); div.innerHTML = html;
   const out = [];
-  function getLiText(li) {
-    let t = "";
-    for (const node of li.childNodes) {
-      if (node.nodeType === 3) t += node.textContent;
-      else if (!["ul","ol"].includes(node.tagName?.toLowerCase())) t += node.textContent;
-    }
-    return t.trim();
-  }
-  function walkList(el, indent, type) {
-    for (const li of el.children) {
-      if (li.tagName?.toLowerCase() !== "li") continue;
-      out.push(newLine(type, getLiText(li), indent));
-      for (const child of li.children) {
-        const t = child.tagName?.toLowerCase();
-        if (t === "ul") walkList(child, indent + 1, "bullet");
-        else if (t === "ol") walkList(child, indent + 1, "number");
-      }
-    }
-  }
-  function walkEl(el, indent = 0) {
-    const tag = el.tagName?.toLowerCase();
-    if (tag === "ul") { walkList(el, indent, "bullet"); return; }
-    if (tag === "ol") { walkList(el, indent, "number"); return; }
-    if (tag === "p" || tag === "div" || tag === "li") { const text = el.textContent?.trim(); if (text) out.push(newLine("none", text, indent)); return; }
-    for (const child of el.children) walkEl(child, indent);
-  }
-  for (const child of div.children) walkEl(child);
+  function getLiText(li) { let t = ""; for (const n of li.childNodes) { if (n.nodeType === 3) t += n.textContent; else if (!["ul","ol"].includes(n.tagName?.toLowerCase())) t += n.textContent; } return t.trim(); }
+  function walkList(el, indent, type) { for (const li of el.children) { if (li.tagName?.toLowerCase() !== "li") continue; out.push(newLine(type, getLiText(li), indent)); for (const c of li.children) { const t = c.tagName?.toLowerCase(); if (t === "ul") walkList(c, indent + 1, "bullet"); else if (t === "ol") walkList(c, indent + 1, "number"); } } }
+  function walkEl(el, indent = 0) { const tag = el.tagName?.toLowerCase(); if (tag === "ul") { walkList(el, indent, "bullet"); return; } if (tag === "ol") { walkList(el, indent, "number"); return; } if (tag === "p" || tag === "div" || tag === "li") { const text = el.textContent?.trim(); if (text) out.push(newLine("none", text, indent)); return; } for (const c of el.children) walkEl(c, indent); }
+  for (const c of div.children) walkEl(c);
   return out;
+}
+
+function migrateState(raw) {
+  try {
+    const s = JSON.parse(raw);
+    if (!s || !Array.isArray(s.pages)) return emptyState();
+    s.pages = s.pages.map((p) => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.flatMap((l) => { if (Array.isArray(l.children)) { const flat = []; function walk(node, depth) { flat.push(newLine(node.type || "none", node.text || "", depth, node.fontSize || 14)); if (Array.isArray(node.children)) node.children.forEach((c) => walk(c, depth + 1)); } walk(l, 0); return flat; } return [newLine(l.type || "none", l.text || "", l.indent || 0, l.fontSize || 14)]; }) : [newLine()] })) : [] }));
+    if (!s.activeId || !s.pages.find((p) => p.id === s.activeId)) s.activeId = s.pages[0]?.id;
+    return s;
+  } catch { return emptyState(); }
 }
 
 export default function Canvas() {
@@ -136,7 +120,7 @@ export default function Canvas() {
         if (maxX - minX > 4 || maxY - minY > 4) {
           const pg = state?.pages.find((p) => p.id === state.activeId) || state?.pages[0];
           const hit = pg?.boxes.find((b) => { const bh = boxRefs.current[b.id]?.offsetHeight || 80; return b.x < maxX && b.x + b.w > minX && b.y < maxY && b.y + bh > minY; });
-          if (hit) { setSelBoxId(hit.id); editorRefs.current[hit.id]?.focus(); }
+          if (hit) { setSelBoxId(hit.id); setTimeout(() => editorRefs.current[hit.id]?.focus(), 10); }
         }
       }
       setLasso(null);
@@ -163,88 +147,35 @@ export default function Canvas() {
   const renamePage = (id) => { const pg = state.pages.find((p) => p.id === id); const name = prompt("Rename:", pg.name); if (name) setState((s) => ({ ...s, pages: s.pages.map((p) => p.id === id ? { ...p, name } : p) })); };
   const dropPage = (id) => { if (!dragPage || dragPage === id) return; setState((s) => { const pages = [...s.pages]; const fi = pages.findIndex((p) => p.id === dragPage); const ti = pages.findIndex((p) => p.id === id); const [m] = pages.splice(fi, 1); pages.splice(ti, 0, m); return { ...s, pages }; }); setDragPage(null); setOverPage(null); };
 
-  const addBox = (x, y) => { const b = newBox(x, y); mut((pg) => pg.boxes.push(b)); setSelBoxId(b.id); setTimeout(() => editorRefs.current[b.id]?.focus(), 50); };
+  const addBox = (x, y) => {
+    const b = newBox(x, y); mut((pg) => pg.boxes.push(b)); setSelBoxId(b.id);
+    setTimeout(() => { const ed = editorRefs.current[b.id]; if (ed) { ed.focus(); if (!ed.querySelector(".cv-row")) ed.appendChild(buildRow(newLine())); } }, 50);
+  };
   const delBox = (id) => { mut((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== id); }); setSelBoxId(null); };
-  const cleanEmptyBox = (id) => { const box = page.boxes.find((b) => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && box.lines[0].indent === 0) delBox(id); };
-
+  const cleanEmptyBox = (id) => { const box = page.boxes.find((b) => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].indent) delBox(id); };
   const syncEditor = (boxId, editorEl) => { const lines = domToLines(editorEl); mut((pg) => { const b = pg.boxes.find((b) => b.id === boxId); if (b) b.lines = lines; }, false); };
+  const getCaretRow = (editorEl) => { const sel = window.getSelection(); if (!sel || !sel.rangeCount) return null; let node = sel.getRangeAt(0).startContainer; while (node && node !== editorEl) { if (node.classList?.contains("cv-row")) return node; node = node.parentElement; } return null; };
 
-  function getCaretRow(editorEl) {
-    const sel = window.getSelection(); if (!sel || !sel.rangeCount) return null;
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && node !== editorEl) { if (node.classList?.contains("cv-row")) return node; node = node.parentElement; }
-    return null;
-  }
-  function updateRowIndent(row) { row.style.paddingLeft = (parseInt(row.dataset.indent || "0", 10) * 20) + "px"; }
-  function renderRowMarker(row) {
-    const type = row.dataset.type || "none";
-    let marker = row.querySelector(".cv-row-marker");
-    if (!marker) { marker = document.createElement("span"); marker.className = "cv-row-marker"; row.prepend(marker); }
-    if (type === "bullet") { marker.textContent = "\u2022"; marker.style.display = "inline-block"; }
-    else if (type === "number") {
-      const indent = parseInt(row.dataset.indent || "0", 10); let n = 0; let prev = row;
-      while ((prev = prev.previousElementSibling)) { if (prev.dataset.type === "number" && parseInt(prev.dataset.indent || "0") === indent) n++; else if (parseInt(prev.dataset.indent || "0") < indent) break; }
-      marker.textContent = (n + 1) + "."; marker.style.display = "inline-block";
-    } else { marker.style.display = "none"; }
-  }
-  function buildRow(line) {
-    const row = document.createElement("div"); row.className = "cv-row";
-    row.dataset.lid = line.id || uid(); row.dataset.type = line.type || "none";
-    row.dataset.indent = line.indent || 0; row.dataset.fs = line.fontSize || 14;
-    row.dataset.collapsed = line.collapsed || false;
-    row.style.paddingLeft = ((line.indent || 0) * 20) + "px";
-    const marker = document.createElement("span"); marker.className = "cv-row-marker";
-    if (line.type === "bullet") marker.textContent = "\u2022";
-    else if (line.type === "number") marker.textContent = "1.";
-    else marker.style.display = "none";
-    row.appendChild(marker);
-    if (line.type === "image" && line.src) {
-      const img = document.createElement("img"); img.src = line.src; img.className = "cv-row-img"; row.appendChild(img);
-    } else {
-      const text = document.createElement("span"); text.className = "cv-text";
-      text.style.fontSize = (line.fontSize || 14) + "px"; text.textContent = line.text || "";
-      row.appendChild(text);
-    }
-    return row;
-  }
-  function buildEditorDom(lines) { const f = document.createDocumentFragment(); lines.forEach((l) => f.appendChild(buildRow(l))); return f; }
-
-  const editorRefCallback = useCallback((el, boxId, lines) => {
-    if (!el) return;
-    editorRefs.current[boxId] = el;
-    const existing = [...el.querySelectorAll(".cv-row")].map((r) => r.dataset.lid);
-    const expected = lines.map((l) => l.id);
-    if (existing.join(",") !== expected.join(",")) { el.innerHTML = ""; el.appendChild(buildEditorDom(lines)); }
-    else {
-      const rows = [...el.querySelectorAll(".cv-row")];
-      lines.forEach((line, i) => {
-        const row = rows[i]; if (!row) return;
-        const textEl = row.querySelector(".cv-text");
-        if (textEl && document.activeElement !== textEl && document.activeElement !== row && textEl.textContent !== line.text) textEl.textContent = line.text;
-        if (row.dataset.type !== line.type) { row.dataset.type = line.type; renderRowMarker(row); }
-        if (parseInt(row.dataset.indent) !== line.indent) { row.dataset.indent = line.indent; updateRowIndent(row); }
-        const fs = String(line.fontSize || 14);
-        if (row.dataset.fs !== fs) { row.dataset.fs = fs; if (textEl) textEl.style.fontSize = fs + "px"; }
-      });
-    }
-  }, []);
+  const toolbarAction = (action) => {
+    const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return;
+    const row = getCaretRow(ed); if (!row) return;
+    if (action === "bullet") row.dataset.type = row.dataset.type === "bullet" ? "none" : "bullet";
+    else if (action === "number") row.dataset.type = row.dataset.type === "number" ? "none" : "number";
+    else if (action === "bigger") { const fs = Math.min(48, parseInt(row.dataset.fs || "14") + 2); row.dataset.fs = String(fs); const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; }
+    else if (action === "smaller") { const fs = Math.max(10, parseInt(row.dataset.fs || "14") - 2); row.dataset.fs = String(fs); const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; }
+    syncMarker(row); syncEditor(selBoxId, ed); setTimeout(() => ed.focus(), 0);
+  };
 
   const onEditorKeyDown = (e, boxId) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
     if (e.key === "Escape") { e.preventDefault(); setSelBoxId(null); e.currentTarget.blur(); return; }
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const row = getCaretRow(e.currentTarget); if (!row) return;
-      const indent = parseInt(row.dataset.indent || "0", 10);
-      if (e.shiftKey) { if (indent > 0) row.dataset.indent = indent - 1; } else { row.dataset.indent = indent + 1; }
-      updateRowIndent(row); syncEditor(boxId, e.currentTarget); return;
-    }
-    if (e.ctrlKey && !e.shiftKey && e.key === ".") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "bullet" ? "none" : "bullet"; renderRowMarker(row); syncEditor(boxId, e.currentTarget); } return; }
-    if (e.ctrlKey && !e.shiftKey && e.key === "/") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "number" ? "none" : "number"; renderRowMarker(row); syncEditor(boxId, e.currentTarget); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { const fs = Math.min(48, parseInt(row.dataset.fs || "14", 10) + 2); row.dataset.fs = fs; const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(boxId, e.currentTarget); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { const fs = Math.max(10, parseInt(row.dataset.fs || "14", 10) - 2); row.dataset.fs = fs; const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(boxId, e.currentTarget); } return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); handlePaste(e.currentTarget, boxId); return; }
+    if (e.key === "Tab") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (!row) return; const indent = parseInt(row.dataset.indent || "0", 10); row.dataset.indent = String(e.shiftKey ? Math.max(0, indent - 1) : indent + 1); row.style.paddingLeft = (parseInt(row.dataset.indent) * 22) + "px"; syncEditor(boxId, e.currentTarget); return; }
+    if (e.ctrlKey && !e.shiftKey && e.key === ".") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "bullet" ? "none" : "bullet"; syncMarker(row); syncEditor(boxId, e.currentTarget); } return; }
+    if (e.ctrlKey && !e.shiftKey && e.key === "/") { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { row.dataset.type = row.dataset.type === "number" ? "none" : "number"; syncMarker(row); syncEditor(boxId, e.currentTarget); } return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { const fs = Math.min(48, parseInt(row.dataset.fs || "14") + 2); row.dataset.fs = String(fs); const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(boxId, e.currentTarget); } return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); const row = getCaretRow(e.currentTarget); if (row) { const fs = Math.max(10, parseInt(row.dataset.fs || "14") - 2); row.dataset.fs = String(fs); const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(boxId, e.currentTarget); } return; }
   };
 
   const handlePaste = async (editorEl, boxId) => {
@@ -253,19 +184,38 @@ export default function Canvas() {
       if (items) {
         for (const item of items) {
           const imgType = item.types.find((t) => t.startsWith("image/"));
-          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const row = getCaretRow(editorEl) || editorEl.querySelector(".cv-row:last-child"); if (row) { const ir = buildRow({ ...newLine("image"), src: reader.result }); row.after(ir); syncEditor(boxId, editorEl); } }; reader.readAsDataURL(blob); return; }
-          if (item.types.includes("text/html")) {
-            const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text());
-            if (parsed.length) { const row = getCaretRow(editorEl); let ins = row || editorEl.querySelector(".cv-row:last-child"); for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } syncEditor(boxId, editorEl); return; }
-          }
+          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const img = document.createElement("img"); img.src = reader.result; img.className = "cv-row-img"; const row = document.createElement("div"); row.className = "cv-row"; row.dataset.type = "image"; row.dataset.lid = uid(); row.dataset.indent = "0"; row.dataset.fs = "14"; const m = document.createElement("span"); m.className = "cv-row-marker"; m.style.visibility = "hidden"; m.setAttribute("contenteditable", "false"); row.appendChild(m); row.appendChild(img); const cur = getCaretRow(editorEl) || editorEl.lastElementChild; if (cur) cur.after(row); else editorEl.appendChild(row); syncEditor(boxId, editorEl); }; reader.readAsDataURL(blob); return; }
+          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = htmlToLines(await htmlBlob.text()); if (parsed.length) { const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur; for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); } syncEditor(boxId, editorEl); return; } }
         }
       }
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
-      const rows = text.split("\n").filter((l) => l.trim()); const row = getCaretRow(editorEl);
-      let ins = row || editorEl.querySelector(".cv-row:last-child");
-      for (const t of rows) { const nr = buildRow(newLine("none", t.trim())); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); }
+      const cur = getCaretRow(editorEl) || editorEl.lastElementChild; let ins = cur;
+      for (const t of text.split("\n").filter((l) => l.trim())) { const nr = buildRow(newLine("none", t.trim())); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); }
       syncEditor(boxId, editorEl);
     } catch {}
+  };
+
+  const setupEditor = (el, boxId, lines) => {
+    if (!el) return;
+    editorRefs.current[boxId] = el;
+    const existingIds = [...el.querySelectorAll(".cv-row")].map((r) => r.dataset.lid).join(",");
+    const expectedIds = lines.map((l) => l.id).join(",");
+    if (existingIds !== expectedIds) {
+      el.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      lines.forEach((line) => frag.appendChild(buildRow(line)));
+      el.appendChild(frag);
+    } else {
+      const rows = [...el.querySelectorAll(".cv-row")];
+      lines.forEach((line, i) => {
+        const row = rows[i]; if (!row) return;
+        const textEl = row.querySelector(".cv-text"); const active = document.activeElement;
+        if (textEl && active !== textEl && !row.contains(active) && textEl.textContent !== line.text) textEl.textContent = line.text;
+        if (row.dataset.type !== line.type) { row.dataset.type = line.type; syncMarker(row); }
+        const ind = String(line.indent || 0); if (row.dataset.indent !== ind) { row.dataset.indent = ind; row.style.paddingLeft = (line.indent * 22) + "px"; }
+        const fs = String(line.fontSize || 14); if (row.dataset.fs !== fs) { row.dataset.fs = fs; if (textEl) textEl.style.fontSize = fs + "px"; }
+      });
+    }
   };
 
   const lassoRect = lasso ? { left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy), width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy) } : null;
@@ -283,15 +233,15 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Bullet (Ctrl+.)" onClick={() => { const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return; const row = getCaretRow(ed); if (row) { row.dataset.type = row.dataset.type === "bullet" ? "none" : "bullet"; renderRowMarker(row); syncEditor(selBoxId, ed); } }}>•</button>
-          <button className="notes-btn" title="Number (Ctrl+/)" onClick={() => { const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return; const row = getCaretRow(ed); if (row) { row.dataset.type = row.dataset.type === "number" ? "none" : "number"; renderRowMarker(row); syncEditor(selBoxId, ed); } }}>1.</button>
+          <button className="notes-btn" title="Bullet (Ctrl+.)" onClick={() => toolbarAction("bullet")}>&bull;</button>
+          <button className="notes-btn" title="Number (Ctrl+/)" onClick={() => toolbarAction("number")}>1.</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Smaller" onClick={() => { const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return; const row = getCaretRow(ed); if (row) { const fs = Math.max(10, parseInt(row.dataset.fs || "14") - 2); row.dataset.fs = fs; const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(selBoxId, ed); } }}>A-</button>
-          <button className="notes-btn" title="Larger" onClick={() => { const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return; const row = getCaretRow(ed); if (row) { const fs = Math.min(48, parseInt(row.dataset.fs || "14") + 2); row.dataset.fs = fs; const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px"; syncEditor(selBoxId, ed); } }}>A+</button>
+          <button className="notes-btn" title="Smaller" onClick={() => toolbarAction("smaller")}>A-</button>
+          <button className="notes-btn" title="Larger" onClick={() => toolbarAction("bigger")}>A+</button>
           <span className="notes-sep" />
           {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  drag top bar to move  |  click-drag to select text  |  Ctrl+V paste  |  Tab/Shift+Tab indent</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  drag top bar to move  |  click-drag to select  |  Tab indent  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 180, e.clientY - r.top - 14); }}
@@ -307,13 +257,13 @@ export default function Canvas() {
           >
             <div className="cv-drag-bar" onMouseDown={(e) => { if (e.target.closest(".cv-editor")) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBoxId(box.id); }} title="Drag to move" />
             <div className="cv-editor"
-              ref={(el) => editorRefCallback(el, box.id, box.lines)}
+              ref={(el) => setupEditor(el, box.id, box.lines)}
               contentEditable suppressContentEditableWarning spellCheck={false}
               onFocus={() => setSelBoxId(box.id)}
               onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
               onInput={(e) => syncEditor(box.id, e.currentTarget)}
               onKeyDown={(e) => onEditorKeyDown(e, box.id)}
-              onPaste={(e) => { e.preventDefault(); }}
+              onPaste={(e) => e.preventDefault()}
             />
             <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
           </div>
