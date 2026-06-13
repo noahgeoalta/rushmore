@@ -12,30 +12,7 @@ const newBox = (x, y) => ({ id: uid(), x, y, w: 360, lines: [newLine()] });
 const emptyPage = () => ({ id: uid(), name: "Main", boxes: [] });
 const emptyState = () => { const p = emptyPage(); return { pages: [p], activeId: p.id }; };
 
-/* ───────────────────────── DOM helpers (module-level, no hooks) ───────────────────────── */
-
-function placeCaret(textEl, pos = 0) {
-  if (!textEl || typeof window === "undefined") return;
-  const sel = window.getSelection(); if (!sel) return;
-  const r = document.createRange();
-  const node = textEl.firstChild;
-  try {
-    if (node && node.nodeType === 3) r.setStart(node, Math.min(pos, node.textContent.length));
-    else r.setStart(textEl, 0);
-    r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
-  } catch {}
-}
-
-function caretOffsetIn(textEl) {
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount || !textEl) return 0;
-  const range = sel.getRangeAt(0);
-  const pre = document.createRange();
-  pre.selectNodeContents(textEl);
-  try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 0; }
-  return pre.toString().length;
-}
+/* ───────── DOM helpers (module-level; rows hold text directly, markers are CSS) ───────── */
 
 function buildRow(line) {
   const row = document.createElement("div");
@@ -45,97 +22,58 @@ function buildRow(line) {
   row.dataset.indent = String(line.indent || 0);
   row.dataset.fs = String(line.fontSize || 14);
   row.dataset.collapsed = line.collapsed ? "true" : "false";
-  row.style.paddingLeft = ((line.indent || 0) * 22) + "px";
-
-  const colBtn = document.createElement("button");
-  colBtn.className = "cv-collapse-btn";
-  colBtn.setAttribute("contenteditable", "false");
-  colBtn.tabIndex = -1;
-  colBtn.type = "button";
-  colBtn.style.visibility = "hidden";
-  colBtn.textContent = line.collapsed ? "\u25b6" : "\u25bc";
-  row.appendChild(colBtn);
-
-  const marker = document.createElement("span");
-  marker.className = "cv-row-marker";
-  marker.setAttribute("contenteditable", "false");
-  if (line.type === "bullet") marker.textContent = "\u2022";
-  else if (line.type === "number") marker.textContent = "1.";
-  else marker.style.visibility = "hidden";
-  row.appendChild(marker);
-
+  row.style.marginLeft = ((line.indent || 0) * 22) + "px";
+  row.style.fontSize = (line.fontSize || 14) + "px";
   if (line.type === "image" && line.src) {
     const img = document.createElement("img");
     img.src = line.src;
     img.className = "cv-row-img";
     img.setAttribute("contenteditable", "false");
     row.appendChild(img);
-    const t = document.createElement("span");
-    t.className = "cv-text"; t.textContent = "";
-    row.appendChild(t);
-  } else {
-    const text = document.createElement("span");
-    text.className = "cv-text";
-    text.style.fontSize = (line.fontSize || 14) + "px";
-    text.textContent = line.text || "";
-    row.appendChild(text);
+  } else if (line.text) {
+    row.textContent = line.text;
   }
   return row;
 }
 
-function syncMarker(row) {
-  const marker = row.querySelector(".cv-row-marker");
-  if (!marker) return;
-  const type = row.dataset.type;
-  if (type === "bullet") { marker.textContent = "\u2022"; marker.style.visibility = ""; }
-  else if (type === "number") {
-    let n = 1; let prev = row.previousElementSibling;
-    while (prev) {
-      const pIndent = prev.dataset.indent || "0";
-      if (parseInt(pIndent) < parseInt(row.dataset.indent || "0")) break;
-      if (prev.dataset.type === "number" && pIndent === (row.dataset.indent || "0")) n++;
-      prev = prev.previousElementSibling;
-    }
-    marker.textContent = n + "."; marker.style.visibility = "";
-  } else { marker.style.visibility = "hidden"; }
-}
-
-// Update collapse buttons, hide collapsed children, and renumber numbered rows.
+// Recompute child markers, numbering, and collapse visibility (visual only).
 function refreshRows(editorEl) {
   const rows = [...editorEl.querySelectorAll(".cv-row")];
+  // has-children flags
   rows.forEach((row, i) => {
-    const myIndent = parseInt(row.dataset.indent || "0");
+    const ind = parseInt(row.dataset.indent || "0");
     const next = rows[i + 1];
-    const hasChildren = next && parseInt(next.dataset.indent || "0") > myIndent;
-    const btn = row.querySelector(".cv-collapse-btn");
-    if (btn) {
-      btn.style.visibility = hasChildren ? "visible" : "hidden";
-      btn.textContent = row.dataset.collapsed === "true" ? "\u25b6" : "\u25bc";
-    }
+    row.dataset.haskids = (next && parseInt(next.dataset.indent || "0") > ind) ? "true" : "false";
   });
+  // per-indent numbering
+  const counters = {};
+  rows.forEach((row) => {
+    const ind = parseInt(row.dataset.indent || "0");
+    Object.keys(counters).forEach((k) => { if (+k > ind) delete counters[k]; });
+    if (row.dataset.type === "number") { counters[ind] = (counters[ind] || 0) + 1; row.dataset.num = String(counters[ind]); }
+    else counters[ind] = 0;
+  });
+  // collapse visibility (handles nested ancestors)
   rows.forEach((row, i) => {
-    const myIndent = parseInt(row.dataset.indent || "0");
-    if (myIndent === 0) { row.style.display = ""; }
-    else {
-      let hidden = false;
-      for (let j = i - 1; j >= 0; j--) {
-        const pIndent = parseInt(rows[j].dataset.indent || "0");
-        if (pIndent < myIndent) { if (rows[j].dataset.collapsed === "true") hidden = true; break; }
-      }
-      row.style.display = hidden ? "none" : "";
-    }
-    if (row.dataset.type === "number") syncMarker(row);
+    const ind = parseInt(row.dataset.indent || "0");
+    let parent = null;
+    for (let j = i - 1; j >= 0; j--) { if (parseInt(rows[j].dataset.indent || "0") < ind) { parent = rows[j]; break; } }
+    const hidden = parent ? (parent.dataset.collapsed === "true" || parent._hidden === true) : false;
+    row._hidden = hidden;
+    row.style.display = hidden ? "none" : "";
   });
 }
 
 function domToLines(editorEl) {
   const lines = [];
   for (const row of editorEl.querySelectorAll(".cv-row")) {
+    let id = row.dataset.lid;
+    if (!id) { id = uid(); row.dataset.lid = id; }
     const img = row.querySelector(".cv-row-img");
     lines.push({
-      id: row.dataset.lid || uid(),
-      type: row.dataset.type || "none",
-      text: row.querySelector(".cv-text")?.textContent || "",
+      id,
+      type: img ? "image" : (row.dataset.type || "none"),
+      text: img ? "" : (row.textContent || ""),
       indent: parseInt(row.dataset.indent || "0", 10),
       fontSize: parseInt(row.dataset.fs || "14", 10),
       collapsed: row.dataset.collapsed === "true",
@@ -143,6 +81,29 @@ function domToLines(editorEl) {
     });
   }
   return lines.length ? lines : [newLine()];
+}
+
+function caretOffset(row) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return 0;
+  const range = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(row);
+  try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 0; }
+  return pre.toString().length;
+}
+
+function placeCaret(row, pos = 0) {
+  if (!row || typeof window === "undefined") return;
+  const sel = window.getSelection(); if (!sel) return;
+  const r = document.createRange();
+  const node = row.firstChild;
+  try {
+    if (node && node.nodeType === 3) r.setStart(node, Math.min(pos, node.textContent.length));
+    else r.setStart(row, 0);
+    r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+  } catch {}
 }
 
 function htmlToLines(html) {
@@ -202,7 +163,7 @@ function migrateState(raw) {
             walk(l, 0);
             return flat;
           }
-          return [{ ...newLine(l.type || "none", l.text || "", l.indent || 0, l.fontSize || 14), src: l.src }];
+          return [{ ...newLine(l.type || "none", l.text || "", l.indent || 0, l.fontSize || 14), ...(l.src ? { src: l.src } : {}) }];
         }) : [newLine()],
       })) : [],
     }));
@@ -211,7 +172,7 @@ function migrateState(raw) {
   } catch { return emptyState(); }
 }
 
-/* ───────────────────────────────────── Component ───────────────────────────────────── */
+/* ───────────────────────────────────── Component ─────────────────────────────────── */
 
 export default function Canvas() {
   const [state, setState] = useState(null);
@@ -229,9 +190,9 @@ export default function Canvas() {
   const boxRefs = useRef({});
   const editorRefs = useRef({});
   const pendingFocus = useRef(null);
+  const forceSync = useRef(false);
   const histRef = useRef(0);
 
-  /* Load + mount */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(CKEY)
@@ -242,55 +203,50 @@ export default function Canvas() {
     } catch { setState(emptyState()); }
   }, []);
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
 
-  /* Save */
-  useEffect(() => {
-    if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {}
-  }, [state]);
-
-  /* State → DOM sync. Runs after commit; never touches the focused editor's text. */
+  /* state → DOM. Never disturbs the focused editor's text unless forced (undo/redo). */
   useEffect(() => {
     if (!state || !mounted) return;
     const pg = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
+    const force = forceSync.current; forceSync.current = false;
     pg?.boxes.forEach((box) => {
       const el = editorRefs.current[box.id];
       if (!el) return;
+      const focused = el.contains(document.activeElement);
       const existing = [...el.querySelectorAll(".cv-row")].map((r) => r.dataset.lid).join(",");
       const expected = box.lines.map((l) => l.id).join(",");
-      if (existing !== expected) {
+      if (force || existing !== expected) {
         el.innerHTML = "";
         const frag = document.createDocumentFragment();
         box.lines.forEach((line) => frag.appendChild(buildRow(line)));
         el.appendChild(frag);
         refreshRows(el);
-      } else {
+      } else if (!focused) {
         const rows = [...el.querySelectorAll(".cv-row")];
-        const active = document.activeElement;
-        const editorFocused = el.contains(active);
         box.lines.forEach((line, i) => {
           const row = rows[i]; if (!row) return;
-          const textEl = row.querySelector(".cv-text");
-          if (textEl && !editorFocused && textEl.textContent !== line.text) textEl.textContent = line.text;
-          if (row.dataset.type !== line.type) { row.dataset.type = line.type; syncMarker(row); }
-          const ind = String(line.indent || 0);
-          if (row.dataset.indent !== ind) { row.dataset.indent = ind; row.style.paddingLeft = (line.indent * 22) + "px"; }
-          const fs = String(line.fontSize || 14);
-          if (row.dataset.fs !== fs) { row.dataset.fs = fs; if (textEl) textEl.style.fontSize = fs + "px"; }
-          const col = line.collapsed ? "true" : "false";
-          if (row.dataset.collapsed !== col) row.dataset.collapsed = col;
+          if (!row.querySelector(".cv-row-img") && row.textContent !== line.text) row.textContent = line.text;
+          row.dataset.type = line.type;
+          row.dataset.indent = String(line.indent || 0);
+          row.style.marginLeft = ((line.indent || 0) * 22) + "px";
+          row.dataset.fs = String(line.fontSize || 14);
+          row.style.fontSize = (line.fontSize || 14) + "px";
+          row.dataset.collapsed = line.collapsed ? "true" : "false";
         });
         refreshRows(el);
+      } else {
+        refreshRows(el); // focused: only refresh markers/visibility, leave text + caret alone
       }
     });
     if (pendingFocus.current) {
       const el = editorRefs.current[pendingFocus.current];
-      const t = el?.querySelector(".cv-text");
-      if (el && t) { el.focus(); placeCaret(t, 0); }
+      if (el) { el.focus(); const first = el.querySelector(".cv-row"); if (first) placeCaret(first, 0); }
       pendingFocus.current = null;
     }
   }, [state, mounted]);
 
-  /* Box drag / resize */
+  /* box drag / resize */
   useEffect(() => {
     if (!drag && !resize) return;
     const move = (e) => {
@@ -309,7 +265,7 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [drag, resize]);
 
-  /* Lasso box-select */
+  /* lasso box-select */
   useEffect(() => {
     if (!lasso) return;
     const move = (e) => { const r = cvRef.current?.getBoundingClientRect(); if (!r) return; setLasso((l) => l ? { ...l, ex: e.clientX - r.left, ey: e.clientY - r.top } : null); };
@@ -331,7 +287,6 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [lasso, state]);
 
-  /* SSR / first-paint gate — matches server output, avoids hydration mismatch */
   if (!state || !mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
 
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
@@ -355,20 +310,15 @@ export default function Canvas() {
     const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; fn(pg); return ns;
   });
 
-  const undo = () => { if (!history.length) return; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
-  const redo = () => { if (!future.length) return; setHistory((h) => [...h, state]); setState(future[0]); setFuture((f) => f.slice(1)); };
+  const undo = () => { if (!history.length) return; forceSync.current = true; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
+  const redo = () => { if (!future.length) return; forceSync.current = true; setHistory((h) => [...h, state]); setState(future[0]); setFuture((f) => f.slice(1)); };
 
   const addPage = () => { const name = prompt("Page name:", "New page"); if (!name) return; const p = emptyPage(); p.name = name; setState((s) => ({ ...s, pages: [...s.pages, p], activeId: p.id })); };
   const delPage = (id) => { if (!confirm("Delete page?")) return; setState((s) => { const pages = s.pages.filter((p) => p.id !== id); const safe = pages.length ? pages : [emptyPage()]; return { pages: safe, activeId: s.activeId === id ? safe[0].id : s.activeId }; }); };
   const renamePage = (id) => { const pg = state.pages.find((p) => p.id === id); const name = prompt("Rename:", pg.name); if (name) setState((s) => ({ ...s, pages: s.pages.map((p) => p.id === id ? { ...p, name } : p) })); };
   const dropPage = (id) => { if (!dragPage || dragPage === id) return; setState((s) => { const pages = [...s.pages]; const fi = pages.findIndex((p) => p.id === dragPage); const ti = pages.findIndex((p) => p.id === id); const [m] = pages.splice(fi, 1); pages.splice(ti, 0, m); return { ...s, pages }; }); setDragPage(null); setOverPage(null); };
 
-  const addBox = (x, y) => {
-    const b = newBox(x, y);
-    pendingFocus.current = b.id;
-    mut((pg) => pg.boxes.push(b));
-    setSelBoxId(b.id);
-  };
+  const addBox = (x, y) => { const b = newBox(x, y); pendingFocus.current = b.id; mut((pg) => pg.boxes.push(b)); setSelBoxId(b.id); };
   const delBox = (id) => { mut((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== id); }); setSelBoxId(null); };
   const cleanEmptyBox = (id) => {
     const box = page.boxes.find((b) => b.id === id); if (!box) return;
@@ -381,13 +331,8 @@ export default function Canvas() {
     while (node && node !== editorEl) { if (node.classList?.contains("cv-row")) return node; node = node.parentElement; }
     return null;
   };
-
-  const setRowType = (editorEl, row, t) => { row.dataset.type = row.dataset.type === t ? "none" : t; syncMarker(row); refreshRows(editorEl); };
-  const setRowFont = (editorEl, row, delta) => {
-    const fs = Math.max(10, Math.min(48, parseInt(row.dataset.fs || "14") + delta));
-    row.dataset.fs = String(fs);
-    const t = row.querySelector(".cv-text"); if (t) t.style.fontSize = fs + "px";
-  };
+  const setRowType = (editorEl, row, t) => { row.dataset.type = row.dataset.type === t ? "none" : t; refreshRows(editorEl); };
+  const setRowFont = (row, delta) => { const fs = Math.max(10, Math.min(48, parseInt(row.dataset.fs || "14") + delta)); row.dataset.fs = String(fs); row.style.fontSize = fs + "px"; };
 
   const toolbarAction = (action) => {
     const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return;
@@ -395,14 +340,13 @@ export default function Canvas() {
     recordHistory(true);
     if (action === "bullet") setRowType(ed, row, "bullet");
     else if (action === "number") setRowType(ed, row, "number");
-    else if (action === "bigger") setRowFont(ed, row, 2);
-    else if (action === "smaller") setRowFont(ed, row, -2);
+    else if (action === "bigger") setRowFont(row, 2);
+    else if (action === "smaller") setRowFont(row, -2);
     commitLines(selBoxId, ed);
   };
 
   const onEditorKeyDown = (e, boxId) => {
     const editorEl = e.currentTarget;
-
     if (e.ctrlKey && !e.shiftKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && (e.key === "z" || e.key === "Z")))) { e.preventDefault(); redo(); return; }
     if (e.key === "Escape") { e.preventDefault(); setSelBoxId(null); editorEl.blur(); return; }
@@ -412,20 +356,18 @@ export default function Canvas() {
       e.preventDefault();
       const row = getCaretRow(editorEl); if (!row) return;
       recordHistory(true);
-      const textEl = row.querySelector(".cv-text");
-      const caret = caretOffsetIn(textEl);
-      const full = textEl?.textContent || "";
+      const caret = caretOffset(row);
+      const full = row.textContent || "";
       const before = full.slice(0, caret);
       const after = full.slice(caret);
-      if (textEl) textEl.textContent = before;
       const curType = row.dataset.type || "none";
       if (!before.trim() && (curType === "bullet" || curType === "number")) {
-        row.dataset.type = "none"; syncMarker(row); refreshRows(editorEl);
-        commitLines(boxId, editorEl); return;
+        row.dataset.type = "none"; refreshRows(editorEl); commitLines(boxId, editorEl); return;
       }
+      row.textContent = before;
       const nr = buildRow({ id: uid(), type: curType, text: after, indent: parseInt(row.dataset.indent || "0"), fontSize: parseInt(row.dataset.fs || "14") });
       row.after(nr);
-      placeCaret(nr.querySelector(".cv-text"), 0);
+      placeCaret(nr, 0);
       refreshRows(editorEl);
       commitLines(boxId, editorEl);
       return;
@@ -433,16 +375,14 @@ export default function Canvas() {
 
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Backspace") {
       const row = getCaretRow(editorEl); if (!row) return;
-      const textEl = row.querySelector(".cv-text");
-      if (caretOffsetIn(textEl) > 0) return;
+      if (caretOffset(row) > 0) return;
       const prev = row.previousElementSibling; if (!prev) return;
       e.preventDefault();
       recordHistory(true);
-      const prevText = prev.querySelector(".cv-text");
-      const prevLen = prevText?.textContent?.length || 0;
-      if (prevText && textEl) prevText.textContent += textEl.textContent;
+      const prevLen = (prev.textContent || "").length;
+      prev.textContent = (prev.textContent || "") + (row.textContent || "");
       row.remove();
-      placeCaret(prevText, prevLen);
+      placeCaret(prev, prevLen);
       refreshRows(editorEl);
       commitLines(boxId, editorEl);
       return;
@@ -454,7 +394,7 @@ export default function Canvas() {
       recordHistory(true);
       const indent = parseInt(row.dataset.indent || "0", 10);
       row.dataset.indent = String(e.shiftKey ? Math.max(0, indent - 1) : indent + 1);
-      row.style.paddingLeft = (parseInt(row.dataset.indent) * 22) + "px";
+      row.style.marginLeft = (parseInt(row.dataset.indent) * 22) + "px";
       refreshRows(editorEl);
       commitLines(boxId, editorEl);
       return;
@@ -462,8 +402,8 @@ export default function Canvas() {
 
     if (e.ctrlKey && !e.shiftKey && e.key === ".") { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowType(editorEl, row, "bullet"); commitLines(boxId, editorEl); } return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "/") { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowType(editorEl, row, "number"); commitLines(boxId, editorEl); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(editorEl, row, 2); commitLines(boxId, editorEl); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(editorEl, row, -2); commitLines(boxId, editorEl); } return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(row, 2); commitLines(boxId, editorEl); } return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(row, -2); commitLines(boxId, editorEl); } return; }
   };
 
   const handlePaste = async (editorEl, boxId) => {
@@ -477,7 +417,7 @@ export default function Canvas() {
             const reader = new FileReader();
             reader.onload = () => {
               recordHistory(true);
-              const nr = buildRow({ id: uid(), type: "image", text: "", indent: 0, fontSize: 14, src: reader.result });
+              const nr = buildRow({ id: uid(), type: "image", src: reader.result });
               const cur = getCaretRow(editorEl) || editorEl.lastElementChild;
               if (cur) cur.after(nr); else editorEl.appendChild(nr);
               refreshRows(editorEl);
@@ -501,12 +441,8 @@ export default function Canvas() {
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
       recordHistory(true);
       let ins = getCaretRow(editorEl) || editorEl.lastElementChild;
-      const parts = text.split("\n").filter((l) => l.trim());
-      parts.forEach((t, i) => {
-        if (i === 0 && ins) {
-          const textEl = ins.querySelector(".cv-text");
-          if (textEl && !textEl.textContent.trim()) { textEl.textContent = t.trim(); return; }
-        }
+      text.split("\n").filter((l) => l.trim()).forEach((t, i) => {
+        if (i === 0 && ins && !(ins.textContent || "").trim()) { ins.textContent = t.trim(); return; }
         const nr = buildRow(newLine("none", t.trim()));
         if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr);
       });
@@ -515,11 +451,13 @@ export default function Canvas() {
     } catch {}
   };
 
-  const onEditorClick = (e, boxId) => {
-    if (e.target.classList?.contains("cv-collapse-btn")) {
-      e.preventDefault();
-      const row = e.target.closest(".cv-row");
-      if (row) {
+  // collapse chevron lives in the left gutter (CSS pseudo); detect clicks there
+  const onEditorMouseDown = (e, boxId) => {
+    const row = e.target.closest?.(".cv-row");
+    if (row && row.dataset.haskids === "true") {
+      const x = e.clientX - row.getBoundingClientRect().left;
+      if (x < 18) {
+        e.preventDefault();
         recordHistory(true);
         row.dataset.collapsed = row.dataset.collapsed === "true" ? "false" : "true";
         refreshRows(e.currentTarget);
@@ -560,7 +498,7 @@ export default function Canvas() {
           <span className="notes-sep" />
           {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for a box  |  drag the top bar to move  |  click-drag to select text  |  Tab indent  |  Ctrl+. / Ctrl+/  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click canvas for a box  |  drag the top bar to move  |  click-drag to select text  |  Tab indent  |  Ctrl+. / Ctrl+/  |  click ▼ to collapse</span>
       </div>
 
       <div className="cv-canvas" ref={cvRef}
@@ -591,8 +529,8 @@ export default function Canvas() {
               spellCheck={false}
               onFocus={() => setSelBoxId(box.id)}
               onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
+              onMouseDown={(e) => onEditorMouseDown(e, box.id)}
               onInput={(e) => { recordHistory(false); commitLines(box.id, e.currentTarget); }}
-              onClick={(e) => onEditorClick(e, box.id)}
               onKeyDown={(e) => onEditorKeyDown(e, box.id)}
               onPaste={(e) => e.preventDefault()}
             />
