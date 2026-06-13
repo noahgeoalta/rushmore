@@ -113,6 +113,7 @@ function migrateState(raw) {
 
 export default function Canvas() {
   const [state, setState] = useState(null);
+  const [mounted, setMounted] = useState(false);
   const [drag, setDrag] = useState(null);
   const [resize, setResize] = useState(null);
   const [lasso, setLasso] = useState(null);
@@ -131,6 +132,8 @@ export default function Canvas() {
       setState(raw ? migrateState(raw) : emptyState());
     } catch { setState(emptyState()); }
   }, []);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
 
@@ -165,7 +168,8 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [lasso, state]);
 
-  if (!state) return null;
+  if (!state || !mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
+
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
   const canvasW = Math.max(800, ...page.boxes.map((b) => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map((b) => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
@@ -317,7 +321,7 @@ export default function Canvas() {
           <span className="notes-sep" />
           {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  Tab indent  |  Ctrl+. bullet  |  Ctrl+/ number  |  click ▼ to collapse  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  Tab indent  |  Ctrl+. bullet  |  Ctrl+/ number  |  click &#9660; to collapse  |  Ctrl+V paste</span>
       </div>
       <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 180, e.clientY - r.top - 14); }}
