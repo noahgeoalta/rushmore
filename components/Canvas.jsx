@@ -1,284 +1,182 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
-const CKEY = "rushmore-canvas-v4";
+const CKEY = "rushmore-canvas-v3";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const BULLET = "\u2022";
+const CC = "\u25b6";
+const CO = "\u25bc";
 
-const newLine = (type = "none", text = "", indent = 0, fontSize = 14) => ({
-  id: uid(), type, text, indent, fontSize, collapsed: false,
-});
-const newBox = (x, y) => ({ id: uid(), x, y, w: 360, lines: [newLine()] });
-const emptyPage = () => ({ id: uid(), name: "Main", boxes: [] });
-const emptyState = () => { const p = emptyPage(); return { pages: [p], activeId: p.id }; };
+const newLine = (type = "none") => ({ id: uid(), text: "", type, fontSize: 14, collapsed: false, children: [] });
+const newBox = (x, y) => ({ id: uid(), x, y, w: 340, lines: [newLine()] });
+const emptyState = () => { const p = { id: uid(), name: "Main", boxes: [] }; return { pages: [p], activeId: p.id }; };
 
-/* ───────── DOM helpers (module-level; rows hold text directly, markers are CSS) ───────── */
-
-function buildRow(line) {
-  const row = document.createElement("div");
-  row.className = "cv-row";
-  row.dataset.lid = line.id || uid();
-  row.dataset.type = line.type || "none";
-  row.dataset.indent = String(line.indent || 0);
-  row.dataset.fs = String(line.fontSize || 14);
-  row.dataset.collapsed = line.collapsed ? "true" : "false";
-  row.style.marginLeft = ((line.indent || 0) * 22) + "px";
-  row.style.fontSize = (line.fontSize || 14) + "px";
-  if (line.type === "image" && line.src) {
-    const img = document.createElement("img");
-    img.src = line.src;
-    img.className = "cv-row-img";
-    img.setAttribute("contenteditable", "false");
-    row.appendChild(img);
-  } else if (line.text) {
-    row.textContent = line.text;
+function loc(nodes, id) {
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].id === id) return { list: nodes, i, node: nodes[i] };
+    const h = loc(nodes[i].children, id);
+    if (h) return h;
   }
-  return row;
+  return null;
+}
+function vids(nodes, out = []) {
+  for (const n of nodes) { out.push(n.id); if (!n.collapsed) vids(n.children, out); }
+  return out;
+}
+function numInList(list, idx) {
+  let n = 0;
+  for (let i = 0; i <= idx; i++) if (list[i].type === "number") n++;
+  return n;
 }
 
-// Recompute child markers, numbering, and collapse visibility (visual only).
-function refreshRows(editorEl) {
-  const rows = [...editorEl.querySelectorAll(".cv-row")];
-  // has-children flags
-  rows.forEach((row, i) => {
-    const ind = parseInt(row.dataset.indent || "0");
-    const next = rows[i + 1];
-    row.dataset.haskids = (next && parseInt(next.dataset.indent || "0") > ind) ? "true" : "false";
-  });
-  // per-indent numbering
-  const counters = {};
-  rows.forEach((row) => {
-    const ind = parseInt(row.dataset.indent || "0");
-    Object.keys(counters).forEach((k) => { if (+k > ind) delete counters[k]; });
-    if (row.dataset.type === "number") { counters[ind] = (counters[ind] || 0) + 1; row.dataset.num = String(counters[ind]); }
-    else counters[ind] = 0;
-  });
-  // collapse visibility (handles nested ancestors)
-  rows.forEach((row, i) => {
-    const ind = parseInt(row.dataset.indent || "0");
-    let parent = null;
-    for (let j = i - 1; j >= 0; j--) { if (parseInt(rows[j].dataset.indent || "0") < ind) { parent = rows[j]; break; } }
-    const hidden = parent ? (parent.dataset.collapsed === "true" || parent._hidden === true) : false;
-    row._hidden = hidden;
-    row.style.display = hidden ? "none" : "";
-  });
+function migrateLine(n) {
+  if (!n || typeof n !== "object") return newLine();
+  return {
+    id: n.id || uid(), text: n.text || "",
+    type: n.type || (n.bullet ? "bullet" : "none"),
+    fontSize: n.fontSize || 14, collapsed: n.collapsed || false,
+    src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [],
+  };
 }
 
-function domToLines(editorEl) {
-  const lines = [];
-  for (const row of editorEl.querySelectorAll(".cv-row")) {
-    let id = row.dataset.lid;
-    if (!id) { id = uid(); row.dataset.lid = id; }
-    const img = row.querySelector(".cv-row-img");
-    lines.push({
-      id,
-      type: img ? "image" : (row.dataset.type || "none"),
-      text: img ? "" : (row.textContent || ""),
-      indent: parseInt(row.dataset.indent || "0", 10),
-      fontSize: parseInt(row.dataset.fs || "14", 10),
-      collapsed: row.dataset.collapsed === "true",
-      ...(img ? { src: img.src } : {}),
-    });
-  }
-  return lines.length ? lines : [newLine()];
-}
-
-function caretOffset(row) {
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return 0;
-  const range = sel.getRangeAt(0);
-  const pre = document.createRange();
-  pre.selectNodeContents(row);
-  try { pre.setEnd(range.startContainer, range.startOffset); } catch { return 0; }
-  return pre.toString().length;
-}
-
-function placeCaret(row, pos = 0) {
-  if (!row || typeof window === "undefined") return;
-  const sel = window.getSelection(); if (!sel) return;
-  const r = document.createRange();
-  const node = row.firstChild;
-  try {
-    if (node && node.nodeType === 3) r.setStart(node, Math.min(pos, node.textContent.length));
-    else r.setStart(row, 0);
-    r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
-  } catch {}
-}
-
-function htmlToLines(html) {
+function parseHtmlToLines(html) {
   if (typeof document === "undefined") return [];
   const div = document.createElement("div");
   div.innerHTML = html;
-  const out = [];
-  const getLiText = (li) => {
+  const lines = [];
+  function getLiText(li) {
     let t = "";
-    for (const n of li.childNodes) {
-      if (n.nodeType === 3) t += n.textContent;
-      else if (!["ul", "ol"].includes(n.tagName?.toLowerCase())) t += n.textContent;
+    for (const node of li.childNodes) {
+      if (node.nodeType === 3) t += node.textContent;
+      else if (!["ul","ol"].includes(node.tagName?.toLowerCase())) t += node.textContent;
     }
     return t.trim();
-  };
-  const walkList = (el, indent, type) => {
-    for (const li of el.children) {
+  }
+  function walkList(listEl, parent) {
+    const type = listEl.tagName?.toLowerCase() === "ol" ? "number" : "bullet";
+    for (const li of listEl.children) {
       if (li.tagName?.toLowerCase() !== "li") continue;
-      out.push(newLine(type, getLiText(li), indent));
-      for (const c of li.children) {
-        const t = c.tagName?.toLowerCase();
-        if (t === "ul") walkList(c, indent + 1, "bullet");
-        else if (t === "ol") walkList(c, indent + 1, "number");
-      }
+      const line = newLine(type); line.text = getLiText(li);
+      for (const child of li.children) { const t = child.tagName?.toLowerCase(); if (t === "ul" || t === "ol") walkList(child, line); }
+      if (parent) parent.children.push(line); else lines.push(line);
     }
-  };
-  const walkEl = (el, indent = 0) => {
+  }
+  function walkEl(el) {
     const tag = el.tagName?.toLowerCase();
-    if (tag === "ul") return walkList(el, indent, "bullet");
-    if (tag === "ol") return walkList(el, indent, "number");
-    if (tag === "p" || tag === "div" || tag === "li") {
-      const text = el.textContent?.trim();
-      if (text) out.push(newLine("none", text, indent));
-      return;
-    }
-    for (const c of el.children) walkEl(c, indent);
-  };
-  for (const c of div.children) walkEl(c);
-  return out;
+    if (tag === "ul" || tag === "ol") { walkList(el, null); return; }
+    if (tag === "p" || tag === "span") { const text = el.textContent?.trim(); if (text) { const l = newLine("none"); l.text = text; lines.push(l); } return; }
+    for (const child of el.children) walkEl(child);
+  }
+  for (const child of div.children) walkEl(child);
+  return lines;
 }
 
-function migrateState(raw) {
-  try {
-    const s = JSON.parse(raw);
-    if (!s || !Array.isArray(s.pages)) return emptyState();
-    s.pages = s.pages.map((p) => ({
-      ...p,
-      boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({
-        ...b,
-        lines: Array.isArray(b.lines) ? b.lines.flatMap((l) => {
-          if (Array.isArray(l.children)) {
-            const flat = [];
-            const walk = (node, depth) => {
-              flat.push(newLine(node.type || "none", node.text || "", depth, node.fontSize || 14));
-              if (Array.isArray(node.children)) node.children.forEach((c) => walk(c, depth + 1));
-            };
-            walk(l, 0);
-            return flat;
-          }
-          return [{ ...newLine(l.type || "none", l.text || "", l.indent || 0, l.fontSize || 14), ...(l.src ? { src: l.src } : {}) }];
-        }) : [newLine()],
-      })) : [],
-    }));
-    if (!s.activeId || !s.pages.find((p) => p.id === s.activeId)) s.activeId = s.pages[0]?.id;
-    return s;
-  } catch { return emptyState(); }
+function parsePlainToLines(text) {
+  const rawLines = text.split("\n").filter((l) => l.trim());
+  const nodes = []; let i = 0;
+  while (i < rawLines.length) {
+    const raw = rawLines[i];
+    const spaces = raw.match(/^([\t ]*)/)[1].length;
+    if (spaces > 0) { i++; continue; }
+    const content = raw.trimStart();
+    let type = "none", t = content;
+    if (content.startsWith("* ") || content.startsWith("\u2022 ")) { type = "bullet"; t = content.slice(2); }
+    else if (/^\d+\. /.test(content)) { type = "number"; t = content.replace(/^\d+\. /, ""); }
+    const childLines = []; let j = i + 1;
+    while (j < rawLines.length && rawLines[j].match(/^([\t ]*)/)[1].length > 0) { childLines.push(rawLines[j].slice(rawLines[j].match(/^(\t| {2})/)?.[0]?.length || 1)); j++; }
+    const node = newLine(type); node.text = t;
+    if (childLines.length) node.children = parsePlainToLines(childLines.join("\n"));
+    nodes.push(node); i = j;
+  }
+  return nodes;
 }
-
-/* ───────────────────────────────────── Component ─────────────────────────────────── */
 
 export default function Canvas() {
   const [state, setState] = useState(null);
-  const [mounted, setMounted] = useState(false);
+  const [selBox, setSelBox] = useState(null);
+  const [selLines, setSelLines] = useState(new Set());
+  const [lastSelLine, setLastSelLine] = useState(null);
+  const [selBoxes, setSelBoxes] = useState(new Set());
+  const [focusId, setFocusId] = useState(null);
+  const [focusCaret, setFocusCaret] = useState(null);
+  const [focusedId, setFocusedId] = useState(null);
   const [drag, setDrag] = useState(null);
   const [resize, setResize] = useState(null);
   const [lasso, setLasso] = useState(null);
-  const [selBoxId, setSelBoxId] = useState(null);
+  const [lineDrop, setLineDrop] = useState(null);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [dragPage, setDragPage] = useState(null);
   const [overPage, setOverPage] = useState(null);
-
   const cvRef = useRef(null);
+  const inputs = useRef({});
+  const dragLineRef = useRef(null);
   const boxRefs = useRef({});
-  const editorRefs = useRef({});
-  const pendingFocus = useRef(null);
-  const forceSync = useRef(false);
-  const histRef = useRef(0);
+  const selLinesRef = useRef(new Set());
+
+  useEffect(() => { selLinesRef.current = selLines; }, [selLines]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(CKEY)
-        || localStorage.getItem("rushmore-canvas-v3")
-        || localStorage.getItem("rushmore-canvas-v2")
-        || localStorage.getItem("rushmore-canvas-v1");
-      setState(raw ? migrateState(raw) : emptyState());
+      const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
+      if (!raw) { setState(emptyState()); return; }
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
+      parsed.pages = parsed.pages.map((p) => ({
+        ...p,
+        boxes: Array.isArray(p.boxes) ? p.boxes.map((b) => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [],
+      }));
+      if (!parsed.activeId || !parsed.pages.find((p) => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
+      setState(parsed);
     } catch { setState(emptyState()); }
   }, []);
-  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
 
-  /* state → DOM. Never disturbs the focused editor's text unless forced (undo/redo). */
   useEffect(() => {
-    if (!state || !mounted) return;
-    const pg = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
-    const force = forceSync.current; forceSync.current = false;
-    pg?.boxes.forEach((box) => {
-      const el = editorRefs.current[box.id];
-      if (!el) return;
-      const focused = el.contains(document.activeElement);
-      const existing = [...el.querySelectorAll(".cv-row")].map((r) => r.dataset.lid).join(",");
-      const expected = box.lines.map((l) => l.id).join(",");
-      if (force || existing !== expected) {
-        el.innerHTML = "";
-        const frag = document.createDocumentFragment();
-        box.lines.forEach((line) => frag.appendChild(buildRow(line)));
-        el.appendChild(frag);
-        refreshRows(el);
-      } else if (!focused) {
-        const rows = [...el.querySelectorAll(".cv-row")];
-        box.lines.forEach((line, i) => {
-          const row = rows[i]; if (!row) return;
-          if (!row.querySelector(".cv-row-img") && row.textContent !== line.text) row.textContent = line.text;
-          row.dataset.type = line.type;
-          row.dataset.indent = String(line.indent || 0);
-          row.style.marginLeft = ((line.indent || 0) * 22) + "px";
-          row.dataset.fs = String(line.fontSize || 14);
-          row.style.fontSize = (line.fontSize || 14) + "px";
-          row.dataset.collapsed = line.collapsed ? "true" : "false";
-        });
-        refreshRows(el);
-      } else {
-        refreshRows(el); // focused: only refresh markers/visibility, leave text + caret alone
-      }
-    });
-    if (pendingFocus.current) {
-      const el = editorRefs.current[pendingFocus.current];
-      if (el) { el.focus(); const first = el.querySelector(".cv-row"); if (first) placeCaret(first, 0); }
-      pendingFocus.current = null;
-    }
-  }, [state, mounted]);
+    if (!focusId) return;
+    let raf;
+    const go = () => {
+      const el = inputs.current[focusId]; if (!el) return;
+      el.focus();
+      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
+      setFocusId(null);
+    };
+    go();
+    raf = typeof window !== "undefined" ? window.requestAnimationFrame(go) : null;
+    return () => { if (raf) window.cancelAnimationFrame(raf); };
+  }, [focusId, focusCaret, state]);
 
-  /* box drag / resize */
   useEffect(() => {
     if (!drag && !resize) return;
     const move = (e) => {
-      if (drag) {
-        const nx = Math.max(0, drag.ox + e.clientX - drag.sx);
-        const ny = Math.max(0, drag.oy + e.clientY - drag.sy);
-        setState((s) => { const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find((b) => b.id === drag.id); if (b) { b.x = nx; b.y = ny; } return ns; });
-      }
-      if (resize) {
-        const nw = Math.max(160, resize.ow + e.clientX - resize.sx);
-        setState((s) => { const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find((b) => b.id === resize.id); if (b) b.w = nw; return ns; });
-      }
+      if (drag) { const nx = Math.max(0, drag.ox + e.clientX - drag.sx); const ny = Math.max(0, drag.oy + e.clientY - drag.sy); setState((s) => { const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find((b) => b.id === drag.id); if (b) { b.x = nx; b.y = ny; } return ns; }); }
+      if (resize) { const nw = Math.max(120, resize.ow + e.clientX - resize.sx); setState((s) => { const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find((b) => b.id === resize.id); if (b) b.w = nw; return ns; }); }
     };
     const up = () => { setDrag(null); setResize(null); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [drag, resize]);
 
-  /* lasso box-select */
   useEffect(() => {
     if (!lasso) return;
-    const move = (e) => { const r = cvRef.current?.getBoundingClientRect(); if (!r) return; setLasso((l) => l ? { ...l, ex: e.clientX - r.left, ey: e.clientY - r.top } : null); };
+    const move = (e) => {
+      const rect = cvRef.current?.getBoundingClientRect(); if (!rect) return;
+      setLasso((l) => l ? ({ ...l, ex: e.clientX - rect.left, ey: e.clientY - rect.top }) : null);
+    };
     const up = (e) => {
       if (lasso && cvRef.current) {
-        const r = cvRef.current.getBoundingClientRect();
-        const ex = e.clientX - r.left, ey = e.clientY - r.top;
+        const rect = cvRef.current.getBoundingClientRect();
+        const ex = e.clientX - rect.left, ey = e.clientY - rect.top;
         const minX = Math.min(lasso.sx, ex), maxX = Math.max(lasso.sx, ex);
         const minY = Math.min(lasso.sy, ey), maxY = Math.max(lasso.sy, ey);
         if (maxX - minX > 4 || maxY - minY > 4) {
           const pg = state?.pages.find((p) => p.id === state.activeId) || state?.pages[0];
-          const hit = pg?.boxes.find((b) => { const bh = boxRefs.current[b.id]?.offsetHeight || 80; return b.x < maxX && b.x + b.w > minX && b.y < maxY && b.y + bh > minY; });
-          if (hit) { setSelBoxId(hit.id); setTimeout(() => editorRefs.current[hit.id]?.focus(), 10); }
+          const hit = new Set();
+          pg?.boxes.forEach((b) => { if (b.x >= minX && b.y >= minY && b.x <= maxX && b.y <= maxY) hit.add(b.id); });
+          setSelBoxes(hit);
+          if (hit.size === 1) setSelBox([...hit][0]);
         }
       }
       setLasso(null);
@@ -287,184 +185,210 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [lasso, state]);
 
-  if (!state || !mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
-
+  if (!state) return null;
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
+
   const canvasW = Math.max(800, ...page.boxes.map((b) => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map((b) => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
 
-  const recordHistory = (immediate) => {
-    const now = Date.now();
-    if (immediate || now - histRef.current > 700) {
-      histRef.current = now;
-      setHistory((h) => [...h.slice(-80), state]);
-      setFuture([]);
-    }
-  };
-  const commitLines = (boxId, editorEl) => {
-    const lines = domToLines(editorEl);
-    setState((s) => { const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find((b) => b.id === boxId); if (b) b.lines = lines; return ns; });
-  };
   const mut = (fn, rec = true) => setState((s) => {
-    if (rec) { setHistory((h) => [...h.slice(-80), s]); setFuture([]); }
-    const ns = structuredClone(s); const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0]; fn(pg); return ns;
+    if (rec) { setHistory((h) => [...h.slice(-60), s]); setFuture([]); }
+    const ns = structuredClone(s);
+    const pg = ns.pages.find((p) => p.id === ns.activeId) || ns.pages[0];
+    fn(pg); return ns;
   });
 
-  const undo = () => { if (!history.length) return; forceSync.current = true; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
-  const redo = () => { if (!future.length) return; forceSync.current = true; setHistory((h) => [...h, state]); setState(future[0]); setFuture((f) => f.slice(1)); };
+  const undo = () => { if (!history.length) return; setFuture((f) => [state, ...f]); setState(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
+  const redo = () => { if (!future.length) return; setHistory((h) => [...h, state]); setState(future[0]); setFuture((f) => f.slice(1)); };
 
-  const addPage = () => { const name = prompt("Page name:", "New page"); if (!name) return; const p = emptyPage(); p.name = name; setState((s) => ({ ...s, pages: [...s.pages, p], activeId: p.id })); };
-  const delPage = (id) => { if (!confirm("Delete page?")) return; setState((s) => { const pages = s.pages.filter((p) => p.id !== id); const safe = pages.length ? pages : [emptyPage()]; return { pages: safe, activeId: s.activeId === id ? safe[0].id : s.activeId }; }); };
+  const addPage = () => { const name = prompt("Page name:", "New page"); if (!name) return; const p = { id: uid(), name, boxes: [] }; setState((s) => ({ ...s, pages: [...s.pages, p], activeId: p.id })); };
+  const delPage = (id) => { if (!confirm("Delete page?")) return; setState((s) => { const pages = s.pages.filter((p) => p.id !== id); const safe = pages.length ? pages : [emptyState().pages[0]]; return { pages: safe, activeId: s.activeId === id ? safe[0].id : s.activeId }; }); };
   const renamePage = (id) => { const pg = state.pages.find((p) => p.id === id); const name = prompt("Rename:", pg.name); if (name) setState((s) => ({ ...s, pages: s.pages.map((p) => p.id === id ? { ...p, name } : p) })); };
   const dropPage = (id) => { if (!dragPage || dragPage === id) return; setState((s) => { const pages = [...s.pages]; const fi = pages.findIndex((p) => p.id === dragPage); const ti = pages.findIndex((p) => p.id === id); const [m] = pages.splice(fi, 1); pages.splice(ti, 0, m); return { ...s, pages }; }); setDragPage(null); setOverPage(null); };
 
-  const addBox = (x, y) => { const b = newBox(x, y); pendingFocus.current = b.id; mut((pg) => pg.boxes.push(b)); setSelBoxId(b.id); };
-  const delBox = (id) => { mut((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== id); }); setSelBoxId(null); };
+  const addBox = (x, y) => { const b = newBox(x, y); mut((pg) => pg.boxes.push(b)); setSelBox(b.id); setSelBoxes(new Set([b.id])); setFocusId(b.lines[0].id); setSelLines(new Set()); };
+  const delBox = (id) => { mut((pg) => { pg.boxes = pg.boxes.filter((b) => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes((prev) => { const s = new Set(prev); s.delete(id); return s; }); };
   const cleanEmptyBox = (id) => {
     const box = page.boxes.find((b) => b.id === id); if (!box) return;
-    if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].indent) delBox(id);
+    if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id);
   };
 
-  const getCaretRow = (editorEl) => {
-    const sel = window.getSelection(); if (!sel || !sel.rangeCount) return null;
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && node !== editorEl) { if (node.classList?.contains("cv-row")) return node; node = node.parentElement; }
-    return null;
-  };
-  const setRowType = (editorEl, row, t) => { row.dataset.type = row.dataset.type === t ? "none" : t; refreshRows(editorEl); };
-  const setRowFont = (row, delta) => { const fs = Math.max(10, Math.min(48, parseInt(row.dataset.fs || "14") + delta)); row.dataset.fs = String(fs); row.style.fontSize = fs + "px"; };
+  const setText = (bid, lid, text) => mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
 
-  const toolbarAction = (action) => {
-    const ed = selBoxId && editorRefs.current[selBoxId]; if (!ed) return;
-    const row = getCaretRow(ed); if (!row) { ed.focus(); return; }
-    recordHistory(true);
-    if (action === "bullet") setRowType(ed, row, "bullet");
-    else if (action === "number") setRowType(ed, row, "number");
-    else if (action === "bigger") setRowFont(row, 2);
-    else if (action === "smaller") setRowFont(row, -2);
-    commitLines(selBoxId, ed);
+  const addAfter = (bid, lid, cp = 0) => {
+    const n = newLine();
+    mut((pg) => {
+      const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
+      const h = loc(b.lines, lid); if (!h) return;
+      n.type = h.node.type; const full = h.node.text;
+      h.node.text = full.slice(0, cp); n.text = full.slice(cp);
+      if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); }
+      else h.list.splice(h.i + 1, 0, n);
+    });
+    setFocusId(n.id); setFocusCaret(0);
   };
 
-  const onEditorKeyDown = (e, boxId) => {
-    const editorEl = e.currentTarget;
-    if (e.ctrlKey && !e.shiftKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
-    if (e.ctrlKey && (e.key === "y" || (e.shiftKey && (e.key === "z" || e.key === "Z")))) { e.preventDefault(); redo(); return; }
-    if (e.key === "Escape") { e.preventDefault(); setSelBoxId(null); editorEl.blur(); return; }
-    if (e.ctrlKey && !e.shiftKey && (e.key === "v" || e.key === "V")) { e.preventDefault(); handlePaste(editorEl, boxId); return; }
+  const deleteSelectedLines = (bid) => {
+    const ids = new Set(selLinesRef.current);
+    if (ids.size === 0) return false;
+    mut((pg) => {
+      const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
+      function rm(nodes) { return nodes.filter((n) => { n.children = rm(n.children); return !ids.has(n.id); }); }
+      b.lines = rm(b.lines);
+      if (!b.lines.length) b.lines.push(newLine());
+    });
+    setSelLines(new Set()); setLastSelLine(null); setFocusedId(null);
+    return true;
+  };
 
-    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") {
-      e.preventDefault();
-      const row = getCaretRow(editorEl); if (!row) return;
-      recordHistory(true);
-      const caret = caretOffset(row);
-      const full = row.textContent || "";
-      const before = full.slice(0, caret);
-      const after = full.slice(caret);
-      const curType = row.dataset.type || "none";
-      if (!before.trim() && (curType === "bullet" || curType === "number")) {
-        row.dataset.type = "none"; refreshRows(editorEl); commitLines(boxId, editorEl); return;
-      }
-      row.textContent = before;
-      const nr = buildRow({ id: uid(), type: curType, text: after, indent: parseInt(row.dataset.indent || "0"), fontSize: parseInt(row.dataset.fs || "14") });
-      row.after(nr);
-      placeCaret(nr, 0);
-      refreshRows(editorEl);
-      commitLines(boxId, editorEl);
-      return;
+  const bsLine = (bid, lid, cur, cp) => {
+    if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
+    if (cp > 0) return false;
+    const box = page.boxes.find((b) => b.id === bid); if (!box) return false;
+    if (cur === "") {
+      const order = vids(box.lines); const ft = order[order.indexOf(lid) - 1] || null;
+      const fth = ft ? loc(box.lines, ft) : null; const ftLen = fth ? fth.node.text.length : 0;
+      mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; if (b.lines.length === 1 && !b.lines[0].children.length) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i, 1); if (!b.lines.length) b.lines.push(newLine()); });
+      if (ft) { setFocusId(ft); setFocusCaret(ftLen); } return true;
+    } else {
+      const order = vids(box.lines); const pos = order.indexOf(lid); if (pos === 0) return false;
+      const prev = order[pos - 1]; let pl = 0;
+      mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const ph = loc(b.lines, prev); const ch = loc(b.lines, lid); if (!ph || !ch) return; pl = ph.node.text.length; ph.node.text += ch.node.text; ch.list.splice(ch.i, 1); if (!b.lines.length) b.lines.push(newLine()); });
+      setFocusId(prev); setFocusCaret(pl); return true;
     }
-
-    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Backspace") {
-      const row = getCaretRow(editorEl); if (!row) return;
-      if (caretOffset(row) > 0) return;
-      const prev = row.previousElementSibling; if (!prev) return;
-      e.preventDefault();
-      recordHistory(true);
-      const prevLen = (prev.textContent || "").length;
-      prev.textContent = (prev.textContent || "") + (row.textContent || "");
-      row.remove();
-      placeCaret(prev, prevLen);
-      refreshRows(editorEl);
-      commitLines(boxId, editorEl);
-      return;
-    }
-
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const row = getCaretRow(editorEl); if (!row) return;
-      recordHistory(true);
-      const indent = parseInt(row.dataset.indent || "0", 10);
-      row.dataset.indent = String(e.shiftKey ? Math.max(0, indent - 1) : indent + 1);
-      row.style.marginLeft = (parseInt(row.dataset.indent) * 22) + "px";
-      refreshRows(editorEl);
-      commitLines(boxId, editorEl);
-      return;
-    }
-
-    if (e.ctrlKey && !e.shiftKey && e.key === ".") { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowType(editorEl, row, "bullet"); commitLines(boxId, editorEl); } return; }
-    if (e.ctrlKey && !e.shiftKey && e.key === "/") { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowType(editorEl, row, "number"); commitLines(boxId, editorEl); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(row, 2); commitLines(boxId, editorEl); } return; }
-    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); const row = getCaretRow(editorEl); if (row) { recordHistory(true); setRowFont(row, -2); commitLines(boxId, editorEl); } return; }
   };
 
-  const handlePaste = async (editorEl, boxId) => {
+  const cycleType = (bid, lid, t) => { mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.type = h.node.type === t ? "none" : t; }); setFocusId(lid); };
+  const indent = (bid, lid) => { mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h || h.i === 0) return; const prev = h.list[h.i - 1]; h.list.splice(h.i, 1); prev.collapsed = false; if (h.node.type === "none") h.node.type = prev.type; prev.children.push(h.node); }); setFocusId(lid); };
+  const outdent = (bid, lid) => { mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const find = (ns) => { for (let i = 0; i < ns.length; i++) { const idx = ns[i].children.findIndex((c) => c.id === lid); if (idx > -1) return { pl: ns, pi: i, idx }; const d = find(ns[i].children); if (d) return d; } return null; }; const h = find(b.lines); if (!h) return; const [node] = h.pl[h.pi].children.splice(h.idx, 1); h.pl.splice(h.pi + 1, 0, node); }); setFocusId(lid); };
+  const toggle = (bid, lid) => { mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.collapsed = !h.node.collapsed; }, false); };
+
+  const fsize = (bid, lid, d) => {
+    const ids = selLinesRef.current;
+    if (ids.size > 1) { const frozen = new Set(ids); mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || 14) + d)); ap(n.children); } } ap(b.lines); }); return; }
+    if (!lid) return;
+    mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + d)); });
+    setFocusId(lid);
+  };
+
+  const pasteAt = async (bid, lid) => {
     try {
       const items = await navigator.clipboard.read().catch(() => null);
       if (items) {
         for (const item of items) {
           const imgType = item.types.find((t) => t.startsWith("image/"));
-          if (imgType) {
-            const blob = await item.getType(imgType);
-            const reader = new FileReader();
-            reader.onload = () => {
-              recordHistory(true);
-              const nr = buildRow({ id: uid(), type: "image", src: reader.result });
-              const cur = getCaretRow(editorEl) || editorEl.lastElementChild;
-              if (cur) cur.after(nr); else editorEl.appendChild(nr);
-              refreshRows(editorEl);
-              commitLines(boxId, editorEl);
-            };
-            reader.readAsDataURL(blob); return;
-          }
-          if (item.types.includes("text/html")) {
-            const htmlBlob = await item.getType("text/html");
-            const parsed = htmlToLines(await htmlBlob.text());
-            if (parsed.length) {
-              recordHistory(true);
-              let ins = getCaretRow(editorEl) || editorEl.lastElementChild;
-              for (const line of parsed) { const nr = buildRow(line); if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr); }
-              refreshRows(editorEl);
-              commitLines(boxId, editorEl); return;
-            }
-          }
+          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const imgLine = { id: uid(), text: "", type: "image", src: reader.result, fontSize: 14, collapsed: false, children: [] }; mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.list.splice(h.i + 1, 0, imgLine); else b.lines.push(imgLine); }); }; reader.readAsDataURL(blob); return; }
+          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = parseHtmlToLines(await htmlBlob.text()); if (parsed.length) { mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); }); setFocusId(parsed[0].id); return; } }
         }
       }
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
-      recordHistory(true);
-      let ins = getCaretRow(editorEl) || editorEl.lastElementChild;
-      text.split("\n").filter((l) => l.trim()).forEach((t, i) => {
-        if (i === 0 && ins && !(ins.textContent || "").trim()) { ins.textContent = t.trim(); return; }
-        const nr = buildRow(newLine("none", t.trim()));
-        if (ins) { ins.after(nr); ins = nr; } else editorEl.appendChild(nr);
-      });
-      refreshRows(editorEl);
-      commitLines(boxId, editorEl);
+      const parsed = parsePlainToLines(text); if (!parsed.length) return;
+      mut((pg) => { const b = pg.boxes.find((b) => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
+      setFocusId(parsed[0].id);
     } catch {}
   };
 
-  // collapse chevron lives in the left gutter (CSS pseudo); detect clicks there
-  const onEditorMouseDown = (e, boxId) => {
-    const row = e.target.closest?.(".cv-row");
-    if (row && row.dataset.haskids === "true") {
-      const x = e.clientX - row.getBoundingClientRect().left;
-      if (x < 18) {
-        e.preventDefault();
-        recordHistory(true);
-        row.dataset.collapsed = row.dataset.collapsed === "true" ? "false" : "true";
-        refreshRows(e.currentTarget);
-        commitLines(boxId, e.currentTarget);
-      }
+  const onLineDragStart = (bid, lid) => { dragLineRef.current = { bid, lid }; };
+  const onLineDragEnd = () => { dragLineRef.current = null; setLineDrop(null); };
+  const onLineDragOver = (e, lid) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!dragLineRef.current || dragLineRef.current.lid === lid) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientY - rect.top) / rect.height;
+    setLineDrop({ id: lid, zone: pct < 0.3 ? "before" : pct > 0.7 ? "after" : "child" });
+  };
+  const onLineDrop = (e, bid, lid) => {
+    e.preventDefault(); e.stopPropagation();
+    const src = dragLineRef.current; if (!src || !lineDrop || src.lid === lid) return;
+    const { zone } = lineDrop; const srcLid = src.lid;
+    dragLineRef.current = null; setLineDrop(null);
+    mut((pg) => {
+      const b = pg.boxes.find((b) => b.id === bid); if (!b) return;
+      const dh = loc(b.lines, srcLid); if (!dh) return;
+      const dragged = structuredClone(dh.node); dh.list.splice(dh.i, 1);
+      if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.node.collapsed = false; tgt.node.children.push(dragged); }
+      else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); }
+    });
+  };
+
+  const onLineClick = (e, bid, lid) => {
+    e.stopPropagation();
+    if (!e.shiftKey) { setSelLines(new Set([lid])); setLastSelLine(lid); return; }
+    const box = page.boxes.find((b) => b.id === bid); if (!box) return;
+    const order = vids(box.lines);
+    const from = lastSelLine ? order.indexOf(lastSelLine) : 0;
+    const to = order.indexOf(lid);
+    const [a, b2] = from <= to ? [from, to] : [to, from];
+    setSelLines(new Set(order.slice(a, b2 + 1)));
+  };
+
+  const kd = (e, bid, lid) => {
+    if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
+    if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
+    if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "." || e.key === ">")) { e.preventDefault(); fsize(bid, lid, 2); return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "-" || e.key === "_")) { e.preventDefault(); fsize(bid, lid, -2); return; }
+    if (e.shiftKey && e.altKey && e.key === "ArrowRight") { e.preventDefault(); indent(bid, lid); return; }
+    if (e.shiftKey && e.altKey && e.key === "ArrowLeft") { e.preventDefault(); outdent(bid, lid); return; }
+    if (e.key === "Tab") { e.preventDefault(); e.shiftKey ? outdent(bid, lid) : indent(bid, lid); return; }
+    if (e.key === "Escape") { e.preventDefault(); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); e.target.blur(); return; }
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addAfter(bid, lid, e.target.selectionStart); return; }
+    if ((e.key === "Delete" || e.key === "Backspace") && selLinesRef.current.size > 1) { e.preventDefault(); deleteSelectedLines(bid); return; }
+    if (e.key === "Backspace") { if (bsLine(bid, lid, e.target.value, e.target.selectionStart)) e.preventDefault(); return; }
+    if (e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const box = page.boxes.find((b) => b.id === bid); if (!box) return;
+      const order = vids(box.lines); const pos = order.indexOf(lid);
+      const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)];
+      if (next) { e.preventDefault(); setSelLines((prev) => { const s = new Set(prev); s.has(next) ? s.delete(lid) : s.add(next); return s; }); setLastSelLine(next); } return;
+    }
+    if (!e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const box = page.boxes.find((b) => b.id === bid); if (!box) return;
+      const order = vids(box.lines); const pos = order.indexOf(lid);
+      const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)];
+      if (next) { e.preventDefault(); inputs.current[next]?.focus(); setSelLines(new Set([next])); setLastSelLine(next); }
     }
   };
+
+  const renderLines = (bid, lines) => lines.map((n, idx) => {
+    const num = n.type === "number" ? numInList(lines, idx) : null;
+    const hh = n.collapsed && n.children.length;
+    const dt = lineDrop?.id === n.id ? lineDrop.zone : null;
+    const isSel = selLines.has(n.id);
+    return (
+      <div key={n.id}>
+        <div className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
+          onDragOver={(e) => onLineDragOver(e, n.id)}
+          onDragLeave={(e) => { e.stopPropagation(); setLineDrop(null); }}
+          onDrop={(e) => onLineDrop(e, bid, n.id)}
+          onClick={(e) => onLineClick(e, bid, n.id)}
+        >
+          <button className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")} onClick={(e) => { e.stopPropagation(); toggle(bid, n.id); }} tabIndex={-1}>
+            {n.children.length ? (n.collapsed ? CC : CO) : ""}
+          </button>
+          {n.type === "image" ? (
+            <img src={n.src} alt="" style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block" }} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />
+          ) : (
+            <>
+              {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{BULLET}</span>}
+              {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{num}.</span>}
+              {n.type === "none" && <span className="cv-marker cv-spacer" draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />}
+              <input className="cv-input" ref={(el) => (inputs.current[n.id] = el)}
+                style={{ fontSize: (n.fontSize || 14) + "px" }}
+                value={n.text} placeholder="..."
+                onChange={(e) => setText(bid, n.id, e.target.value)}
+                onKeyDown={(e) => kd(e, bid, n.id)}
+                onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines((prev) => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine((prev) => prev || n.id); }}
+                onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }}
+              />
+            </>
+          )}
+        </div>
+        {!n.collapsed && n.children.length > 0 && <div className="cv-kids">{renderLines(bid, n.children)}</div>}
+      </div>
+    );
+  });
 
   const lassoRect = lasso ? {
     left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy),
@@ -480,9 +404,10 @@ export default function Canvas() {
             draggable onDragStart={() => setDragPage(p.id)} onDragEnd={() => { setDragPage(null); setOverPage(null); }}
             onDragOver={(e) => { e.preventDefault(); setOverPage(p.id); }} onDragLeave={() => setOverPage(null)}
             onDrop={() => dropPage(p.id)}
-            onClick={() => { setState((s) => ({ ...s, activeId: p.id })); setSelBoxId(null); }}
+            onClick={() => { setState((s) => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
             onDoubleClick={() => renamePage(p.id)} title="Double-click to rename">
-            {p.name}<span className="x" onClick={(e) => { e.stopPropagation(); delPage(p.id); }}>x</span>
+            {p.name}
+            <span className="x" onClick={(e) => { e.stopPropagation(); delPage(p.id); }}>x</span>
           </button>
         ))}
         <button className="page-tab new" onClick={addPage}>+ New page</button>
@@ -490,54 +415,35 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Bullet (Ctrl+.)" onMouseDown={(e) => e.preventDefault()} onClick={() => toolbarAction("bullet")}>{"\u2022"}</button>
-          <button className="notes-btn" title="Number (Ctrl+/)" onMouseDown={(e) => e.preventDefault()} onClick={() => toolbarAction("number")}>1.</button>
+          <button className="notes-btn" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "bullet")}>Bullet</button>
+          <button className="notes-btn" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "number")}>1.</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Smaller (Ctrl+Shift+-)" onMouseDown={(e) => e.preventDefault()} onClick={() => toolbarAction("smaller")}>A-</button>
-          <button className="notes-btn" title="Larger (Ctrl+Shift+.)" onMouseDown={(e) => e.preventDefault()} onClick={() => toolbarAction("bigger")}>A+</button>
+          <button className="notes-btn" onClick={() => selBox && fsize(selBox, focusedId, -2)}>A-</button>
+          <button className="notes-btn" onClick={() => selBox && fsize(selBox, focusedId, 2)}>A+</button>
           <span className="notes-sep" />
-          {selBoxId && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBoxId)}>Del box</button>}
+          {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
+          {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for a box  |  drag the top bar to move  |  click-drag to select text  |  Tab indent  |  Ctrl+. / Ctrl+/  |  click ▼ to collapse</span>
+        <span className="notes-hint">Dbl-click canvas for box  |  drag canvas to select  |  Shift+click lines  |  Ctrl+V paste  |  click outside empty box to remove it</span>
       </div>
-
       <div className="cv-canvas" ref={cvRef}
         style={{ width: canvasW, minHeight: canvasH }}
-        onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 180, e.clientY - r.top - 14); }}
-        onMouseDown={(e) => { if (e.target !== cvRef.current) return; setSelBoxId(null); const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); }}
-        onClick={(e) => { if (e.target === cvRef.current) setSelBoxId(null); }}
+        onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
+        onMouseDown={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
+        onClick={(e) => { if (e.target === cvRef.current) { setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); } }}
       >
-        {lassoRect && lassoRect.width > 4 && (
-          <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.05)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />
+        {lassoRect && lassoRect.width > 2 && (
+          <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />
         )}
-
         {page.boxes.map((box) => (
-          <div key={box.id} ref={(el) => { boxRefs.current[box.id] = el; }}
-            className={"cv-box" + (selBoxId === box.id ? " selected" : "")}
+          <div key={box.id} ref={(el) => (boxRefs.current[box.id] = el)}
+            className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")}
             style={{ left: box.x, top: box.y, width: box.w }}
-            onClick={(e) => { e.stopPropagation(); setSelBoxId(box.id); }}
+            onClick={(e) => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
           >
-            <div className="cv-drag-bar"
-              onMouseDown={(e) => { if (e.target.closest(".cv-editor")) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBoxId(box.id); }}
-              title="Drag to move"
-            />
-            <div
-              className="cv-editor"
-              ref={(el) => { if (el) editorRefs.current[box.id] = el; }}
-              contentEditable
-              suppressContentEditableWarning
-              spellCheck={false}
-              onFocus={() => setSelBoxId(box.id)}
-              onBlur={() => setTimeout(() => { if (!editorRefs.current[box.id]?.contains(document.activeElement)) cleanEmptyBox(box.id); }, 200)}
-              onMouseDown={(e) => onEditorMouseDown(e, box.id)}
-              onInput={(e) => { recordHistory(false); commitLines(box.id, e.currentTarget); }}
-              onKeyDown={(e) => onEditorKeyDown(e, box.id)}
-              onPaste={(e) => e.preventDefault()}
-            />
-            <div className="cv-resize"
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }}
-              title="Drag to resize"
-            />
+            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
+            <div className="cv-body">{renderLines(box.id, box.lines)}</div>
+            <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
           </div>
         ))}
         {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
