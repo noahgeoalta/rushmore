@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Canvas from "@/components/Canvas";
 import contextsData from "@/data/contexts.json";
+import CommandBar from "@/components/CommandBar";
 
 const contexts = contextsData.contexts;
 
@@ -40,15 +41,12 @@ function ContextCard({ ctx }) {
       <div className="cmd-card-header">
         <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>
       </div>
-
       {claude.map(l => (
         <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} icon={ICONS.claude} />
       ))}
-
       {ghRepos.map(r => (
         <Chip key={r.url} label={r.label} url={r.url} icon={ICONS.github} />
       ))}
-
       {ghBoards.map(b => (
         <div key={b.url} className="cmd-chip-row">
           <span className="cmd-sub-arrow">↳</span>
@@ -58,7 +56,6 @@ function ContextCard({ ctx }) {
           </a>
         </div>
       ))}
-
       {sp.map(s => (
         <Chip key={s.url} label={s.label} url={s.url} icon={ICONS.sharepoint} />
       ))}
@@ -72,7 +69,6 @@ function RiipenSection({ ctx }) {
     if (!groups[l.group]) groups[l.group] = [];
     groups[l.group].push(l);
   }
-
   const topLevel = groups["Riipen"] || [];
   const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen · "));
 
@@ -126,9 +122,10 @@ export default function Home() {
         <span className="app-date">{today}</span>
       </header>
 
+      <CommandBar />
+
       {view === "command" && (
         <main className="cmd-main">
-
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-row">
@@ -157,7 +154,6 @@ export default function Home() {
           </section>
 
           {geocomforter && <RiipenSection ctx={geocomforter} />}
-
         </main>
       )}
 
