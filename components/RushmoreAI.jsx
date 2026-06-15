@@ -73,8 +73,7 @@ export default function RushmoreAI() {
       });
       const data = await res.json();
       const reply = data.content?.[0]?.text || data.error?.message || "[No response]";
-      const assistantMsg = { role: "assistant", content: reply };
-      setMessages(prev => [...prev, assistantMsg]);
+      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       if (ttsOn) speak(reply);
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
@@ -103,15 +102,11 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      {/* Hero panel with logo */}
+      {/* Hero panel — logo + image only, no text overlay */}
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" />
         <div className="ai-panel-overlay">
           <img src={LOGO} alt="" className="ai-panel-logo" />
-          <div className="ai-panel-text">
-            <div className="ai-panel-title">RUSH<span>MORE</span></div>
-            <div className="ai-panel-sub">GeoAlta · GeoComforter · ChronoSlate · NMGCO · The Order · TheGame</div>
-          </div>
         </div>
       </div>
 
@@ -129,7 +124,6 @@ export default function RushmoreAI() {
         </div>
       </div>
 
-      {/* Feed */}
       <div className="ai-feed">
         {messages.map((msg, i) => <Message key={i} msg={msg} />)}
         {loading && (
@@ -141,7 +135,6 @@ export default function RushmoreAI() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div className="ai-input-bar">
         <button className={`ai-mic-btn ${listening ? "listening" : ""}`} onClick={toggleVoice} title={listening ? "Stop" : "Voice input"}>
           {listening ? "●" : "🎙"}

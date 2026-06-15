@@ -4,7 +4,6 @@ import { useState } from "react";
 import Canvas from "@/components/Canvas";
 import RushmoreAI from "@/components/RushmoreAI";
 import contextsData from "@/data/contexts.json";
-import CommandBar from "@/components/CommandBar";
 
 const contexts = contextsData.contexts;
 const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
@@ -51,7 +50,6 @@ function ImgIcon({ src, size = 15 }) {
   if (!src) return null;
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
-
 function Chip({ label, url, img: imgSrc, symbol }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
@@ -61,28 +59,18 @@ function Chip({ label, url, img: imgSrc, symbol }) {
     </a>
   );
 }
-
-// Coloured board chip for work context cards
 function BoardChip({ label, url, tag }) {
-  const cls = tag === "dev" ? "cmd-board-chip dev"
-            : tag === "biz" ? "cmd-board-chip biz"
-            : "cmd-board-chip board";
-  const text = tag === "dev" ? "Dev Board"
-             : tag === "biz" ? "Biz Board"
-             : label;
+  const cls = tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board";
+  const text = tag === "dev" ? "Dev Board" : tag === "biz" ? "Biz Board" : label;
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
-
-// Plain chip with icon for personal boards (no coloured background)
 function IconBoardChip({ label, url, icon }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
-      <ImgIcon src={icon} size={15} />
-      {label}
+      <ImgIcon src={icon} size={15} />{label}
     </a>
   );
 }
-
 function ContextCard({ ctx }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
@@ -92,9 +80,8 @@ function ContextCard({ ctx }) {
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        {logo
-          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-          : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+              : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
       {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
       {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
@@ -105,7 +92,6 @@ function ContextCard({ ctx }) {
     </div>
   );
 }
-
 function RiipenSection({ ctx }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
@@ -135,12 +121,15 @@ function RiipenSection({ ctx }) {
   );
 }
 
+// Card order: GeoComforter, ChronoSlate, GeoAlta, NMGCO
+const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
+
 export default function Home() {
   const [view, setView] = useState("command");
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   const personal     = contexts.find(c => c.id === "personal");
   const geocomforter = contexts.find(c => c.id === "geocomforter");
-  const otherWork    = contexts.filter(c => c.id !== "personal");
+  const workOrdered  = WORK_ORDER.map(id => contexts.find(c => c.id === id)).filter(Boolean);
 
   const personalWeb    = (personal?.launchpad || []).filter(l => l.group === "Web");
   const personalClaude = (personal?.launchpad || []).filter(l => l.group === "Claude");
@@ -169,26 +158,21 @@ export default function Home() {
         <span className="app-date">{today}</span>
       </header>
 
-      {view !== "ai" && <CommandBar />}
-
       {view === "command" && (
         <main className="cmd-main">
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
-              {/* Row 1: The Order */}
               <div className="cmd-row">
                 {row1Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon} />)}
                 {ORDER1_BOARD && <IconBoardChip label={ORDER1_BOARD.label} url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
                 {ORDER1_REPO  && <Chip label={ORDER1_REPO.label} url={ORDER1_REPO.url} img={IMG.orderIcon} />}
               </div>
-              {/* Row 2: TheGame */}
               <div className="cmd-row">
                 {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} />)}
                 {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
                 {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
               </div>
-              {/* Row 3: Web + tools */}
               <div className="cmd-row">
                 {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
                 <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
@@ -201,7 +185,7 @@ export default function Home() {
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
             <div className="cmd-cards-row">
-              {otherWork.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
             </div>
           </section>
 
