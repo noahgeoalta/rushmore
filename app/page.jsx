@@ -116,16 +116,13 @@ function RiipenSection({ ctx }) {
         <div className="cmd-riipen-top">
           {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
         </div>
-        {teamKeys.map(key => {
-          const teamName = key.replace("Riipen · ", "");
-          return (
-            <div key={key} className="cmd-riipen-row">
-              <ImgIcon src={IMG.rrc} size={13} />
-              <span className="cmd-riipen-team">{teamName}</span>
-              {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
-            </div>
-          );
-        })}
+        {teamKeys.map(key => (
+          <div key={key} className="cmd-riipen-row">
+            <ImgIcon src={IMG.rrc} size={13} />
+            <span className="cmd-riipen-team">{key.replace("Riipen · ", "")}</span>
+            {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -145,13 +142,11 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="app-bar">
-        <span className="wordmark">
-          <img src={IMG.rushmorelogo} alt="" className="wordmark-logo" />
-          RUSH<span>MORE</span>
-        </span>
+        {/* Top-left wordmark: plain text OPERATIONS */}
+        <span className="wordmark">OPERATIONS</span>
         <nav className="app-nav">
           <button className={"app-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>Command</button>
-          <button className={"app-nav-btn" + (view === "ai"      ? " active" : "")} onClick={() => setView("ai")}>RUSHMORE AI</button>
+          <button className={"app-nav-btn" + (view === "ai"      ? " active" : "")} onClick={() => setView("ai")}>RUSHMORE</button>
           <button className={"app-nav-btn" + (view === "notes"   ? " active" : "")} onClick={() => setView("notes")}>Notes</button>
         </nav>
         <span className="app-date">{today}</span>

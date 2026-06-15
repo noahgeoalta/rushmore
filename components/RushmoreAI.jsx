@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 
 const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
 const PANEL = img("images/Rushmore/Rushmore Panel.png");
+const LOGO  = img("images/Rushmore/Rushmore Logo.png");
 
 function speak(text) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -68,9 +69,7 @@ export default function RushmoreAI() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: history.map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })) }),
       });
       const data = await res.json();
       const reply = data.content?.[0]?.text || data.error?.message || "[No response]";
@@ -104,34 +103,29 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      {/* Hero panel */}
+      {/* Hero panel with logo */}
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" />
         <div className="ai-panel-overlay">
-          <div className="ai-panel-title">RUSHMORE <span>INTELLIGENCE</span></div>
-          <div className="ai-panel-sub">Personal command AI — GeoAlta · GeoComforter · ChronoSlate · NMGCO · The Order · TheGame</div>
+          <img src={LOGO} alt="" className="ai-panel-logo" />
+          <div className="ai-panel-text">
+            <div className="ai-panel-title">RUSH<span>MORE</span></div>
+            <div className="ai-panel-sub">GeoAlta · GeoComforter · ChronoSlate · NMGCO · The Order · TheGame</div>
+          </div>
         </div>
       </div>
 
-      {/* Header strip */}
+      {/* Status bar */}
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
           <span className="ai-online-label">ONLINE</span>
         </div>
         <div className="ai-header-right">
-          <button
-            className={`ai-ctrl-btn ${ttsOn ? "active" : ""}`}
-            onClick={() => { setTtsOn(t => !t); if (ttsOn) window.speechSynthesis?.cancel(); }}
-          >
+          <button className={`ai-ctrl-btn ${ttsOn ? "active" : ""}`} onClick={() => { setTtsOn(t => !t); if (ttsOn) window.speechSynthesis?.cancel(); }}>
             {ttsOn ? "◉ VOICE OUT" : "○ VOICE OUT"}
           </button>
-          <button
-            className="ai-ctrl-btn"
-            onClick={() => setMessages([BOOT_MSG])}
-          >
-            CLEAR
-          </button>
+          <button className="ai-ctrl-btn" onClick={() => setMessages([BOOT_MSG])}>CLEAR</button>
         </div>
       </div>
 
@@ -149,11 +143,7 @@ export default function RushmoreAI() {
 
       {/* Input */}
       <div className="ai-input-bar">
-        <button
-          className={`ai-mic-btn ${listening ? "listening" : ""}`}
-          onClick={toggleVoice}
-          title={listening ? "Stop listening" : "Voice input"}
-        >
+        <button className={`ai-mic-btn ${listening ? "listening" : ""}`} onClick={toggleVoice} title={listening ? "Stop" : "Voice input"}>
           {listening ? "●" : "🎙"}
         </button>
         <textarea
