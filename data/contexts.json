@@ -1,5 +1,5 @@
 {
-  "_readme": "RUSHMORE's single source of truth. Every context, tile source, and launchpad link lives here. Adding a new venture = adding a context object. panelBg/panelEdge/accent control each context's tint.",
+  "_readme": "RUSHMORE's single source of truth. Every context, tile source, and launchpad link lives here.",
   "contexts": [
     {
       "id": "geoalta",
@@ -35,7 +35,7 @@
       "accent": "#3a7acc",
       "panelBg": "#050d1a",
       "panelEdge": "#0a1e3a",
-      "mail": { "mailbox": "noah@geoalta.com", "note": "GeoComforter mail flows through the GeoAlta inbox" },
+      "mail": { "mailbox": "noah@geoalta.com" },
       "sharepoint": [
         { "label": "Comforter SP", "url": "https://geoalta.sharepoint.com/sites/ComforterDevelopmentTeam/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FComforterDevelopmentTeam%2FShared%20Documents%2FGeoComforter%20Development&viewid=07cff1dd%2Daf08%2D480b%2Dabba%2D0c24c23f2b16" },
         { "label": "Business Growth SP", "url": "https://geoalta.sharepoint.com/sites/GeoAltaBusinessGrowth/SitePages/ProjectHome.aspx" }
@@ -100,7 +100,7 @@
       "accent": "#c8a030",
       "panelBg": "#080a14",
       "panelEdge": "#1a1a2e",
-      "mail": { "mailbox": "noah@geoalta.com", "note": "ChronoSlate mail flows through the GeoAlta inbox" },
+      "mail": { "mailbox": "noah@geoalta.com" },
       "sharepoint": [
         { "label": "ChronoSlate SP", "url": "https://geoalta.sharepoint.com/Shared%20Documents/Forms/AllItems.aspx?id=%2FShared%20Documents%2FGeoAlta%2FProjects%2FGeoTime&viewid=81b6eca8%2Dbc4d%2D47ad%2D9697%2D2d88ee5ffe27" }
       ],
@@ -147,7 +147,7 @@
         { "label": "Claude: Life", "url": "https://claude.ai/project/019e999b-6b94-727f-9569-ea07f188c22b", "group": "Claude" },
         { "label": "Claude: Helforge", "url": "https://claude.ai/project/019e999a-5542-7048-8c0a-87808f862ea4", "group": "Claude" },
         { "label": "Gmail", "url": "https://mail.google.com", "group": "Web" },
-        { "label": "NoahTube", "url": "https://studio.youtube.com", "group": "Web" },
+        { "label": "NoahTube", "url": "https://noahgeoalta.github.io/noahtube/", "group": "Web" },
         { "label": "RBC", "url": "https://www.rbcroyalbank.com", "group": "Web" }
       ]
     }

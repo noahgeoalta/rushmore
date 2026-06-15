@@ -62,17 +62,23 @@ function Chip({ label, url, img: imgSrc, symbol }) {
   );
 }
 
-// Board chip — merged tag+link into one clickable coloured chip
+// Coloured board chip for work context cards
 function BoardChip({ label, url, tag }) {
   const cls = tag === "dev" ? "cmd-board-chip dev"
             : tag === "biz" ? "cmd-board-chip biz"
             : "cmd-board-chip board";
-  const text = tag === "dev" ? `Dev Board`
-             : tag === "biz" ? `Biz Board`
-             : label; // e.g. "GeoAlta Board"
+  const text = tag === "dev" ? "Dev Board"
+             : tag === "biz" ? "Biz Board"
+             : label;
+  return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
+}
+
+// Plain chip with icon for personal boards (no coloured background)
+function IconBoardChip({ label, url, icon }) {
   return (
-    <a href={url} target="_blank" rel="noreferrer" className={cls}>
-      {text}
+    <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
+      <ImgIcon src={icon} size={15} />
+      {label}
     </a>
   );
 }
@@ -92,7 +98,6 @@ function ContextCard({ ctx }) {
       </div>
       {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
       {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
-      {/* Merged board chips */}
       <div className="cmd-board-row">
         {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
       </div>
@@ -114,7 +119,6 @@ function RiipenSection({ ctx }) {
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
       <div className="cmd-riipen">
-        {/* Top row: Riipen Home, Project RRC, + Riipen Overlord */}
         <div className="cmd-riipen-top">
           {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
           {riipenOverlord && <Chip label="Riipen Overlord" url={riipenOverlord.url} img={IMG.claude} />}
@@ -138,13 +142,11 @@ export default function Home() {
   const geocomforter = contexts.find(c => c.id === "geocomforter");
   const otherWork    = contexts.filter(c => c.id !== "personal");
 
-  // Personal — split into 3 rows
   const personalWeb    = (personal?.launchpad || []).filter(l => l.group === "Web");
   const personalClaude = (personal?.launchpad || []).filter(l => l.group === "Claude");
   const personalBoards = personal?.github?.boards || [];
   const personalRepos  = personal?.github?.repos  || [];
 
-  // Row 1: The Order stuff (icon1) — Doctrine and Order, Helforge, The Order Board, The Order Repo
   const ORDER1_LABELS = ["Claude: Doctrine and Order", "Claude: Helforge"];
   const ORDER2_LABELS = ["Claude: TheGame Development", "Claude: Gaming"];
   const ORDER1_BOARD  = personalBoards.find(b => b.label === "The Order Board");
@@ -152,7 +154,6 @@ export default function Home() {
   const ORDER1_REPO   = personalRepos.find(r => r.label === "The Order Repo");
   const ORDER2_REPO   = personalRepos.find(r => r.label === "TheGame Repo");
   const RUSHMORE_REPO = personalRepos.find(r => r.label === "Rushmore Repo");
-
   const row1Claude = personalClaude.filter(l => ORDER1_LABELS.includes(l.label));
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
 
@@ -172,23 +173,22 @@ export default function Home() {
 
       {view === "command" && (
         <main className="cmd-main">
-          {/* PERSONAL */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
-              {/* Row 1: The Order (icon1) */}
+              {/* Row 1: The Order */}
               <div className="cmd-row">
                 {row1Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon} />)}
-                {ORDER1_BOARD && <BoardChip label={ORDER1_BOARD.label} url={ORDER1_BOARD.url} tag="board" />}
-                {ORDER1_REPO  && <Chip label={ORDER1_REPO.label}  url={ORDER1_REPO.url}  img={IMG.orderIcon} />}
+                {ORDER1_BOARD && <IconBoardChip label={ORDER1_BOARD.label} url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
+                {ORDER1_REPO  && <Chip label={ORDER1_REPO.label} url={ORDER1_REPO.url} img={IMG.orderIcon} />}
               </div>
-              {/* Row 2: TheGame (icon2) */}
+              {/* Row 2: TheGame */}
               <div className="cmd-row">
                 {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} />)}
-                {ORDER2_BOARD && <BoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} tag="board" />}
-                {ORDER2_REPO  && <Chip label={ORDER2_REPO.label}  url={ORDER2_REPO.url}  img={IMG.orderIcon2} />}
+                {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
+                {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
               </div>
-              {/* Row 3: Web + AI tools + Rushmore Repo */}
+              {/* Row 3: Web + tools */}
               <div className="cmd-row">
                 {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
                 <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
@@ -198,7 +198,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* WORK — GITHUB */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
             <div className="cmd-cards-row">
@@ -206,7 +205,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* RIIPEN */}
           {geocomforter && <RiipenSection ctx={geocomforter} />}
         </main>
       )}
