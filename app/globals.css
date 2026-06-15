@@ -31,8 +31,9 @@ a { color: inherit; text-decoration: none; }
   top: 0;
   z-index: 10;
 }
-.wordmark { font-size: 13px; font-weight: 800; letter-spacing: 0.3em; color: var(--text); flex-shrink: 0; }
+.wordmark { font-size: 13px; font-weight: 800; letter-spacing: 0.3em; color: var(--text); flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
 .wordmark span { color: #ff4444; }
+.wordmark-logo { height: 22px; width: auto; object-fit: contain; }
 
 .app-nav { display: flex; gap: 4px; }
 .app-nav-btn {
@@ -52,6 +53,30 @@ a { color: inherit; text-decoration: none; }
 .app-nav-btn.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
 
 .app-date { margin-left: auto; color: var(--faint); font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+
+/* ── Hero banner ── */
+.hero-banner {
+  width: 100%;
+  max-height: 180px;
+  overflow: hidden;
+  position: relative;
+  border-bottom: 1px solid var(--edge);
+}
+.hero-banner img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  object-position: center 30%;
+  display: block;
+  opacity: 0.85;
+}
+.hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, var(--bg) 100%);
+  pointer-events: none;
+}
 
 /* ── Command Bar ── */
 .cmd-bar {
@@ -151,12 +176,16 @@ a { color: inherit; text-decoration: none; }
 }
 .cmd-card-header { margin-bottom: 3px; padding-bottom: 5px; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-logo {
-  height: 22px;
+  height: 26px;
   width: auto;
   max-width: 100%;
   object-fit: contain;
   object-position: left center;
   display: block;
+}
+/* ChronoSlate logo is smaller by default so we boost it */
+.cmd-card-logo.logo-chronoslate {
+  height: 36px;
 }
 .cmd-card-name { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 
@@ -263,6 +292,8 @@ a { color: inherit; text-decoration: none; }
   .notes-hint { display: none; }
   .cmd-riipen-team { min-width: 110px; }
   .cmd-bar-usage { display: none; }
+  .hero-banner { max-height: 100px; }
+  .hero-banner img { height: 100px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
