@@ -7,14 +7,12 @@ import contextsData from "@/data/contexts.json";
 import CommandBar from "@/components/CommandBar";
 
 const contexts = contextsData.contexts;
-
-const img = (repoPath) => `/api/img?path=${encodeURIComponent(repoPath)}`;
+const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
 
 const IMG = {
   claude:      img("images/AI/Claude.png"),
   chatgpt:     img("images/AI/ChatGPT.png"),
   copilot:     img("images/AI/Copilot.png"),
-  rushmorePanel: img("images/Rushmore/Rushmore Panel.png"),
   rushmorelogo:  img("images/Rushmore/Rushmore Logo.png"),
   geoaltaLogo:   img("images/GeoAlta/GeoAlta Logo.png"),
   geoaltaSP:     img("images/GeoAlta/GeoAlta Icon.png"),
@@ -65,11 +63,9 @@ function ImgIcon({ src, size = 14 }) {
   if (!src) return null;
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
-
 function Tag({ type }) {
   return <span className={`cmd-tag cmd-tag-${type}`}>{type}</span>;
 }
-
 function Chip({ label, url, img: imgSrc, symbol }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
@@ -79,12 +75,11 @@ function Chip({ label, url, img: imgSrc, symbol }) {
     </a>
   );
 }
-
 function ContextCard({ ctx }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
   const sp       = ctx.sharepoint     || [];
-  const claude   = (ctx.launchpad || []).filter((l) => l.group === "Claude");
+  const claude   = (ctx.launchpad || []).filter(l => l.group === "Claude");
   const logo     = CTX_LOGO[ctx.id];
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
@@ -93,20 +88,19 @@ function ContextCard({ ctx }) {
           ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
           : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-      {claude.map((l) => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
-      {ghRepos.map((r) => <Chip key={r.url} label={r.label} url={r.url} symbol="⌥" />)}
-      {ghBoards.map((b) => (
+      {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
+      {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⌥" />)}
+      {ghBoards.map(b => (
         <div key={b.url} className="cmd-chip-row">
           <span className="cmd-sub-arrow">↳</span>
           {b.tag && <Tag type={b.tag} />}
           <a href={b.url} target="_blank" rel="noreferrer" className="cmd-chip-inline">{b.label}</a>
         </div>
       ))}
-      {sp.map((s) => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
     </div>
   );
 }
-
 function RiipenSection({ ctx }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
@@ -114,22 +108,21 @@ function RiipenSection({ ctx }) {
     groups[l.group].push(l);
   }
   const topLevel = groups["Riipen"] || [];
-  const teamKeys = Object.keys(groups).filter((k) => k.startsWith("Riipen · "));
+  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen · "));
   return (
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
       <div className="cmd-riipen">
         <div className="cmd-riipen-top">
-          {topLevel.map((l) => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
+          {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
         </div>
-        {teamKeys.map((key) => {
+        {teamKeys.map(key => {
           const teamName = key.replace("Riipen · ", "");
-          const links = groups[key];
           return (
             <div key={key} className="cmd-riipen-row">
               <ImgIcon src={IMG.rrc} size={13} />
               <span className="cmd-riipen-team">{teamName}</span>
-              {links.map((l) => <Chip key={l.url} label={l.label} url={l.url} />)}
+              {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
             </div>
           );
         })}
@@ -141,13 +134,11 @@ function RiipenSection({ ctx }) {
 export default function Home() {
   const [view, setView] = useState("command");
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-
-  const personal     = contexts.find((c) => c.id === "personal");
-  const geocomforter = contexts.find((c) => c.id === "geocomforter");
-  const otherWork    = contexts.filter((c) => c.id !== "personal");
-
-  const personalClaude = (personal?.launchpad || []).filter((l) => l.group === "Claude");
-  const personalWeb    = (personal?.launchpad || []).filter((l) => l.group === "Web");
+  const personal     = contexts.find(c => c.id === "personal");
+  const geocomforter = contexts.find(c => c.id === "geocomforter");
+  const otherWork    = contexts.filter(c => c.id !== "personal");
+  const personalClaude = (personal?.launchpad || []).filter(l => l.group === "Claude");
+  const personalWeb    = (personal?.launchpad || []).filter(l => l.group === "Web");
   const personalBoards = personal?.github?.boards || [];
   const personalRepos  = personal?.github?.repos  || [];
 
@@ -169,45 +160,32 @@ export default function Home() {
       {view !== "ai" && <CommandBar />}
 
       {view === "command" && (
-        <>
-          <div className="hero-banner">
-            <img src={IMG.rushmorePanel} alt="RUSHMORE" />
-          </div>
-          <main className="cmd-main">
-            <section className="cmd-section">
-              <div className="cmd-section-header"><span>PERSONAL</span></div>
-              <div className="cmd-row">
-                {personalWeb.map((l) => <Chip key={l.url} label={l.label} url={l.url} />)}
-                <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
-                <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
-                {personalClaude.map((l) => (
-                  <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={PERSONAL_ICON[l.label] ?? IMG.orderIcon} />
-                ))}
-                {personalBoards.map((b) => (
-                  <Chip key={b.url} label={b.label} url={b.url} img={PERSONAL_ICON[b.label] ?? undefined} symbol={!PERSONAL_ICON[b.label] ? "⊞" : undefined} />
-                ))}
-                {personalRepos.map((r) => (
-                  <Chip key={r.url} label={r.label} url={r.url} img={PERSONAL_ICON[r.label] ?? undefined} symbol={!PERSONAL_ICON[r.label] ? "⌥" : undefined} />
-                ))}
-              </div>
-            </section>
-            <section className="cmd-section">
-              <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
-              <div className="cmd-cards-row">
-                {otherWork.map((ctx) => <ContextCard key={ctx.id} ctx={ctx} />)}
-              </div>
-            </section>
-            {geocomforter && <RiipenSection ctx={geocomforter} />}
-          </main>
-        </>
+        <main className="cmd-main">
+          <section className="cmd-section">
+            <div className="cmd-section-header"><span>PERSONAL</span></div>
+            <div className="cmd-row">
+              {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+              <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
+              <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
+              {personalClaude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={PERSONAL_ICON[l.label] ?? IMG.orderIcon} />)}
+              {personalBoards.map(b => <Chip key={b.url} label={b.label} url={b.url} img={PERSONAL_ICON[b.label]} symbol={!PERSONAL_ICON[b.label] ? "⊞" : undefined} />)}
+              {personalRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} img={PERSONAL_ICON[r.label]} symbol={!PERSONAL_ICON[r.label] ? "⌥" : undefined} />)}
+            </div>
+          </section>
+          <section className="cmd-section">
+            <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
+            <div className="cmd-cards-row">
+              {otherWork.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+            </div>
+          </section>
+          {geocomforter && <RiipenSection ctx={geocomforter} />}
+        </main>
       )}
 
       {view === "ai" && <RushmoreAI />}
 
       {view === "notes" && (
-        <main className="notes-main">
-          <Canvas />
-        </main>
+        <main className="notes-main"><Canvas /></main>
       )}
     </div>
   );
