@@ -24,6 +24,7 @@ const IMG = {
   nmgcoSP:   img("images/NMGCO/NMGCO SP Icon.png"),
   orderIcon:  img("images/Personal/The Order Icon.png"),
   orderIcon2: img("images/Personal/The Order Icon2.png"),
+  noahtube:   img("images/Personal/orc.ico"),
   riipen: img("images/Riipen/Riipen.png"),
   rrc:    img("images/Riipen/RRC.png"),
 };
@@ -121,7 +122,6 @@ function RiipenSection({ ctx }) {
   );
 }
 
-// Card order: GeoComforter, ChronoSlate, GeoAlta, NMGCO
 const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 
 export default function Home() {
@@ -145,6 +145,9 @@ export default function Home() {
   const RUSHMORE_REPO = personalRepos.find(r => r.label === "Rushmore Repo");
   const row1Claude = personalClaude.filter(l => ORDER1_LABELS.includes(l.label));
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
+
+  // Web chips with custom icons where applicable
+  const webIconMap = { "NoahTube": IMG.noahtube };
 
   return (
     <div className="app-shell">
@@ -174,7 +177,7 @@ export default function Home() {
                 {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
               </div>
               <div className="cmd-row">
-                {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+                {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
                 <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
                 <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
                 {RUSHMORE_REPO && <Chip label="Rushmore Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
