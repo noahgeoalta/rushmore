@@ -3,9 +3,9 @@ import "./globals.css";
 export const metadata = {
   title: "RUSHMORE",
   icons: {
-    icon: "/api/img?path=images%2FPersonal%2FThe%20Order%20Icon.png",
-    shortcut: "/api/img?path=images%2FPersonal%2FThe%20Order%20Icon.png",
-    apple: "/api/img?path=images%2FPersonal%2FThe%20Order%20Icon.png",
+    icon: "/api/img?path=images%2FRushmore%2Fskull.ico",
+    shortcut: "/api/img?path=images%2FRushmore%2Fskull.ico",
+    apple: "/api/img?path=images%2FRushmore%2Fskull.ico",
   },
 };
 
