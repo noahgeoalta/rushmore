@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CKEY = "rushmore-canvas-v3";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -93,6 +93,7 @@ function parsePlainToLines(text) {
 }
 
 export default function Canvas() {
+  const [mounted, setMounted] = useState(false);
   const [state, setState] = useState(null);
   const [selBox, setSelBox] = useState(null);
   const [selLines, setSelLines] = useState(new Set());
@@ -115,9 +116,13 @@ export default function Canvas() {
   const boxRefs = useRef({});
   const selLinesRef = useRef(new Set());
 
+  // Mount gate — prevents SSR/client mismatch (React #425)
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => { selLinesRef.current = selLines; }, [selLines]);
 
   useEffect(() => {
+    if (!mounted) return;
     try {
       const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
       if (!raw) { setState(emptyState()); return; }
@@ -130,22 +135,21 @@ export default function Canvas() {
       if (!parsed.activeId || !parsed.pages.find((p) => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
       setState(parsed);
     } catch { setState(emptyState()); }
-  }, []);
+  }, [mounted]);
 
   useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
 
   useEffect(() => {
     if (!focusId) return;
-    let raf;
     const go = () => {
       const el = inputs.current[focusId]; if (!el) return;
       el.focus();
-      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
+      if (focusCaret !== null) { try { el.setSelectionRange(focusCaret, focusCaret); } catch {} setFocusCaret(null); }
       setFocusId(null);
     };
     go();
-    raf = typeof window !== "undefined" ? window.requestAnimationFrame(go) : null;
-    return () => { if (raf) window.cancelAnimationFrame(raf); };
+    const raf = requestAnimationFrame(go);
+    return () => cancelAnimationFrame(raf);
   }, [focusId, focusCaret, state]);
 
   useEffect(() => {
@@ -185,9 +189,11 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [lasso, state]);
 
-  if (!state) return null;
-  const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
+  // Don't render anything on the server — canvas is 100% client-side
+  if (!mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
+  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
 
+  const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
   const canvasW = Math.max(800, ...page.boxes.map((b) => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map((b) => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
 
@@ -358,13 +364,18 @@ export default function Canvas() {
     const isSel = selLines.has(n.id);
     return (
       <div key={n.id}>
-        <div className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
+        <div
+          className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
           onDragOver={(e) => onLineDragOver(e, n.id)}
           onDragLeave={(e) => { e.stopPropagation(); setLineDrop(null); }}
           onDrop={(e) => onLineDrop(e, bid, n.id)}
           onClick={(e) => onLineClick(e, bid, n.id)}
         >
-          <button className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")} onClick={(e) => { e.stopPropagation(); toggle(bid, n.id); }} tabIndex={-1}>
+          <button
+            className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")}
+            onClick={(e) => { e.stopPropagation(); toggle(bid, n.id); }}
+            tabIndex={-1}
+          >
             {n.children.length ? (n.collapsed ? CC : CO) : ""}
           </button>
           {n.type === "image" ? (
@@ -374,9 +385,12 @@ export default function Canvas() {
               {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{BULLET}</span>}
               {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd}>{num}.</span>}
               {n.type === "none" && <span className="cv-marker cv-spacer" draggable onDragStart={() => onLineDragStart(bid, n.id)} onDragEnd={onLineDragEnd} />}
-              <input className="cv-input" ref={(el) => (inputs.current[n.id] = el)}
+              <input
+                className="cv-input"
+                ref={(el) => (inputs.current[n.id] = el)}
                 style={{ fontSize: (n.fontSize || 14) + "px" }}
-                value={n.text} placeholder="..."
+                value={n.text}
+                placeholder="..."
                 onChange={(e) => setText(bid, n.id, e.target.value)}
                 onKeyDown={(e) => kd(e, bid, n.id)}
                 onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines((prev) => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine((prev) => prev || n.id); }}
@@ -399,13 +413,19 @@ export default function Canvas() {
     <>
       <div className="notes-bar">
         {state.pages.map((p) => (
-          <button key={p.id}
+          <button
+            key={p.id}
             className={"page-tab" + (p.id === state.activeId ? " active" : "") + (overPage === p.id && dragPage !== p.id ? " page-drag-over" : "")}
-            draggable onDragStart={() => setDragPage(p.id)} onDragEnd={() => { setDragPage(null); setOverPage(null); }}
-            onDragOver={(e) => { e.preventDefault(); setOverPage(p.id); }} onDragLeave={() => setOverPage(null)}
+            draggable
+            onDragStart={() => setDragPage(p.id)}
+            onDragEnd={() => { setDragPage(null); setOverPage(null); }}
+            onDragOver={(e) => { e.preventDefault(); setOverPage(p.id); }}
+            onDragLeave={() => setOverPage(null)}
             onDrop={() => dropPage(p.id)}
             onClick={() => { setState((s) => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
-            onDoubleClick={() => renamePage(p.id)} title="Double-click to rename">
+            onDoubleClick={() => renamePage(p.id)}
+            title="Double-click to rename"
+          >
             {p.name}
             <span className="x" onClick={(e) => { e.stopPropagation(); delPage(p.id); }}>x</span>
           </button>
@@ -415,21 +435,23 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Bullet (Ctrl+.)" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "bullet")}>{"\u2022"}</button>
-          <button className="notes-btn" title="Number (Ctrl+/)" onClick={() => focusedId && selBox && cycleType(selBox, focusedId, "number")}>1.</button>
+          <button className="notes-btn" title="Bullet (Ctrl+.)" onMouseDown={(e) => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "bullet"); }}>{"\u2022"}</button>
+          <button className="notes-btn" title="Number (Ctrl+/)" onMouseDown={(e) => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "number"); }}>1.</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Indent (Tab)" onClick={() => focusedId && selBox && indent(selBox, focusedId)}>{"\u2192"}</button>
-          <button className="notes-btn" title="Outdent (Shift+Tab)" onClick={() => focusedId && selBox && outdent(selBox, focusedId)}>{"\u2190"}</button>
+          <button className="notes-btn" title="Indent (Tab)" onMouseDown={(e) => { e.preventDefault(); focusedId && selBox && indent(selBox, focusedId); }}>{"\u2192"}</button>
+          <button className="notes-btn" title="Outdent (Shift+Tab)" onMouseDown={(e) => { e.preventDefault(); focusedId && selBox && outdent(selBox, focusedId); }}>{"\u2190"}</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Smaller" onClick={() => selBox && fsize(selBox, focusedId, -2)}>A-</button>
-          <button className="notes-btn" title="Larger" onClick={() => selBox && fsize(selBox, focusedId, 2)}>A+</button>
+          <button className="notes-btn" title="Smaller" onMouseDown={(e) => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
+          <button className="notes-btn" title="Larger" onMouseDown={(e) => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
           <span className="notes-sep" />
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box  |  Tab / Shift+Tab to indent  |  Shift+click to multi-select  |  Ctrl+V paste</span>
+        <span className="notes-hint">Dbl-click canvas for box | Tab / Shift+Tab to indent | Shift+click to multi-select</span>
       </div>
-      <div className="cv-canvas" ref={cvRef}
+      <div
+        className="cv-canvas"
+        ref={cvRef}
         style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
         onMouseDown={(e) => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
@@ -439,14 +461,24 @@ export default function Canvas() {
           <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />
         )}
         {page.boxes.map((box) => (
-          <div key={box.id} ref={(el) => (boxRefs.current[box.id] = el)}
+          <div
+            key={box.id}
+            ref={(el) => (boxRefs.current[box.id] = el)}
             className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")}
             style={{ left: box.x, top: box.y, width: box.w }}
             onClick={(e) => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
           >
-            <div className="cv-drag-bar" onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move" />
+            <div
+              className="cv-drag-bar"
+              onMouseDown={(e) => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
+              title="Drag to move"
+            />
             <div className="cv-body">{renderLines(box.id, box.lines)}</div>
-            <div className="cv-resize" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
+            <div
+              className="cv-resize"
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }}
+              title="Drag to resize"
+            />
           </div>
         ))}
         {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
