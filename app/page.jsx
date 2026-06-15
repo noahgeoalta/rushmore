@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Canvas from "@/components/Canvas";
+import RushmoreAI from "@/components/RushmoreAI";
 import contextsData from "@/data/contexts.json";
 import CommandBar from "@/components/CommandBar";
 
@@ -85,15 +86,12 @@ function ContextCard({ ctx }) {
   const sp       = ctx.sharepoint     || [];
   const claude   = (ctx.launchpad || []).filter((l) => l.group === "Claude");
   const logo     = CTX_LOGO[ctx.id];
-
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        {logo ? (
-          <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-        ) : (
-          <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>
-        )}
+        {logo
+          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+          : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
       {claude.map((l) => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
       {ghRepos.map((r) => <Chip key={r.url} label={r.label} url={r.url} symbol="⌥" />)}
@@ -116,8 +114,7 @@ function RiipenSection({ ctx }) {
     groups[l.group].push(l);
   }
   const topLevel = groups["Riipen"] || [];
-  const teamKeys = Object.keys(groups).filter((k) => k.startsWith("Riipen \u00b7 "));
-
+  const teamKeys = Object.keys(groups).filter((k) => k.startsWith("Riipen · "));
   return (
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
@@ -126,7 +123,7 @@ function RiipenSection({ ctx }) {
           {topLevel.map((l) => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
         </div>
         {teamKeys.map((key) => {
-          const teamName = key.replace("Riipen \u00b7 ", "");
+          const teamName = key.replace("Riipen · ", "");
           const links = groups[key];
           return (
             <div key={key} className="cmd-riipen-row">
@@ -163,22 +160,20 @@ export default function Home() {
         </span>
         <nav className="app-nav">
           <button className={"app-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>Command</button>
+          <button className={"app-nav-btn" + (view === "ai"      ? " active" : "")} onClick={() => setView("ai")}>RUSHMORE AI</button>
           <button className={"app-nav-btn" + (view === "notes"   ? " active" : "")} onClick={() => setView("notes")}>Notes</button>
         </nav>
         <span className="app-date">{today}</span>
       </header>
 
-      <CommandBar />
+      {view !== "ai" && <CommandBar />}
 
       {view === "command" && (
         <>
-          {/* Hero banner */}
           <div className="hero-banner">
             <img src={IMG.rushmorePanel} alt="RUSHMORE" />
           </div>
-
           <main className="cmd-main">
-            {/* PERSONAL */}
             <section className="cmd-section">
               <div className="cmd-section-header"><span>PERSONAL</span></div>
               <div className="cmd-row">
@@ -196,20 +191,18 @@ export default function Home() {
                 ))}
               </div>
             </section>
-
-            {/* WORK — GITHUB */}
             <section className="cmd-section">
               <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
               <div className="cmd-cards-row">
                 {otherWork.map((ctx) => <ContextCard key={ctx.id} ctx={ctx} />)}
               </div>
             </section>
-
-            {/* RIIPEN */}
             {geocomforter && <RiipenSection ctx={geocomforter} />}
           </main>
         </>
       )}
+
+      {view === "ai" && <RushmoreAI />}
 
       {view === "notes" && (
         <main className="notes-main">
