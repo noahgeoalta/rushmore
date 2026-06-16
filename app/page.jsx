@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Canvas from "@/components/Canvas";
 import RushmoreAI from "@/components/RushmoreAI";
+import MicrosoftPanel from "@/components/MicrosoftPanel";
 import contextsData from "@/data/contexts.json";
 
 const contexts = contextsData.contexts;
@@ -101,7 +102,7 @@ function RiipenSection({ ctx }) {
   }
   const topLevel = groups["Riipen"] || [];
   const riipenOverlord = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
-  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen · "));
+  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
   return (
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
@@ -113,7 +114,7 @@ function RiipenSection({ ctx }) {
         {teamKeys.map(key => (
           <div key={key} className="cmd-riipen-row">
             <ImgIcon src={IMG.rrc} size={14} />
-            <span className="cmd-riipen-team">{key.replace("Riipen · ", "")}</span>
+            <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
             {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
           </div>
         ))}
@@ -126,7 +127,9 @@ const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 
 export default function Home() {
   const [view, setView] = useState("command");
+  const [msAuthed, setMsAuthed] = useState(false);
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
   const personal     = contexts.find(c => c.id === "personal");
   const geocomforter = contexts.find(c => c.id === "geocomforter");
   const workOrdered  = WORK_ORDER.map(id => contexts.find(c => c.id === id)).filter(Boolean);
@@ -145,9 +148,12 @@ export default function Home() {
   const RUSHMORE_REPO = personalRepos.find(r => r.label === "Rushmore Repo");
   const row1Claude = personalClaude.filter(l => ORDER1_LABELS.includes(l.label));
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
-
-  // Web chips with custom icons where applicable
   const webIconMap = { "NoahTube": IMG.noahtube };
+
+  // Check auth status on load + after redirect
+  useEffect(() => {
+    fetch("/api/auth/status").then(r => r.json()).then(d => setMsAuthed(d.authed)).catch(() => {});
+  }, []);
 
   return (
     <div className="app-shell">
@@ -158,11 +164,23 @@ export default function Home() {
           <button className={"app-nav-btn" + (view === "ai"      ? " active" : "")} onClick={() => setView("ai")}>RUSHMORE</button>
           <button className={"app-nav-btn" + (view === "notes"   ? " active" : "")} onClick={() => setView("notes")}>Notes</button>
         </nav>
-        <span className="app-date">{today}</span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          {msAuthed
+            ? <span style={{ fontSize: 11, color: "#5aaa5a", letterSpacing: "0.1em" }}>&#10003; MS CONNECTED</span>
+            : <a href="/api/auth/login" style={{ fontSize: 11, color: "var(--orange)", letterSpacing: "0.1em", textDecoration: "none" }}>CONNECT MICROSOFT</a>
+          }
+          <span className="app-date">{today}</span>
+        </div>
       </header>
 
       {view === "command" && (
         <main className="cmd-main">
+          {/* Microsoft Panel — mail, calendar, teams */}
+          <section className="cmd-section">
+            <div className="cmd-section-header"><span>MICROSOFT</span></div>
+            <MicrosoftPanel />
+          </section>
+
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
