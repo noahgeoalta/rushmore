@@ -5,6 +5,7 @@ export async function GET() {
   const tenantId = process.env.AZURE_TENANT_ID;
   const redirectUri = `${process.env.NEXTAUTH_URL || "https://rushmore-phi.vercel.app"}/api/auth/callback`;
 
+  // Only use permissions that don't require admin consent
   const scopes = [
     "openid",
     "profile",
@@ -13,8 +14,6 @@ export async function GET() {
     "User.Read",
     "Mail.Read",
     "Calendars.Read",
-    "Chat.Read",
-    "Team.ReadBasic.All",
     "Files.Read",
   ].join(" ");
 
@@ -24,7 +23,6 @@ export async function GET() {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", scopes);
   url.searchParams.set("response_mode", "query");
-  // Use 'consent' prompt so user can approve individually without admin pre-consent
   url.searchParams.set("prompt", "consent");
 
   return NextResponse.redirect(url.toString());
