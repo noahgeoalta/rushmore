@@ -24,7 +24,8 @@ export async function GET() {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", scopes);
   url.searchParams.set("response_mode", "query");
-  url.searchParams.set("prompt", "select_account");
+  // Use 'consent' prompt so user can approve individually without admin pre-consent
+  url.searchParams.set("prompt", "consent");
 
   return NextResponse.redirect(url.toString());
 }
