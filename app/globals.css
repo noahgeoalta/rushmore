@@ -30,7 +30,7 @@ a { color: inherit; text-decoration: none; }
 .app-nav-btn.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
 .app-date { margin-left: auto; color: var(--faint); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; }
 
-/* Command Centre — scaled up ~0.75x more than before */
+/* Command Centre */
 .cmd-main { padding: 26px 30px 56px; display: flex; flex-direction: column; gap: 0; }
 .cmd-section { margin-bottom: 30px; }
 .cmd-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--faint); text-transform: uppercase; }
@@ -110,7 +110,6 @@ a { color: inherit; text-decoration: none; }
 .cv-bullet.has-hidden, .cv-num.has-hidden { color: var(--orange); }
 .cv-num { font-size: 14px; font-weight: 700; width: 30px; }
 .cv-spacer { width: 26px; }
-/* Vertical dots handle for plain lines */
 .cv-drag-handle { font-size: 14px; color: #333; letter-spacing: -2px; }
 .cv-drag-handle:hover { color: var(--orange); }
 .cv-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: Arial, sans-serif; font-size: 18px; padding: 2px 4px; min-width: 0; }
@@ -121,11 +120,54 @@ a { color: inherit; text-decoration: none; }
 
 /* RUSHMORE AI */
 .ai-shell { display: flex; flex-direction: column; flex: 1; height: calc(100vh - 53px); background: #0a0a0a; }
-.ai-panel-banner { position: relative; width: 100%; height: 200px; overflow: hidden; flex-shrink: 0; border-bottom: 1px solid #1e1e1e; }
-.ai-panel-banner img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; opacity: 0.8; }
-.ai-panel-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 50%, rgba(10,10,10,0.9) 100%); pointer-events: none; }
-.ai-panel-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
-.ai-panel-logo { height: 100px; width: auto; object-fit: contain; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.9)); }
+
+/* Panel banner — show full image at natural size, centered, no crop */
+.ai-panel-banner {
+  position: relative;
+  width: 100%;
+  max-height: 300px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid #1e1e1e;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-panel-banner img {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;   /* show full image, no crop */
+  object-position: center center;
+  display: block;
+  opacity: 0.85;
+}
+.ai-panel-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 60%, rgba(10,10,10,0.7) 100%);
+  pointer-events: none;
+}
+.ai-panel-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+/* Logo much smaller — about 1/10 of original */
+.ai-panel-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9));
+  opacity: 0.9;
+}
+
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
 .ai-header-left { display: flex; align-items: center; gap: 10px; }
 .ai-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff8c3a; box-shadow: 0 0 6px #ff8c3a; animation: pulse 2.5s ease-in-out infinite; }
@@ -170,8 +212,8 @@ a { color: inherit; text-decoration: none; }
   .cmd-main { padding: 14px 14px 32px; }
   .cmd-card { max-width: 100%; }
   .notes-hint { display: none; }
-  .ai-panel-banner { height: 120px; }
-  .ai-panel-logo { height: 60px; }
+  .ai-panel-banner { max-height: 160px; }
+  .ai-panel-logo { height: 28px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
