@@ -1,0 +1,6 @@
+/* Appended to globals.css */
+.ai-usage { display: flex; align-items: center; gap: 5px; margin-left: 10px; }
+.ai-usage-tok { font-size: 10px; font-weight: 700; color: var(--dim); letter-spacing: 0.05em; }
+.ai-usage-cost { font-size: 10px; font-weight: 700; color: var(--orange); }
+.ai-usage-calls { font-size: 10px; color: var(--faint); }
+.ai-usage-sep { color: var(--faint); font-size: 10px; }
