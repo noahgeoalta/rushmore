@@ -1,0 +1,28 @@
+/* Microsoft Panel */
+.ms-panel { background: var(--surface); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+.ms-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--edge); background: #141414; }
+.ms-panel-tabs { display: flex; gap: 4px; }
+.ms-tab { padding: 4px 12px; background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dim); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.1s; }
+.ms-tab:hover { color: var(--text); border-color: var(--edge2); }
+.ms-tab.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
+.ms-panel-user { display: flex; align-items: center; gap: 10px; }
+.ms-user-name { font-size: 11px; color: var(--dim); }
+.ms-signout { font-size: 11px; color: var(--faint); text-decoration: none; }
+.ms-signout:hover { color: var(--text); }
+.ms-panel-body { padding: 8px 0; max-height: 280px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
+.ms-list { display: flex; flex-direction: column; }
+.ms-item { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 2px 10px; padding: 8px 14px; border-bottom: 1px solid #1a1a1a; cursor: default; transition: background 0.1s; }
+.ms-item:hover { background: rgba(255,255,255,0.03); }
+.ms-item.unread { border-left: 2px solid var(--orange); }
+.ms-item-from { font-size: 12px; font-weight: 600; color: var(--text); grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-item-subject { font-size: 11px; color: var(--dim); grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-item-time { font-size: 10px; color: var(--faint); grid-column: 2; grid-row: 1; white-space: nowrap; align-self: center; }
+.ms-item.unread .ms-item-from { color: #fff; }
+.ms-item.unread .ms-item-subject { color: var(--text); }
+.ms-loading { padding: 16px 14px; color: var(--faint); font-size: 12px; }
+.ms-empty { padding: 16px 14px; color: var(--faint); font-size: 12px; }
+.ms-signin { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; }
+.ms-signin-text { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+.ms-signin-icon { font-size: 18px; }
+.ms-signin-btn { padding: 7px 16px; background: #0078d4; border: none; border-radius: 5px; color: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; transition: background 0.1s; }
+.ms-signin-btn:hover { background: #106ebe; }

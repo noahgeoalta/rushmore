@@ -1,6 +1,7 @@
 import "./globals.css";
 import "./cv-input-override.css";
 import "./ai-usage.css";
+import "./ms-panel.css";
 
 export const metadata = {
   title: "RUSHMORE",
