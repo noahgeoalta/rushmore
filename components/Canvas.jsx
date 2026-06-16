@@ -60,6 +60,13 @@ function parsePlainToLines(text) {
   return nodes;
 }
 
+// Auto-resize a textarea to fit its content
+function autoSize(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+
 export default function Canvas() {
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState(null);
@@ -87,6 +94,11 @@ export default function Canvas() {
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { selLinesRef.current = selLines; }, [selLines]);
 
+  // Re-autosize all textareas whenever state changes
+  useEffect(() => {
+    Object.values(inputs.current).forEach(el => autoSize(el));
+  }, [state]);
+
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -104,7 +116,12 @@ export default function Canvas() {
 
   useEffect(() => {
     if (!focusId) return;
-    const go = () => { const el = inputs.current[focusId]; if (!el) return; el.focus(); if (focusCaret !== null) { try { el.setSelectionRange(focusCaret, focusCaret); } catch {} setFocusCaret(null); } setFocusId(null); };
+    const go = () => {
+      const el = inputs.current[focusId]; if (!el) return;
+      el.focus();
+      if (focusCaret !== null) { try { el.setSelectionRange(focusCaret, focusCaret); } catch {} setFocusCaret(null); }
+      setFocusId(null);
+    };
     go(); const raf = requestAnimationFrame(go); return () => cancelAnimationFrame(raf);
   }, [focusId, focusCaret, state]);
 
@@ -227,13 +244,7 @@ export default function Canvas() {
     } catch {}
   };
 
-  // Line drag — dragging the handle moves the line + all its children
-  const onLineDragStart = (e, bid, lid) => {
-    e.stopPropagation();
-    dragLineRef.current = { bid, lid };
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", lid); // required for Firefox
-  };
+  const onLineDragStart = (e, bid, lid) => { e.stopPropagation(); dragLineRef.current = { bid, lid }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", lid); };
   const onLineDragEnd = () => { dragLineRef.current = null; setLineDrop(null); };
   const onLineDragOver = (e, lid) => {
     e.preventDefault(); e.stopPropagation();
@@ -251,15 +262,10 @@ export default function Canvas() {
     mut(pg => {
       const b = pg.boxes.find(b => b.id === bid); if (!b) return;
       const dh = loc(b.lines, srcLid); if (!dh) return;
-      const dragged = structuredClone(dh.node); // includes all children
+      const dragged = structuredClone(dh.node);
       dh.list.splice(dh.i, 1);
-      if (zone === "child") {
-        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; }
-        tgt.node.collapsed = false; tgt.node.children.push(dragged);
-      } else {
-        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; }
-        tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged);
-      }
+      if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.node.collapsed = false; tgt.node.children.push(dragged); }
+      else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); }
     });
   };
 
@@ -317,57 +323,27 @@ export default function Canvas() {
           onDrop={e => onLineDrop(e, bid, n.id)}
           onClick={e => onLineClick(e, bid, n.id)}
         >
-          {/* Collapse toggle */}
           <button className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")} onClick={e => { e.stopPropagation(); toggle(bid, n.id); }} tabIndex={-1}>
             {n.children.length ? (n.collapsed ? CC : CO) : ""}
           </button>
-
           {n.type === "image" ? (
-            // Image lines: the whole thing is the drag handle
-            <img
-              src={n.src} alt=""
-              style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block", cursor: "grab" }}
-              draggable
-              onDragStart={e => onLineDragStart(e, bid, n.id)}
-              onDragEnd={onLineDragEnd}
-            />
+            <img src={n.src} alt="" style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block", cursor: "grab" }} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} />
           ) : (
             <>
-              {/* Drag handle — the marker area. Cursor shows grab, whole marker is draggable */}
-              {n.type === "bullet" && (
-                <span
-                  className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")}
-                  draggable
-                  onDragStart={e => onLineDragStart(e, bid, n.id)}
-                  onDragEnd={onLineDragEnd}
-                  title="Drag to move"
-                >{BULLET}</span>
-              )}
-              {n.type === "number" && (
-                <span
-                  className={"cv-marker cv-num" + (hh ? " has-hidden" : "")}
-                  draggable
-                  onDragStart={e => onLineDragStart(e, bid, n.id)}
-                  onDragEnd={onLineDragEnd}
-                  title="Drag to move"
-                >{num}.</span>
-              )}
-              {n.type === "none" && (
-                <span
-                  className="cv-marker cv-spacer cv-drag-handle"
-                  draggable
-                  onDragStart={e => onLineDragStart(e, bid, n.id)}
-                  onDragEnd={onLineDragEnd}
-                  title="Drag to move"
-                >&#8942;</span>
-              )}
-              <input
+              {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{BULLET}</span>}
+              {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{num}.</span>}
+              {n.type === "none" && <span className="cv-marker cv-spacer cv-drag-handle" draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">&#8942;</span>}
+              <textarea
                 className="cv-input"
-                ref={el => (inputs.current[n.id] = el)}
+                ref={el => {
+                  inputs.current[n.id] = el;
+                  autoSize(el);
+                }}
                 style={{ fontSize: (n.fontSize || 14) + "px" }}
                 value={n.text}
                 placeholder="..."
-                onChange={e => setText(bid, n.id, e.target.value)}
+                rows={1}
+                onChange={e => { autoSize(e.target); setText(bid, n.id, e.target.value); }}
                 onKeyDown={e => kd(e, bid, n.id)}
                 onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines(prev => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine(prev => prev || n.id); }}
                 onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }}
@@ -443,11 +419,7 @@ export default function Canvas() {
             style={{ left: box.x, top: box.y, width: box.w }}
             onClick={e => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
           >
-            <div
-              className="cv-drag-bar"
-              onMouseDown={e => { if (["INPUT","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
-              title="Drag to move box"
-            />
+            <div className="cv-drag-bar" onMouseDown={e => { if (["TEXTAREA","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move box" />
             <div className="cv-body">{renderLines(box.id, box.lines)}</div>
             <div className="cv-resize" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
           </div>
