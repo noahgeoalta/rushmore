@@ -12,11 +12,10 @@ export async function GET(request) {
 
   const clientId     = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
-  const tenantId     = process.env.AZURE_TENANT_ID;
   const redirectUri  = `${process.env.NEXTAUTH_URL || "https://rushmore-phi.vercel.app"}/api/auth/callback`;
 
-  // Exchange code for tokens
-  const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+  // Use 'common' endpoint for token exchange too
+  const tokenRes = await fetch(`https://login.microsoftonline.com/common/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -33,7 +32,6 @@ export async function GET(request) {
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL || "https://rushmore-phi.vercel.app"}?auth_error=token_exchange_failed`);
   }
 
-  // Store tokens in httpOnly cookies (expires with refresh_token ~90 days)
   const cookieStore = await cookies();
   const opts = { httpOnly: true, secure: true, sameSite: "lax", path: "/" };
   cookieStore.set("ms_access_token",  tokens.access_token,  { ...opts, maxAge: tokens.expires_in || 3600 });
