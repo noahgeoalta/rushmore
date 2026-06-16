@@ -6,6 +6,14 @@ const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
 const PANEL = img("images/Rushmore/Rushmore Panel.png");
 const LOGO  = img("images/Rushmore/Rushmore Logo.png");
 
+// Sonnet 4.6 pricing (per million tokens)
+const PRICE_IN  = 3.00;
+const PRICE_OUT = 15.00;
+
+function calcCost(inTok, outTok) {
+  return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
+}
+
 function speak(text) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
@@ -41,7 +49,7 @@ function Message({ msg }) {
 
 const BOOT_MSG = {
   role: "assistant",
-  content: "RUSHMORE online. All systems nominal.\n\nI have full context on GeoAlta, GeoComforter, ChronoSlate, NMGCO, The Order, and TheGame. GitHub actions and Microsoft Graph are not yet wired — everything else, ask away."
+  content: "RUSHMORE online. All systems nominal.\n\nI have full context on GeoAlta, GeoComforter, ChronoSlate, NMGCO, The Order, and TheGame. GitHub actions and Microsoft Graph are not yet wired \u2014 everything else, ask away."
 };
 
 export default function RushmoreAI() {
@@ -50,6 +58,7 @@ export default function RushmoreAI() {
   const [loading, setLoading] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
   const [listening, setListening] = useState(false);
+  const [usage, setUsage] = useState({ inTok: 0, outTok: 0, calls: 0 });
   const bottomRef = useRef(null);
   const recognitionRef = useRef(null);
 
@@ -75,11 +84,24 @@ export default function RushmoreAI() {
       const reply = data.content?.[0]?.text || data.error?.message || "[No response]";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       if (ttsOn) speak(reply);
+      // Track usage from API response
+      if (data.usage) {
+        setUsage(prev => ({
+          inTok:  prev.inTok  + (data.usage.input_tokens  || 0),
+          outTok: prev.outTok + (data.usage.output_tokens || 0),
+          calls:  prev.calls  + 1,
+        }));
+      }
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetAll = () => {
+    setMessages([BOOT_MSG]);
+    setUsage({ inTok: 0, outTok: 0, calls: 0 });
   };
 
   const toggleVoice = () => {
@@ -100,9 +122,11 @@ export default function RushmoreAI() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
+  const cost = calcCost(usage.inTok, usage.outTok);
+  const totalTok = usage.inTok + usage.outTok;
+
   return (
     <div className="ai-shell">
-      {/* Hero panel — logo + image only, no text overlay */}
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" />
         <div className="ai-panel-overlay">
@@ -110,17 +134,29 @@ export default function RushmoreAI() {
         </div>
       </div>
 
-      {/* Status bar */}
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
           <span className="ai-online-label">ONLINE</span>
+          {/* Live usage display */}
+          {totalTok > 0 && (
+            <span className="ai-usage">
+              <span className="ai-usage-tok">{totalTok.toLocaleString()} tok</span>
+              <span className="ai-usage-sep">·</span>
+              <span className="ai-usage-cost">${cost.toFixed(4)}</span>
+              <span className="ai-usage-sep">·</span>
+              <span className="ai-usage-calls">{usage.calls} msg{usage.calls !== 1 ? "s" : ""}</span>
+            </span>
+          )}
         </div>
         <div className="ai-header-right">
-          <button className={`ai-ctrl-btn ${ttsOn ? "active" : ""}`} onClick={() => { setTtsOn(t => !t); if (ttsOn) window.speechSynthesis?.cancel(); }}>
-            {ttsOn ? "◉ VOICE OUT" : "○ VOICE OUT"}
+          <button
+            className={`ai-ctrl-btn ${ttsOn ? "active" : ""}`}
+            onClick={() => { setTtsOn(t => !t); if (ttsOn) window.speechSynthesis?.cancel(); }}
+          >
+            {ttsOn ? "\u25c9 VOICE OUT" : "\u25cb VOICE OUT"}
           </button>
-          <button className="ai-ctrl-btn" onClick={() => setMessages([BOOT_MSG])}>CLEAR</button>
+          <button className="ai-ctrl-btn" onClick={resetAll}>CLEAR</button>
         </div>
       </div>
 
@@ -136,8 +172,12 @@ export default function RushmoreAI() {
       </div>
 
       <div className="ai-input-bar">
-        <button className={`ai-mic-btn ${listening ? "listening" : ""}`} onClick={toggleVoice} title={listening ? "Stop" : "Voice input"}>
-          {listening ? "●" : "🎙"}
+        <button
+          className={`ai-mic-btn ${listening ? "listening" : ""}`}
+          onClick={toggleVoice}
+          title={listening ? "Stop" : "Voice input"}
+        >
+          {listening ? "\u25cf" : "\ud83c\udf99"}
         </button>
         <textarea
           className="ai-textarea"
