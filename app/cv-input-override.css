@@ -1,0 +1,19 @@
+.cv-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  font-size: 18px;
+  padding: 2px 4px;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+  display: block;
+  width: 100%;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.cv-input::placeholder { color: #2a2a2a; }
