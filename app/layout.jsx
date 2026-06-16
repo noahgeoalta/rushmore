@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./cv-input-override.css";
 
 export const metadata = {
   title: "RUSHMORE",
