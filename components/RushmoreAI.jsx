@@ -13,18 +13,17 @@ function calcCost(inTok, outTok) {
 }
 
 // ── Audio FX chain ────────────────────────────────────────────────────────────
-// Builds an impulse response for a large chamber reverb
-function makeImpulse(ctx, duration = 2.5, decay = 3.0) {
-  const rate    = ctx.sampleRate;
-  const length  = rate * duration;
-  const impulse = ctx.createBuffer(2, length, rate);
+function makeImpulse(ctx, duration = 2.2, decay = 3.2) {
+  const rate   = ctx.sampleRate;
+  const length = rate * duration;
+  const buf    = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
-    const ch = impulse.getChannelData(c);
+    const ch = buf.getChannelData(c);
     for (let i = 0; i < length; i++) {
       ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
     }
   }
-  return impulse;
+  return buf;
 }
 
 let audioCtx = null;
@@ -37,20 +36,16 @@ function getCtx() {
 }
 
 let currentSource = null;
-let currentAudioEl = null;
 
 async function speakWithFX(text, onDone) {
   if (typeof window === "undefined") return;
-
-  // Stop anything playing
   try { currentSource?.stop(); } catch (_) {}
   currentSource = null;
-  if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
   window.speechSynthesis?.cancel();
 
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
 
-  // ── Try ElevenLabs + Web Audio FX ──
+  // ── ElevenLabs + Web Audio FX ──
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
@@ -63,63 +58,72 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // Source
+      // Source node
       const source = ctx.createBufferSource();
       source.buffer = decoded;
       currentSource = source;
 
-      // 1. Pitch shift down — playback rate < 1 lowers pitch
-      //    0.82 ≈ down ~3 semitones, noticeably deeper without sounding broken
-      source.playbackRate.value = 0.82;
+      // 1. Slight pitch shift down — just enough to add weight without muffling
+      source.playbackRate.value = 0.88; // ~2 semitones down
 
-      // 2. Low-shelf boost — adds body/weight to the voice
-      const lowShelf = ctx.createBiquadFilter();
-      lowShelf.type      = "lowshelf";
-      lowShelf.frequency.value = 300;
-      lowShelf.gain.value      = 6;  // +6dB below 300Hz
+      // 2. High-pass to remove muddiness in low-mids
+      const hiPass = ctx.createBiquadFilter();
+      hiPass.type = "highpass";
+      hiPass.frequency.value = 120; // cut rumble below 120Hz
 
-      // 3. High-shelf cut — removes brightness, makes it darker/grittier
-      const highShelf = ctx.createBiquadFilter();
-      highShelf.type      = "highshelf";
-      highShelf.frequency.value = 3500;
-      highShelf.gain.value      = -8; // -8dB above 3.5kHz
+      // 3. Subtle presence boost — keeps voice crisp and clear (High Templar clarity)
+      const presence = ctx.createBiquadFilter();
+      presence.type = "peaking";
+      presence.frequency.value = 2800;
+      presence.Q.value = 1.2;
+      presence.gain.value = 3; // +3dB presence, not harsh
 
-      // 4. Mild waveshaper distortion — adds grit/edge
-      const waveshaper = ctx.createWaveShaper();
-      const curve = new Float32Array(256);
-      const amount = 18; // subtle — just enough crunch
-      for (let i = 0; i < 256; i++) {
-        const x = (i * 2) / 256 - 1;
-        curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
-      }
-      waveshaper.curve   = curve;
-      waveshaper.oversample = "4x";
+      // 4. Short predelay echo — the psionic near-doubling effect (~80ms)
+      const preDelay = ctx.createDelay(0.2);
+      preDelay.delayTime.value = 0.08; // 80ms
+      const preDelayGain = ctx.createGain();
+      preDelayGain.gain.value = 0.28; // subtle, not an obvious slap
 
-      // 5. Convolver reverb — large chamber echo
+      // 5. Far chamber reverb — the long tail
       const convolver = ctx.createConvolver();
-      convolver.buffer = makeImpulse(ctx, 2.0, 3.5);
+      convolver.buffer = makeImpulse(ctx, 2.2, 3.2);
 
-      // 6. Wet/dry mix — 25% reverb, 75% dry
-      const dryGain = ctx.createGain();  dryGain.gain.value  = 0.75;
-      const wetGain = ctx.createGain();  wetGain.gain.value  = 0.25;
-      const master  = ctx.createGain();  master.gain.value   = 1.1;
+      // 6. Wet/dry mix — 20% reverb keeps it spacious without mud
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.80;
+      const wetGain = ctx.createGain(); wetGain.gain.value = 0.20;
+      const echoGain = ctx.createGain(); echoGain.gain.value = 0.28;
 
-      // Chain: source → lowShelf → highShelf → waveshaper → [dry + wet]
-      source.connect(lowShelf);
-      lowShelf.connect(highShelf);
-      highShelf.connect(waveshaper);
-      waveshaper.connect(dryGain);
-      waveshaper.connect(convolver);
-      convolver.connect(wetGain);
+      // 7. Master — slight reduction to prevent clipping from echo layers
+      const master = ctx.createGain(); master.gain.value = 0.90;
+
+      // Chain:
+      // source → hiPass → presence → [dry path]
+      //                             → [predelay echo path]
+      //                             → [convolver reverb path]
+      // all paths → master → destination
+      source.connect(hiPass);
+      hiPass.connect(presence);
+
+      // dry
+      presence.connect(dryGain);
       dryGain.connect(master);
+
+      // short echo
+      presence.connect(preDelay);
+      preDelay.connect(preDelayGain);
+      preDelayGain.connect(master);
+
+      // far reverb
+      presence.connect(convolver);
+      convolver.connect(wetGain);
       wetGain.connect(master);
+
       master.connect(ctx.destination);
 
       source.onended = () => { currentSource = null; onDone?.(); };
       source.start(0);
       return;
     }
-    // 503 = not configured, fall through
   } catch (_) {}
 
   // ── Browser TTS fallback ──
@@ -128,7 +132,6 @@ async function speakWithFX(text, onDone) {
   const preferred =
     voices.find(v => /google uk english male/i.test(v.name)) ||
     voices.find(v => /microsoft george/i.test(v.name)) ||
-    voices.find(v => /microsoft david/i.test(v.name)) ||
     voices.find(v => /daniel/i.test(v.name)) ||
     voices.find(v => v.lang === "en-GB") ||
     voices.find(v => v.lang.startsWith("en"));
@@ -142,7 +145,6 @@ async function speakWithFX(text, onDone) {
 function stopSpeech() {
   try { currentSource?.stop(); } catch (_) {}
   currentSource = null;
-  if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
   window.speechSynthesis?.cancel();
 }
 
@@ -303,7 +305,6 @@ export default function RushmoreAI() {
           <button
             className={`ai-ctrl-btn${continuous ? " active" : ""}`}
             onClick={toggleContinuous}
-            title={continuous ? "Turn off continuous voice mode" : "Turn on continuous voice mode"}
           >
             {continuous
               ? (listening ? "\u25cf LISTENING" : speaking ? "\u25b6 SPEAKING" : "\u25cc WAITING")
