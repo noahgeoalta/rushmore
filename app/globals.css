@@ -117,25 +117,36 @@ a { color: inherit; text-decoration: none; }
 }
 
 /*
-  Fixed 360px height — never changes with window size.
-  overflow:hidden crops the black letterbox bars in the video.
-  No box-shadow here — glow is handled by the overlay div inside.
+  Full-width outer strip — black background fills the row edge to edge.
+  The actual video frame is centred inside with a max-width cap.
+*/
+.ai-video-strip {
+  flex-shrink: 0;
+  background: #000;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex;
+  justify-content: center;
+}
+
+/*
+  The actual video frame — capped at 900px wide, centred.
+  aspect-ratio matches the video's content area (after cropping black bars).
+  Since the video is 16:9 but has black bars top+bottom, the visible face
+  content is roughly 16:7. Adjust the ratio if needed.
+  max-height caps it so it never eats the whole viewport on tall screens.
 */
 .ai-video-sticky {
   position: relative;
-  flex-shrink: 0;
-  height: 360px;
-  background: #000;
-  border-bottom: 1px solid #1a1a1a;
+  width: 100%;
+  max-width: 900px;
+  aspect-ratio: 16 / 7;
+  max-height: 45vh;
   overflow: hidden;
 }
 
 /*
-  The video fills the fixed-height container exactly.
-  object-fit:cover fills the frame and crops black bars.
-  object-position: center 35% skips the black bar at top
-  and centres on the face area.
-  No z-index needed — natural stacking order puts it below the overlay.
+  Video fills the container exactly, cropping to show just the face area.
+  object-position: center 35% skips the black bar baked into the top.
 */
 .ai-video-main {
   display: block;
@@ -146,11 +157,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 /*
-  Glow overlay — sits ON TOP of the video (z-index:1 above video's auto).
-  pointer-events:none so it doesn't block clicks.
-  mix-blend-mode:screen makes it additive — brightens what's under it.
-  background is set inline by JS every RAF frame via the bloomRef.
-  The radial gradient radiates from center so the whole face area glows.
+  Glow overlay — ON TOP of the video, blends additively via screen.
+  JS sets .style.background to a radial-gradient every RAF frame.
 */
 .ai-video-bloom {
   position: absolute;
@@ -158,7 +166,6 @@ a { color: inherit; text-decoration: none; }
   z-index: 1;
   pointer-events: none;
   mix-blend-mode: screen;
-  /* default idle glow — JS overrides this every frame */
   background: radial-gradient(ellipse 80% 80% at 50% 50%,
     rgba(30, 180, 30, 0.08) 0%,
     rgba(30, 180, 30, 0.03) 50%,
@@ -231,7 +238,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  .ai-video-sticky { height: 220px; }
+  .ai-video-sticky { max-height: 35vh; }
   .ai-feed { padding: 14px 14px; }
   .ai-input-bar { padding: 10px 14px; }
   .ai-header { padding: 6px 14px; }
