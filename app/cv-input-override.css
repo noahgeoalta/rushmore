@@ -4,8 +4,8 @@
   border: none;
   outline: none;
   color: var(--text);
-  font-family: Arial, sans-serif;
-  font-size: 18px;
+  font-family: inherit;
+  font-size: inherit;
   padding: 2px 4px;
   min-width: 0;
   width: 100%;
