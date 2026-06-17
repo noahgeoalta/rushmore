@@ -7,32 +7,12 @@ const PANEL     = img("images/Rushmore/Rushmore Panel.png");
 const LOGO      = img("images/Rushmore/Rushmore Logo.png");
 const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
 
-// Panel: 1784 x 951
-// Octagon bounding box as % of panel
 const FACE = {
   left:   516  / 1784 * 100,
   top:    60   / 951  * 100,
   width:  703  / 1784 * 100,
   height: 482  / 951  * 100,
 };
-
-// SVG octagon points normalised to 0-100 within the bounding box
-// These match the original measured coords, converted to % of the bounding box
-const OCT_PTS = [
-  [47.5,  0  ],
-  [91.7,  3.7],
-  [100,   47.5],
-  [94.3,  91.1],
-  [47.5,  100 ],
-  [7.1,   92.5],
-  [0,     47.5],
-  [7.3,   4.8 ],
-];
-
-// Build an SVG <polygon> points string from 0-100 normalised coords
-// We render the SVG clipPath at a fixed internal size (1000x1000)
-const SVG_SIZE = 1000;
-const svgPoints = OCT_PTS.map(([x, y]) => `${x * 10},${y * 10}`).join(" ");
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -58,6 +38,19 @@ function makeImpulse(ctx, duration, decay) {
     }
   }
   return buf;
+}
+
+// Soft-clip waveshaper — amount 0-100, higher = more grit
+// amount ~8 = barely perceptible warmth, ~20 = audible crunch
+function makeDistCurve(amount) {
+  const n = 256;
+  const curve = new Float32Array(n);
+  const k = amount;
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((Math.PI + k) * x) / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
 }
 
 let audioCtx      = null;
@@ -94,44 +87,100 @@ async function speakWithFX(text, onDone) {
       const arrayBuf = await res.arrayBuffer();
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
+
+      // ── Sources ──
       const srcMain  = makeSource(ctx, decoded, BASE);
       const srcChoA  = makeSource(ctx, decoded, CHO_A);
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
+
+      // ── EQ ──
       const hiPass = ctx.createBiquadFilter(); hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
       const midNotch = ctx.createBiquadFilter(); midNotch.type = "peaking"; midNotch.frequency.value = 420; midNotch.Q.value = 1.5; midNotch.gain.value = -5;
       const presence = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 1.0; presence.gain.value = 4;
       const airShelf = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
       const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 12000; brilliance.Q.value = 0.8; brilliance.gain.value = 3;
       hiPass.connect(midNotch); midNotch.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6; analyserNode = analyser;
-      const makeEcho = (dt, gain) => { const d = ctx.createDelay(1.0); d.delayTime.value = dt; const g = ctx.createGain(); g.gain.value = gain; brilliance.connect(d); d.connect(g); return g; };
-      const e1=makeEcho(0.060,0.40); const e2=makeEcho(0.110,0.28); const e3=makeEcho(0.175,0.18);
-      const e4=makeEcho(0.260,0.11); const e5=makeEcho(0.370,0.06); const e6=makeEcho(0.500,0.03);
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx,1.0,4.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.28;
-      brilliance.connect(plate); plate.connect(plateGain);
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx,1.8,3.0);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.20;
-      brilliance.connect(hall); hall.connect(hallGain);
+
+      // ── Subtle distortion — soft clip, amount=8 = barely there warmth/grit ──
+      const distPre  = ctx.createGain(); distPre.gain.value = 1.4;   // slight drive into clipper
+      const dist     = ctx.createWaveShaper();
+      dist.curve     = makeDistCurve(8);   // 8 = very subtle
+      dist.oversample = "2x";
+      const distPost = ctx.createGain(); distPost.gain.value = 0.75; // compensate level
+      brilliance.connect(distPre); distPre.connect(dist); dist.connect(distPost);
+      // distPost is now the signal after distortion — echoes and reverb branch from here
+
+      // ── Analyser ──
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
+      analyserNode = analyser;
+
+      // ── 9-tap echo — all branch from distPost independently ──
+      const makeEcho = (dt, gain) => {
+        const d = ctx.createDelay(1.5); d.delayTime.value = dt;
+        const g = ctx.createGain(); g.gain.value = gain;
+        distPost.connect(d); d.connect(g); return g;
+      };
+      const e1 = makeEcho(0.060, 0.40);  // 60ms
+      const e2 = makeEcho(0.110, 0.30);  // 110ms
+      const e3 = makeEcho(0.175, 0.22);  // 175ms
+      const e4 = makeEcho(0.260, 0.15);  // 260ms
+      const e5 = makeEcho(0.370, 0.10);  // 370ms
+      const e6 = makeEcho(0.500, 0.06);  // 500ms
+      const e7 = makeEcho(0.660, 0.04);  // 660ms — new
+      const e8 = makeEcho(0.850, 0.02);  // 850ms — new
+      const e9 = makeEcho(1.100, 0.01);  // 1.1s  — barely there tail
+
+      // ── Reverb: plate + hall + large chamber (new) ──
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.0, 4.0);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.32; // boosted from 0.28
+      distPost.connect(plate); plate.connect(plateGain);
+
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.8, 3.0);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.24; // boosted from 0.20
+      distPost.connect(hall); hall.connect(hallGain);
+
+      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 2.8, 2.2); // long, slow decay
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.12;
+      distPost.connect(chamber); chamber.connect(chamberGain);
+
+      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
+
+      // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
-      const master = ctx.createGain(); master.gain.value = 0.75;
+
+      // ── Master — slight reduction for extra reverb+echo headroom ──
+      const master = ctx.createGain(); master.gain.value = 0.70;
+
+      // ── Routing ──
       srcMain.connect(hiPass);
-      brilliance.connect(analyser); analyser.connect(master);
+
+      // dry signal after dist
+      distPost.connect(analyser); analyser.connect(master);
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
-      brilliance.connect(dryGain); dryGain.connect(master);
-      [e1,e2,e3,e4,e5,e6].forEach(e => e.connect(master));
-      plateGain.connect(master); hallGain.connect(master);
+      distPost.connect(dryGain); dryGain.connect(master);
+
+      // echoes
+      [e1,e2,e3,e4,e5,e6,e7,e8,e9].forEach(e => e.connect(master));
+
+      // reverbs
+      plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
+
+      // chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+
+      // undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
+
       master.connect(ctx.destination);
+
       let ended = false;
       srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
       const t = ctx.currentTime + 0.01;
@@ -225,7 +274,7 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const continuousRef  = useRef(false);
-  const wrapRef        = useRef(null);  // outer div carries filter/glow
+  const wrapRef        = useRef(null);
   const glowRef        = useRef(null);
 
   useVoiceGlow(wrapRef, glowRef);
@@ -303,16 +352,9 @@ export default function RushmoreAI() {
   return (
     <div className="ai-shell">
       <div className="ai-panel-banner">
-        {/* Hidden SVG that defines the rounded octagon clipPath */}
         <svg width="0" height="0" style={{ position: "absolute" }}>
           <defs>
             <clipPath id="tv-oct" clipPathUnits="objectBoundingBox">
-              {/*
-                objectBoundingBox means coords are 0-1 relative to the element.
-                We use the same octagon percentages / 100.
-                The polygon is drawn with rounded joints via a path with
-                quadratic bezier curves at each corner.
-              */}
               <path d="
                 M 0.475,0.01
                 Q 0.475,0    0.485,0.001
@@ -338,10 +380,6 @@ export default function RushmoreAI() {
 
         <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
 
-        {/*
-          Wrapper div carries the clip-path (rounded octagon) and filter/glow.
-          Video fills the wrapper via absolute inset.
-        */}
         <div
           ref={wrapRef}
           style={{
@@ -359,17 +397,16 @@ export default function RushmoreAI() {
             src={VIDEO_SRC}
             autoPlay loop muted playsInline
             style={{
-              position:   "absolute",
-              inset:      0,
-              width:      "100%",
-              height:     "100%",
-              objectFit:  "contain",
+              position:     "absolute",
+              inset:        0,
+              width:        "100%",
+              height:       "100%",
+              objectFit:    "contain",
               mixBlendMode: "screen",
             }}
           />
         </div>
 
-        {/* Glow overlay — same octagon clip, flashes on speech */}
         <div
           ref={glowRef}
           style={{
