@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.0;  // was -0.2 — pitch down 10%
+const BASE  = -3.8;  // was -2.0 — pitch down another 10%
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
