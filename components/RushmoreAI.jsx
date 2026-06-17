@@ -11,15 +11,41 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
-// ── Audio FX ─────────────────────────────────────────────────────────────
-// Radio/intercom character:
-//   - Hard HPF at 300 Hz  (cut low-end rumble + body)
-//   - Hard LPF at 5500 Hz (cut air + sibilance, simulate cheap driver)
-//   - Mid-range bell boost 1800 Hz (nasally intercom presence)
-//   - Mid-range bell boost 2800 Hz (telephone clarity)
-//   - Light waveshaper saturation (grit/buzz texture)
-//   - Compressor (dynamic control like a limiter)
-//   - Short room reverb only (no lush hall)
+// ── Audio FX ──────────────────────────────────────────────────────────────
+// Original multi-layer voice chain restored:
+//   pitch-shifted main + chorus A/B + undertone layer
+//   EQ → compressor → reverb (plate + hall + chamber) → echo → stereo chorus
+// Plus: gentle waveshaper saturation added (amount=25, very subtle grit)
+
+const st = (n) => Math.pow(2, n / 12);
+const BASE  = -2.0;
+const CHO_A = BASE + 14 / 100;
+const CHO_B = BASE - 12 / 100;
+const UNDER = -2.25;
+
+function makeImpulse(ctx, duration, decay) {
+  const rate   = ctx.sampleRate;
+  const length = Math.floor(rate * duration);
+  const buf    = ctx.createBuffer(2, length, rate);
+  for (let c = 0; c < 2; c++) {
+    const ch = buf.getChannelData(c);
+    for (let i = 0; i < length; i++) {
+      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.94);
+    }
+  }
+  return buf;
+}
+
+// Gentle waveshaper — amount 25 = very light grit, barely noticeable texture
+function makeSatCurve(amount = 25) {
+  const n = 256;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
 
 let audioCtx      = null;
 let analyserNode  = null;
@@ -31,35 +57,12 @@ function getCtx() {
   return audioCtx;
 }
 
-function makeSource(ctx, decoded) {
+function makeSource(ctx, decoded, semitones) {
   const src = ctx.createBufferSource();
   src.buffer = decoded;
+  src.playbackRate.value = st(semitones);
   activeSources.push(src);
   return src;
-}
-
-// Waveshaper curve for light tape saturation
-function makeSatCurve(amount = 60) {
-  const n = 256;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
-    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
-  }
-  return curve;
-}
-
-function makeRoomImpulse(ctx, duration = 0.4, decay = 6.0) {
-  const rate   = ctx.sampleRate;
-  const length = Math.floor(rate * duration);
-  const buf    = ctx.createBuffer(2, length, rate);
-  for (let c = 0; c < 2; c++) {
-    const ch = buf.getChannelData(c);
-    for (let i = 0; i < length; i++) {
-      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
-    }
-  }
-  return buf;
 }
 
 async function speakWithFX(text, onDone) {
@@ -78,75 +81,113 @@ async function speakWithFX(text, onDone) {
       const arrayBuf = await res.arrayBuffer();
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
-      const src      = makeSource(ctx, decoded);
 
-      // ── EQ chain: radio bandwidth ──
-      // Hard high-pass at 300 Hz — cut everything below (body, warmth, chest)
-      const hpf = ctx.createBiquadFilter();
-      hpf.type = "highpass"; hpf.frequency.value = 300; hpf.Q.value = 1.4;
+      const srcMain  = makeSource(ctx, decoded, BASE);
+      const srcChoA  = makeSource(ctx, decoded, CHO_A);
+      const srcChoB  = makeSource(ctx, decoded, CHO_B);
+      const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // Hard low-pass at 5500 Hz — cut air, sibilance, high harmonics
-      const lpf = ctx.createBiquadFilter();
-      lpf.type = "lowpass"; lpf.frequency.value = 5500; lpf.Q.value = 1.2;
+      // ── EQ ──
+      const hiPass = ctx.createBiquadFilter();
+      hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
+      const lowShelf = ctx.createBiquadFilter();
+      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = 5;
+      const midLo = ctx.createBiquadFilter();
+      midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
+      const midHi = ctx.createBiquadFilter();
+      midHi.type = "peaking"; midHi.frequency.value = 1800; midHi.Q.value = 1.0; midHi.gain.value = -4;
+      const presence = ctx.createBiquadFilter();
+      presence.type = "peaking"; presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
+      const airShelf = ctx.createBiquadFilter();
+      airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
+      const brilliance = ctx.createBiquadFilter();
+      brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
+      hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
+      midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // Bell boost at 1800 Hz — nasally intercom character
-      const mid1 = ctx.createBiquadFilter();
-      mid1.type = "peaking"; mid1.frequency.value = 1800; mid1.Q.value = 1.4; mid1.gain.value = 6;
-
-      // Bell boost at 2800 Hz — telephone/walkie-talkie intelligibility
-      const mid2 = ctx.createBiquadFilter();
-      mid2.type = "peaking"; mid2.frequency.value = 2800; mid2.Q.value = 1.2; mid2.gain.value = 5;
-
-      // Slight cut at 500 Hz to hollow out the mid-low mud
-      const mud = ctx.createBiquadFilter();
-      mud.type = "peaking"; mud.frequency.value = 500; mud.Q.value = 1.0; mud.gain.value = -5;
-
-      hpf.connect(lpf); lpf.connect(mud); mud.connect(mid1); mid1.connect(mid2);
-
-      // ── Light waveshaper saturation ──
+      // ── Light saturation (subtle grit, not harsh) ──
       const sat = ctx.createWaveShaper();
-      sat.curve = makeSatCurve(50);
+      sat.curve = makeSatCurve(25); // 25 = very light; was 50-60 before
       sat.oversample = "2x";
-      mid2.connect(sat);
+      brilliance.connect(sat);
 
-      // ── Compressor / limiter ──
+      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -12; comp.knee.value = 4;
-      comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.08;
-      const compGain = ctx.createGain(); compGain.gain.value = 1.2;
+      comp.threshold.value = -18; comp.knee.value = 8;
+      comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
+      const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       sat.connect(comp); comp.connect(compGain);
 
-      // ── Analyser for bloom glow ──
+      // ── Computer transmission bandpass ──
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
+      const bpGain = ctx.createGain(); bpGain.gain.value = 0.25;
+      compGain.connect(bandpass); bandpass.connect(bpGain);
+
+      // ── Analyser ──
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.55;
+      analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
-      compGain.connect(analyser);
 
-      // ── Very short room reverb only (no lush hall) ──
-      const room = ctx.createConvolver(); room.buffer = makeRoomImpulse(ctx, 0.35, 7);
-      const roomGain = ctx.createGain(); roomGain.gain.value = 0.18;
-      compGain.connect(room); room.connect(roomGain);
+      // ── 9-tap echo ──
+      const makeEcho = (dt, gain) => {
+        const d = ctx.createDelay(1.5); d.delayTime.value = dt;
+        const g = ctx.createGain(); g.gain.value = gain;
+        compGain.connect(d); d.connect(g); return g;
+      };
+      const e1=makeEcho(0.060,0.38); const e2=makeEcho(0.110,0.28); const e3=makeEcho(0.175,0.20);
+      const e4=makeEcho(0.260,0.13); const e5=makeEcho(0.370,0.08); const e6=makeEcho(0.500,0.05);
+      const e7=makeEcho(0.660,0.03); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
 
-      // ── Short echo (single repeat, phone-booth style) ──
-      const echo = ctx.createDelay(0.5); echo.delayTime.value = 0.06;
-      const echoGain = ctx.createGain(); echoGain.gain.value = 0.15;
-      compGain.connect(echo); echo.connect(echoGain);
+      // ── Reverb ──
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.2, 4.0);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.55;
+      compGain.connect(plate); plate.connect(plateGain);
+
+      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025;
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 2.2, 2.8);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.50;
+      compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
+
+      const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055;
+      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 3.5, 2.0);
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.30;
+      compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
+
+      // ── Stereo chorus ──
+      const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
+      const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
+      const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
+
+      // ── Undertone ──
+      const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
+      const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
       // ── Master ──
-      const master = ctx.createGain(); master.gain.value = 0.85;
-      analyser.connect(master);
-      roomGain.connect(master);
-      echoGain.connect(master);
+      const master = ctx.createGain(); master.gain.value = 0.50;
+
+      // ── Routing ──
+      srcMain.connect(hiPass);
+      compGain.connect(analyser); analyser.connect(master);
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.20;
+      compGain.connect(dryGain); dryGain.connect(master);
+      bpGain.connect(master);
+      [e1,e2,e3,e4,e5,e6,e7,e8,e9].forEach(e => e.connect(master));
+      plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
+      srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
+      srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+      srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
       master.connect(ctx.destination);
 
       let ended = false;
-      src.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
-      src.connect(hpf);
-      src.start(ctx.currentTime + 0.01);
+      srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
+      const t = ctx.currentTime + 0.01;
+      srcMain.start(t); srcChoA.start(t); srcChoB.start(t); srcUnder.start(t);
       return;
     }
   } catch (_) {}
-  // Fallback: browser TTS
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
   const preferred = voices.find(v => /google uk english male/i.test(v.name))
@@ -166,16 +207,11 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video darkening + bloom glow ─────────────────────────────────────────
-// darkRef  = the dark overlay div (on top of video, below bloom)
-// bloomRef = the colour glow div (on top of dark overlay)
-// When idle (not speaking): dark overlay is heavy (~0.65 opacity black)
-// When speaking: dark overlay fades out, bloom pulses bright
+// ── Video darkening + bloom glow ──────────────────────────────────────────
 function useVideoFX(darkRef, bloomRef) {
-  const rafRef  = useRef(null);
-  const dataArr = useRef(null);
-  // Current darkness level — animated smoothly
-  const darknessRef = useRef(0.65); // 0 = clear, 1 = black
+  const rafRef      = useRef(null);
+  const dataArr     = useRef(null);
+  const darknessRef = useRef(0.65);
 
   useEffect(() => {
     const loop = () => {
@@ -183,23 +219,17 @@ function useVideoFX(darkRef, bloomRef) {
       const dark  = darkRef.current;
       const bloom = bloomRef.current;
       if (!dark || !bloom) return;
-
       const t = Date.now() / 1400;
 
       if (!analyserNode) {
-        // ── Idle: dark + faint slow-breathing green ──
-        // Ease darkness UP toward 0.65
         darknessRef.current = Math.min(0.65, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
-
-        // Faint idle breath
         const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
         bloom.style.background =
           `radial-gradient(ellipse 70% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
         return;
       }
 
-      // ── Speaking: analyse audio ──
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount)
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(dataArr.current);
@@ -207,12 +237,10 @@ function useVideoFX(darkRef, bloomRef) {
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Ease darkness DOWN as voice gets louder
       const targetDark = Math.max(0.0, 0.30 - rms * 0.30);
       darknessRef.current += (targetDark - darknessRef.current) * 0.12;
       dark.style.opacity = darknessRef.current.toFixed(3);
 
-      // Bloom pulses with the voice
       const r  = Math.round(30  + rms * 200);
       const g  = Math.round(200 + rms * 55);
       const b  = Math.round(10  + rms * 20);
@@ -249,13 +277,13 @@ const BOOT_MSG = {
 };
 
 export default function RushmoreAI() {
-  const [messages,   setMessages]   = useState([BOOT_MSG]);
-  const [input,      setInput]      = useState("");
-  const [loading,    setLoading]    = useState(false);
-  const [voiceOut,   setVoiceOut]   = useState(false);  // TTS output toggle
-  const [listening,  setListening]  = useState(false);
-  const [speaking,   setSpeaking]   = useState(false);
-  const [usage,      setUsage]      = useState({ inTok: 0, outTok: 0, calls: 0 });
+  const [messages,  setMessages]  = useState([BOOT_MSG]);
+  const [input,     setInput]     = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [voiceOut,  setVoiceOut]  = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking,  setSpeaking]  = useState(false);
+  const [usage,     setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const voiceOutRef    = useRef(false);
@@ -267,29 +295,19 @@ export default function RushmoreAI() {
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
-  // ── Mobile-safe speech recognition ──
-  // Uses a fresh instance each time (avoids Safari stale-ref bug).
-  // Requests permission explicitly on iOS via getUserMedia before starting.
   const startListening = useCallback(async () => {
-    // Ensure mic permission on mobile (especially iOS Safari)
     if (navigator.mediaDevices?.getUserMedia) {
       try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) { return; }
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("Speech recognition not supported in this browser."); return; }
-    // Stop any existing instance
     try { recognitionRef.current?.stop(); } catch (_) {}
     const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = false;
-    rec.lang           = "en-US";
+    rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
     rec.onstart  = () => setListening(true);
     rec.onend    = () => setListening(false);
     rec.onerror  = (e) => { console.warn("SR error", e.error); setListening(false); };
-    rec.onresult = (e) => {
-      const transcript = e.results[0]?.[0]?.transcript;
-      if (transcript) sendMessage(transcript);
-    };
+    rec.onresult = (e) => { const t = e.results[0]?.[0]?.transcript; if (t) sendMessage(t); };
     recognitionRef.current = rec;
     try { rec.start(); } catch (e) { console.warn("SR start failed", e); }
   }, []); // eslint-disable-line
@@ -332,33 +350,23 @@ export default function RushmoreAI() {
     } finally { setLoading(false); }
   };
 
-  const resetAll = () => {
-    stopSpeech(); stopListening();
-    setVoiceOut(false); voiceOutRef.current = false;
-    setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 });
-  };
-
+  const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(false); voiceOutRef.current = false; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
   const toggleMic   = () => { if (listening) { stopListening(); } else { startListening(); } };
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-  const cost      = calcCost(usage.inTok, usage.outTok);
-  const totalTok  = usage.inTok + usage.outTok;
+  const cost     = calcCost(usage.inTok, usage.outTok);
+  const totalTok = usage.inTok + usage.outTok;
 
   return (
     <div className="ai-shell">
-
-      {/* Full-width strip — video centred at max 900px */}
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
           <video src={VIDEO_SRC} autoPlay loop muted playsInline className="ai-video-main" />
-          {/* Dark overlay — heavy when idle, clears when speaking */}
-          <div className="ai-video-dark" ref={darkRef} />
-          {/* Bloom overlay — colour glow ON TOP of dark layer */}
+          <div className="ai-video-dark"  ref={darkRef}  />
           <div className="ai-video-bloom" ref={bloomRef} />
         </div>
       </div>
 
-      {/* Status bar */}
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
@@ -372,7 +380,7 @@ export default function RushmoreAI() {
               <span className="ai-usage-calls">{usage.calls} msg{usage.calls !== 1 ? "s" : ""}</span>
             </span>
           )}
-          {speaking && <span className="ai-speaking-label">&#9654; SPEAKING</span>}
+          {speaking  && <span className="ai-speaking-label">&#9654; SPEAKING</span>}
           {listening && <span className="ai-listening-label">&#9679; LISTENING</span>}
         </div>
         <div className="ai-header-right">
@@ -380,7 +388,6 @@ export default function RushmoreAI() {
         </div>
       </div>
 
-      {/* Chat feed */}
       <div className="ai-feed">
         {messages.map((msg, i) => <Message key={i} msg={msg} />)}
         {loading && (
@@ -392,33 +399,19 @@ export default function RushmoreAI() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar — mic + voice out on left, textarea, send */}
       <div className="ai-input-bar">
         <div className="ai-voice-btns">
-          <button
-            className={`ai-mic-btn${listening ? " listening" : ""}`}
-            onClick={toggleMic}
-            title={listening ? "Stop listening" : "Tap to speak"}
-          >
+          <button className={`ai-mic-btn${listening ? " listening" : ""}`} onClick={toggleMic} title={listening ? "Stop" : "Speak"}>
             {listening ? "\u25cf" : "\uD83C\uDFA4"}
           </button>
-          <button
-            className={`ai-voice-out-btn${voiceOut ? " active" : ""}`}
-            onClick={toggleVoice}
-            title={voiceOut ? "Voice out on" : "Voice out off"}
-          >
+          <button className={`ai-voice-out-btn${voiceOut ? " active" : ""}`} onClick={toggleVoice} title="Toggle voice output">
             {voiceOut ? "\uD83D\uDD0A" : "\uD83D\uDD07"}
           </button>
         </div>
-        <textarea
-          className="ai-textarea"
-          value={input}
-          onChange={e => setInput(e.target.value)}
+        <textarea className="ai-textarea" value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
           placeholder={listening ? "Listening..." : speaking ? "RUSHMORE speaking..." : "Command RUSHMORE..."}
-          rows={1}
-          spellCheck={false}
-        />
+          rows={1} spellCheck={false} />
         <button className="ai-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>SEND</button>
       </div>
     </div>
