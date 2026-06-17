@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.39;  // was -2.9 — pitch up 3% (2^(0.51/12) ≈ 1.030)
+const BASE  = -2.39;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -80,12 +80,12 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      const hiPass = ctx.createBiquadFilter(); hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
-      const lowShelf = ctx.createBiquadFilter(); lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
-      const midLo = ctx.createBiquadFilter(); midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
-      const midHi = ctx.createBiquadFilter(); midHi.type = "peaking"; midHi.frequency.value = 1800; midHi.Q.value = 1.0; midHi.gain.value = -4;
-      const presence = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
-      const airShelf = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
+      const hiPass    = ctx.createBiquadFilter(); hiPass.type = "highpass";  hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
+      const lowShelf  = ctx.createBiquadFilter(); lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
+      const midLo     = ctx.createBiquadFilter(); midLo.type = "peaking";    midLo.frequency.value = 600;  midLo.Q.value = 1.2; midLo.gain.value = -7;
+      const midHi     = ctx.createBiquadFilter(); midHi.type = "peaking";    midHi.frequency.value = 1800; midHi.Q.value = 1.0; midHi.gain.value = -4;
+      const presence  = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
+      const airShelf  = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
       const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi); midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
@@ -94,12 +94,27 @@ async function speakWithFX(text, onDone) {
       const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0; sat.connect(comp); comp.connect(compGain);
 
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6; analyserNode = analyser;
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.55; analyserNode = analyser;
 
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.6, 4.0); const plateGain = ctx.createGain(); plateGain.gain.value = 0.75; compGain.connect(plate); plate.connect(plateGain);
-      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025; const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.0, 2.8); const hallGain = ctx.createGain(); hallGain.gain.value = 0.70; compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
-      const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055; const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.4, 2.0); const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45; compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
+      // ── Reverb: shorter tails, less wet ──────────────────────────────
+      // Plate: 0.4s, no pre-delay — immediate but quick
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.4, 5.0);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.35;
+      compGain.connect(plate); plate.connect(plateGain);
 
+      // Hall: 0.8s tail, 20ms pre-delay — medium room feel
+      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.020;
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.8, 3.5);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.30;
+      compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
+
+      // Chamber: 1.2s tail, 40ms pre-delay — distant but not shhhhh
+      const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.040;
+      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.2, 3.0);
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.18;
+      compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
+
+      // ── Echo taps ────────────────────────────────────────────────────
       const makeEcho = (dt, gain, maxDt) => {
         const d = ctx.createDelay(maxDt || dt + 0.01); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -163,7 +178,7 @@ function stopSpeech() {
 function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
-  const darknessRef = useRef(0.26);
+  const darknessRef = useRef(0.80); // start fully dark
 
   useEffect(() => {
     function positionBloom() {
@@ -196,38 +211,49 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
       const bloom = bloomRef.current;
-      if (!bloom) return;
-      const t = Date.now() / 1400;
+      const dark  = darkRef.current;
+      if (!bloom || !dark) return;
 
       if (!analyserNode) {
-        darknessRef.current = Math.min(0.26, darknessRef.current + 0.012);
-        const dark = darkRef.current; if (dark) dark.style.opacity = darknessRef.current.toFixed(3);
-        const a = (0.04 + 0.025 * Math.sin(t)).toFixed(3);
-        bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
+        // Idle: fade to very dark (0.80 darkness = 20% video visible, faint idle pulse)
+        darknessRef.current = Math.min(0.80, darknessRef.current + 0.008);
+        dark.style.opacity = darknessRef.current.toFixed(3);
+        const t   = Date.now() / 1800;
+        const idleA = (0.03 + 0.02 * Math.sin(t)).toFixed(3);
+        bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,${idleA}) 0%, transparent 65%)`;
         return;
       }
 
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount)
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(dataArr.current);
+
+      // RMS — no smoothing curve, raw linear so quiet gaps drop to near 0
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-      const powered = Math.pow(rms, 0.5);
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1 true linear
 
-      const dark = darkRef.current;
-      if (dark) {
-        const targetDark = Math.max(0.0, 0.26 - powered * 0.26);
-        darknessRef.current += (targetDark - darknessRef.current) * 0.18;
-        dark.style.opacity = darknessRef.current.toFixed(3);
-      }
-      const r  = Math.round(20  + powered * 80);
-      const g  = Math.round(180 + powered * 75);
-      const b  = Math.round(20  + powered * 10);
-      const a1 = Math.min(0.40, powered * 0.40).toFixed(2);
-      const a2 = Math.min(0.20, powered * 0.20).toFixed(2);
-      const a3 = Math.min(0.07, powered * 0.07).toFixed(2);
-      bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 45%, rgba(${r},${g},${b},${a3}) 65%, transparent 80%)`;
+      // Darkness: 0.80 at silence → 0.0 at full volume — full reveal on loud
+      const targetDark = 0.80 * (1 - rms);
+      darknessRef.current += (targetDark - darknessRef.current) * 0.22;
+      dark.style.opacity = Math.max(0, darknessRef.current).toFixed(3);
+
+      // Bloom colours green→yellow with amplitude
+      const r  = Math.round(20  + rms * 220);
+      const g  = Math.round(200 + rms * 55);
+      const b  = Math.round(20  + rms * 10);
+
+      // Alpha scales 0→full directly with rms — no floor so quiet gaps = no glow
+      const a1 = (rms * 0.85).toFixed(2);  // centre
+      const a2 = (rms * 0.55).toFixed(2);  // mid
+      const a3 = (rms * 0.20).toFixed(2);  // edge fade
+
+      bloom.style.background =
+        `radial-gradient(ellipse 90% 85% at 50% 50%, ` +
+        `rgba(${r},${g},${b},${a1}) 0%, ` +
+        `rgba(${r},${g},${b},${a2}) 40%, ` +
+        `rgba(${r},${g},${b},${a3}) 65%, ` +
+        `transparent 80%)`;
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => {
