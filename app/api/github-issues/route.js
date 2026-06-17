@@ -22,22 +22,23 @@ export async function GET() {
   const results = await Promise.allSettled(
     REPOS.map(async ({ id, owner, repo }) => {
       const res = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/issues?assignee=${GITHUB_USER}&state=open&per_page=5`,
+        `https://api.github.com/repos/${owner}/${repo}/issues?assignee=${GITHUB_USER}&state=open&per_page=20`,
         { headers, next: { revalidate: 120 } }
       );
-      if (!res.ok) return { id, issues: [] };
+      if (!res.ok) return { id, rocks: [], bugCount: 0 };
       const data = await res.json();
-      // Filter out pull requests (GitHub issues API includes PRs)
-      const issues = data
-        .filter(i => !i.pull_request)
-        .map(i => ({ number: i.number, title: i.title, url: i.html_url, labels: i.labels?.map(l => l.name) || [] }));
-      return { id, issues };
+      const issues = data.filter(i => !i.pull_request);
+      const bugs  = issues.filter(i => i.labels.some(l => l.name.toLowerCase() === "bug"));
+      const rocks = issues
+        .filter(i => !i.labels.some(l => l.name.toLowerCase() === "bug"))
+        .map(i => ({ number: i.number, title: i.title, url: i.html_url }));
+      return { id, rocks, bugCount: bugs.length };
     })
   );
 
   const out = {};
   for (const r of results) {
-    if (r.status === "fulfilled") out[r.value.id] = r.value.issues;
+    if (r.status === "fulfilled") out[r.value.id] = { rocks: r.value.rocks, bugCount: r.value.bugCount };
   }
 
   return NextResponse.json(out, {
