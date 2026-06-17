@@ -106,48 +106,42 @@ a { color: inherit; text-decoration: none; }
 .cv-del-btn { color: #ff6666 !important; border-color: #3a0000 !important; }
 .cv-del-btn:hover { background: #1a0000 !important; color: #ff4444 !important; }
 
-/* RUSHMORE AI */
+/* ── RUSHMORE AI ── */
 .ai-shell { display: flex; flex-direction: column; flex: 1; height: calc(100vh - 53px); background: #0a0a0a; }
 
 /*
-  Panel banner — use a padding-top trick to lock the aspect ratio of 1784:1481
-  so the image never gets cropped and the video overlays align perfectly.
-  The banner grows/shrinks with viewport width but we cap at 45vh.
+  Panel banner — padding-top locks 1784:951 aspect ratio (53.31%)
+  so the image never crops and video % coords map 1:1 to image pixels.
+  Capped at 55vh so the chat area stays usable.
 */
 .ai-panel-banner {
   position: relative;
   width: 100%;
-  /* aspect-ratio: 1784/1481 = 83.0% padding-top */
-  padding-top: min(83%, 45vh);
+  padding-top: min(53.31%, 55vh);
   flex-shrink: 0;
   border-bottom: 1px solid #1e1e1e;
   background: #000;
   overflow: hidden;
 }
 
-/* Panel base image — absolutely fills the padded box exactly */
+/* Fill the padded box exactly — no crop, no letterbox */
 .ai-panel-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill; /* fill = stretch to exact box, no crop, matches padding-top ratio */
+  object-fit: fill;
   display: block;
-  opacity: 0.92;
+  opacity: 0.93;
 }
 
-/*
-  Face video — % coordinates are relative to the banner box,
-  which now has the same aspect ratio as the source image.
-  So FACE.left/top/width/height percentages map 1:1.
-*/
+/* Video — % coords relative to banner box = same as image pixel coords */
 .ai-face-video {
   position: absolute;
   object-fit: cover;
-  border-radius: 2px;
-  filter: brightness(1.05);
   mix-blend-mode: screen;
-  opacity: 0.88;
+  opacity: 0.90;
+  filter: brightness(1.1);
 }
 
 .ai-panel-overlay {
@@ -160,7 +154,7 @@ a { color: inherit; text-decoration: none; }
   z-index: 2;
   pointer-events: none;
 }
-.ai-panel-logo { height: 24px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9)); opacity: 0.85; }
+.ai-panel-logo { height: 22px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.95)); opacity: 0.85; }
 
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
 .ai-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
@@ -212,8 +206,8 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  .ai-panel-banner { padding-top: min(83%, 35vh); }
-  .ai-panel-logo { height: 18px; }
+  .ai-panel-banner { padding-top: min(53.31%, 40vh); }
+  .ai-panel-logo { height: 16px; }
   .ai-feed { padding: 14px 14px; }
   .ai-input-bar { padding: 10px 14px; }
   .ai-header { padding: 6px 14px; }
