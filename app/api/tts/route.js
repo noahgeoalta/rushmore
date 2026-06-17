@@ -31,9 +31,9 @@ export async function POST(request) {
         voice_settings: {
           stability: 0.25,
           similarity_boost: 0.95,
-          style: 0.0,
+          style: 0.45,        // was 0.0 — expressive/exaggerated delivery
           use_speaker_boost: true,
-          speed: 1.0,
+          speed: 1.0,         // was 1.20 — natural pace
         },
       }),
     }
