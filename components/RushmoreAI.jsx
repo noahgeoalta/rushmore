@@ -7,14 +7,32 @@ const PANEL     = img("images/Rushmore/Rushmore Panel.png");
 const LOGO      = img("images/Rushmore/Rushmore Logo.png");
 const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
 
-// Panel: 1784 x 951 — original measured octagon coords
+// Panel: 1784 x 951
+// Octagon bounding box as % of panel
 const FACE = {
   left:   516  / 1784 * 100,
   top:    60   / 951  * 100,
   width:  703  / 1784 * 100,
   height: 482  / 951  * 100,
-  clipPath: "polygon(47.5% 0%, 91.7% 3.7%, 100% 47.5%, 94.3% 91.1%, 47.5% 100%, 7.1% 92.5%, 0% 47.5%, 7.3% 4.8%)",
 };
+
+// SVG octagon points normalised to 0-100 within the bounding box
+// These match the original measured coords, converted to % of the bounding box
+const OCT_PTS = [
+  [47.5,  0  ],
+  [91.7,  3.7],
+  [100,   47.5],
+  [94.3,  91.1],
+  [47.5,  100 ],
+  [7.1,   92.5],
+  [0,     47.5],
+  [7.3,   4.8 ],
+];
+
+// Build an SVG <polygon> points string from 0-100 normalised coords
+// We render the SVG clipPath at a fixed internal size (1000x1000)
+const SVG_SIZE = 1000;
+const svgPoints = OCT_PTS.map(([x, y]) => `${x * 10},${y * 10}`).join(" ");
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -65,75 +83,45 @@ async function speakWithFX(text, onDone) {
   activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
   activeSources = [];
   window.speechSynthesis?.cancel();
-
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
-
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: clean }),
     });
-
     if (res.ok) {
       const arrayBuf = await res.arrayBuffer();
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
-
       const srcMain  = makeSource(ctx, decoded, BASE);
       const srcChoA  = makeSource(ctx, decoded, CHO_A);
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
-
-      const hiPass = ctx.createBiquadFilter();
-      hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
-      const midNotch = ctx.createBiquadFilter();
-      midNotch.type = "peaking"; midNotch.frequency.value = 420; midNotch.Q.value = 1.5; midNotch.gain.value = -5;
-      const presence = ctx.createBiquadFilter();
-      presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 1.0; presence.gain.value = 4;
-      const airShelf = ctx.createBiquadFilter();
-      airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
-      const brilliance = ctx.createBiquadFilter();
-      brilliance.type = "peaking"; brilliance.frequency.value = 12000; brilliance.Q.value = 0.8; brilliance.gain.value = 3;
-      hiPass.connect(midNotch); midNotch.connect(presence);
-      presence.connect(airShelf); airShelf.connect(brilliance);
-
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.6;
-      analyserNode = analyser;
-
-      const makeEcho = (dt, gain) => {
-        const d = ctx.createDelay(1.0); d.delayTime.value = dt;
-        const g = ctx.createGain(); g.gain.value = gain;
-        brilliance.connect(d); d.connect(g); return g;
-      };
-      const e1 = makeEcho(0.060, 0.40);
-      const e2 = makeEcho(0.110, 0.28);
-      const e3 = makeEcho(0.175, 0.18);
-      const e4 = makeEcho(0.260, 0.11);
-      const e5 = makeEcho(0.370, 0.06);
-      const e6 = makeEcho(0.500, 0.03);
-
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.0, 4.0);
+      const hiPass = ctx.createBiquadFilter(); hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
+      const midNotch = ctx.createBiquadFilter(); midNotch.type = "peaking"; midNotch.frequency.value = 420; midNotch.Q.value = 1.5; midNotch.gain.value = -5;
+      const presence = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 1.0; presence.gain.value = 4;
+      const airShelf = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
+      const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 12000; brilliance.Q.value = 0.8; brilliance.gain.value = 3;
+      hiPass.connect(midNotch); midNotch.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6; analyserNode = analyser;
+      const makeEcho = (dt, gain) => { const d = ctx.createDelay(1.0); d.delayTime.value = dt; const g = ctx.createGain(); g.gain.value = gain; brilliance.connect(d); d.connect(g); return g; };
+      const e1=makeEcho(0.060,0.40); const e2=makeEcho(0.110,0.28); const e3=makeEcho(0.175,0.18);
+      const e4=makeEcho(0.260,0.11); const e5=makeEcho(0.370,0.06); const e6=makeEcho(0.500,0.03);
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx,1.0,4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.28;
       brilliance.connect(plate); plate.connect(plateGain);
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.8, 3.0);
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx,1.8,3.0);
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.20;
       brilliance.connect(hall); hall.connect(hallGain);
-
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
-      const choHiPass = ctx.createBiquadFilter();
-      choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
+      const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
-      const underLow = ctx.createBiquadFilter();
-      underLow.type = "lowpass"; underLow.frequency.value = 4000;
+      const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
-
       const master = ctx.createGain(); master.gain.value = 0.75;
-
       srcMain.connect(hiPass);
       brilliance.connect(analyser); analyser.connect(master);
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
@@ -144,7 +132,6 @@ async function speakWithFX(text, onDone) {
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
       master.connect(ctx.destination);
-
       let ended = false;
       srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
       const t = ctx.currentTime + 0.01;
@@ -152,15 +139,9 @@ async function speakWithFX(text, onDone) {
       return;
     }
   } catch (_) {}
-
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
-  const preferred =
-    voices.find(v => /google uk english male/i.test(v.name)) ||
-    voices.find(v => /microsoft george/i.test(v.name)) ||
-    voices.find(v => /daniel/i.test(v.name)) ||
-    voices.find(v => v.lang === "en-GB") ||
-    voices.find(v => v.lang.startsWith("en"));
+  const preferred = voices.find(v => /google uk english male/i.test(v.name)) || voices.find(v => /microsoft george/i.test(v.name)) || voices.find(v => /daniel/i.test(v.name)) || voices.find(v => v.lang === "en-GB") || voices.find(v => v.lang.startsWith("en"));
   if (preferred) utt.voice = preferred;
   utt.rate = 0.92; utt.pitch = 1.0; utt.volume = 1;
   utt.onend = () => onDone?.(); utt.onerror = () => onDone?.();
@@ -174,58 +155,44 @@ function stopSpeech() {
 }
 
 // ── Voice-reactive glow ──
-function useVoiceGlow(videoRef, glowRef) {
+function useVoiceGlow(wrapRef, glowRef) {
   const rafRef  = useRef(null);
   const dataArr = useRef(null);
-
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
-
       if (!analyserNode) {
-        // Not speaking — dark and still
-        if (videoRef.current)  videoRef.current.style.filter  = "brightness(0.45) saturate(0.6)";
-        if (glowRef.current)   glowRef.current.style.opacity  = "0";
+        if (wrapRef.current)  wrapRef.current.style.filter  = "brightness(0.45) saturate(0.6)";
+        if (glowRef.current)  glowRef.current.style.opacity = "0";
         return;
       }
-
-      if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount) {
+      if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount)
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
-      }
       analyserNode.getByteFrequencyData(dataArr.current);
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-
-      const bright = 0.45 + rms * 1.6;  // dark → very bright flash
+      const rms    = Math.sqrt(sum / dataArr.current.length) / 255;
+      const bright = 0.45 + rms * 1.6;
       const glow   = Math.round(rms * 90);
       const r = Math.round(40  + rms * 180);
       const g = Math.round(160 + rms * 95);
       const b = Math.round(20  + rms * 40);
       const col = `rgba(${r},${g},${b},0.9)`;
-
-      if (videoRef.current) {
-        videoRef.current.style.filter =
-          `brightness(${bright.toFixed(2)}) saturate(1.4) drop-shadow(0 0 ${glow}px ${col})`;
-      }
-
+      if (wrapRef.current)
+        wrapRef.current.style.filter = `brightness(${bright.toFixed(2)}) saturate(1.4) drop-shadow(0 0 ${glow}px ${col})`;
       if (glowRef.current) {
         const intensity = Math.min(rms * 2.2, 1.0);
         glowRef.current.style.opacity = intensity.toFixed(2);
-        glowRef.current.style.background =
-          `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.5) 0%, transparent 70%)`;
-        glowRef.current.style.boxShadow =
-          `inset 0 0 ${glow * 2}px ${glow}px rgba(${r},${g},${b},0.55)`;
+        glowRef.current.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.5) 0%, transparent 70%)`;
+        glowRef.current.style.boxShadow  = `inset 0 0 ${glow*2}px ${glow}px rgba(${r},${g},${b},0.55)`;
       }
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [videoRef, glowRef]);
+  }, [wrapRef, glowRef]);
 }
 
-function TypingDots() {
-  return <div className="ai-typing"><span /><span /><span /></div>;
-}
+function TypingDots() { return <div className="ai-typing"><span /><span /><span /></div>; }
 
 function Message({ msg }) {
   const isUser = msg.role === "user";
@@ -258,10 +225,10 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const continuousRef  = useRef(false);
-  const videoRef       = useRef(null);
+  const wrapRef        = useRef(null);  // outer div carries filter/glow
   const glowRef        = useRef(null);
 
-  useVoiceGlow(videoRef, glowRef);
+  useVoiceGlow(wrapRef, glowRef);
 
   useEffect(() => { continuousRef.current = continuous; }, [continuous]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -320,47 +287,89 @@ export default function RushmoreAI() {
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const resetAll = () => {
-    stopSpeech(); stopListening(); setContinuous(false);
-    setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 });
-  };
-
+  const resetAll = () => { stopSpeech(); stopListening(); setContinuous(false); setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
   const toggleContinuous = () => {
     if (continuous) { setContinuous(false); continuousRef.current = false; stopListening(); stopSpeech(); }
     else { setContinuous(true); continuousRef.current = true; setTtsOn(true); startListening(); }
   };
-
   const toggleOneShotMic = () => { if (listening) { stopListening(); return; } startListening(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-
   const cost = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
 
   return (
     <div className="ai-shell">
       <div className="ai-panel-banner">
+        {/* Hidden SVG that defines the rounded octagon clipPath */}
+        <svg width="0" height="0" style={{ position: "absolute" }}>
+          <defs>
+            <clipPath id="tv-oct" clipPathUnits="objectBoundingBox">
+              {/*
+                objectBoundingBox means coords are 0-1 relative to the element.
+                We use the same octagon percentages / 100.
+                The polygon is drawn with rounded joints via a path with
+                quadratic bezier curves at each corner.
+              */}
+              <path d="
+                M 0.475,0.01
+                Q 0.475,0    0.485,0.001
+                L 0.907,0.038
+                Q 0.917,0.039  0.921,0.048
+                L 0.998,0.468
+                Q 1.0,0.475    0.998,0.482
+                L 0.948,0.904
+                Q 0.945,0.913  0.936,0.916
+                L 0.482,0.998
+                Q 0.475,1.0    0.468,0.998
+                L 0.078,0.921
+                Q 0.069,0.918  0.066,0.909
+                L 0.003,0.482
+                Q 0.0,0.475    0.003,0.468
+                L 0.077,0.052
+                Q 0.080,0.043  0.089,0.041
+                Z
+              " />
+            </clipPath>
+          </defs>
+        </svg>
+
         <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
 
-        <video
-          ref={videoRef}
-          src={VIDEO_SRC}
-          autoPlay loop muted playsInline
-          className="ai-face-video"
+        {/*
+          Wrapper div carries the clip-path (rounded octagon) and filter/glow.
+          Video fills the wrapper via absolute inset.
+        */}
+        <div
+          ref={wrapRef}
           style={{
-            left:     `${FACE.left}%`,
-            top:      `${FACE.top}%`,
-            width:    `${FACE.width}%`,
-            height:   `${FACE.height}%`,
-            clipPath: FACE.clipPath,
-            filter:   "brightness(0.45) saturate(0.6)",
+            position:  "absolute",
+            left:      `${FACE.left}%`,
+            top:       `${FACE.top}%`,
+            width:     `${FACE.width}%`,
+            height:    `${FACE.height}%`,
+            clipPath:  "url(#tv-oct)",
+            filter:    "brightness(0.45) saturate(0.6)",
+            overflow:  "hidden",
           }}
-        />
+        >
+          <video
+            src={VIDEO_SRC}
+            autoPlay loop muted playsInline
+            style={{
+              position:   "absolute",
+              inset:      0,
+              width:      "100%",
+              height:     "100%",
+              objectFit:  "contain",
+              mixBlendMode: "screen",
+            }}
+          />
+        </div>
 
+        {/* Glow overlay — same octagon clip, flashes on speech */}
         <div
           ref={glowRef}
           style={{
@@ -369,7 +378,7 @@ export default function RushmoreAI() {
             top:           `${FACE.top}%`,
             width:         `${FACE.width}%`,
             height:        `${FACE.height}%`,
-            clipPath:      FACE.clipPath,
+            clipPath:      "url(#tv-oct)",
             opacity:       0,
             pointerEvents: "none",
             zIndex:        2,
