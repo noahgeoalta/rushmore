@@ -20,19 +20,14 @@ function loc(nodes, id) {
   }
   return null;
 }
-
-// Visible IDs only (respects collapsed state) — used for arrow nav
 function vids(nodes, out = []) {
   for (const n of nodes) { out.push(n.id); if (!n.collapsed) vids(n.children, out); }
   return out;
 }
-
-// ALL IDs including collapsed children — used for Ctrl+A and copy
 function allIds(nodes, out = []) {
   for (const n of nodes) { out.push(n.id); allIds(n.children, out); }
   return out;
 }
-
 function numInList(list, idx) {
   let n = 0;
   for (let i = 0; i <= idx; i++) if (list[i].type === "number") n++;
@@ -42,30 +37,24 @@ function migrateLine(n) {
   if (!n || typeof n !== "object") return newLine();
   return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || 14, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
 }
-
-// Serialize full tree including collapsed children — like OneNote's clipboard
 function serializeLines(nodes, depth = 0) {
   let out = ""; const indent = "  ".repeat(depth);
   for (const n of nodes) {
     if (n.type === "bullet") out += `${indent}\u2022 ${n.text}\n`;
     else if (n.type === "number") out += `${indent}1. ${n.text}\n`;
     else out += `${indent}${n.text}\n`;
-    // Always recurse into children regardless of collapsed state
     if (n.children.length) out += serializeLines(n.children, depth + 1);
   }
   return out;
 }
-
-// Collect top-level selected nodes with full subtrees (skip children of selected parents)
 function collectSelected(nodes, ids) {
   const result = [];
   for (const n of nodes) {
-    if (ids.has(n.id)) { result.push(n); } // include whole subtree
+    if (ids.has(n.id)) { result.push(n); }
     else if (n.children.length) { result.push(...collectSelected(n.children, ids)); }
   }
   return result;
 }
-
 function parseHtmlToLines(html) {
   if (typeof document === "undefined") return [];
   const div = document.createElement("div"); div.innerHTML = html;
@@ -76,62 +65,48 @@ function parseHtmlToLines(html) {
   for (const child of div.children) walkEl(child);
   return lines;
 }
-
-// Parse indented plain text back into a tree — properly handles nested lines
 function parsePlainToLines(text) {
   const rawLines = text.split("\n");
-  
   function parseLevel(lines, baseIndent) {
-    const nodes = [];
-    let i = 0;
+    const nodes = []; let i = 0;
     while (i < lines.length) {
       const raw = lines[i];
       if (!raw.trim()) { i++; continue; }
       const indentMatch = raw.match(/^([\t ]*)/);
       const indent = indentMatch ? indentMatch[1].length : 0;
-      if (indent < baseIndent) break; // belongs to parent level
-      if (indent > baseIndent) { i++; continue; } // skip orphaned deeper lines
-      
+      if (indent < baseIndent) break;
+      if (indent > baseIndent) { i++; continue; }
       const content = raw.slice(baseIndent).trimStart();
       let type = "none", t = content;
       if (content.startsWith("\u2022 ")) { type = "bullet"; t = content.slice(2); }
       else if (content.startsWith("* ")) { type = "bullet"; t = content.slice(2); }
       else if (/^\d+\. /.test(content)) { type = "number"; t = content.replace(/^\d+\. /, ""); }
-      
       const node = newLine(type); node.text = t.trim();
-      
-      // Collect child lines (deeper indent)
-      const childLines = [];
-      let j = i + 1;
+      const childLines = []; let j = i + 1;
       while (j < lines.length) {
         const nextRaw = lines[j];
         if (!nextRaw.trim()) { j++; continue; }
         const nextIndent = (nextRaw.match(/^([\t ]*)/)?.[1]?.length ?? 0);
         if (nextIndent <= indent) break;
-        childLines.push(nextRaw);
-        j++;
+        childLines.push(nextRaw); j++;
       }
-      if (childLines.length) {
-        const childBaseIndent = (childLines[0].match(/^([\t ]*)/)?.[1]?.length ?? 0);
-        node.children = parseLevel(childLines, childBaseIndent);
-      }
-      
-      nodes.push(node);
-      i = j;
+      if (childLines.length) { const childBaseIndent = (childLines[0].match(/^([\t ]*)/)?.[1]?.length ?? 0); node.children = parseLevel(childLines, childBaseIndent); }
+      nodes.push(node); i = j;
     }
     return nodes;
   }
-  
   const nonEmpty = rawLines.filter(l => l.trim());
   if (!nonEmpty.length) return [];
   const baseIndent = nonEmpty[0].match(/^([\t ]*)/)?.[1]?.length ?? 0;
   return parseLevel(rawLines, baseIndent);
 }
+function autoSize(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
 
-function autoSize(el) {
-  if (!el) return;
-  el.style.height = "auto";
-  el.style.height = el.scrollHeight + "px";
+function migrateState(parsed) {
+  if (!parsed || !Array.isArray(parsed.pages)) return null;
+  parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
+  if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
+  return parsed;
 }
 
 export default function Canvas() {
@@ -171,24 +146,19 @@ export default function Canvas() {
     const load = async () => {
       try {
         const res = await fetch("/api/notes");
-        const { data } = await res.json();
-        if (data) {
-          const parsed = JSON.parse(data);
-          if (parsed && Array.isArray(parsed.pages)) {
-            parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
-            if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
-            setState(parsed); setSyncStatus("saved"); return;
-          }
-        }
+        const json = await res.json();
+        let data = json.data;
+        // Handle both string and object forms
+        if (typeof data === "string") { try { data = JSON.parse(data); } catch {} }
+        const parsed = migrateState(data);
+        if (parsed) { setState(parsed); setSyncStatus("saved"); return; }
       } catch {}
+      // Fall back to localStorage
       try {
         const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
         if (!raw) { setState(emptyState()); return; }
-        const parsed = JSON.parse(raw);
-        if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
-        parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
-        if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
-        setState(parsed);
+        const parsed = migrateState(JSON.parse(raw));
+        setState(parsed || emptyState());
       } catch { setState(emptyState()); }
     };
     load();
@@ -263,82 +233,34 @@ export default function Canvas() {
 
   const undo = () => { if (!history.length) return; setFuture(f => [state, ...f]); setState(history[history.length - 1]); setHistory(h => h.slice(0, -1)); };
   const redo = () => { if (!future.length) return; setHistory(h => [...h, state]); setState(future[0]); setFuture(f => f.slice(1)); };
-
   const addPage = () => { const name = prompt("Page name:", "New page"); if (!name) return; const p = { id: uid(), name, boxes: [] }; setState(s => ({ ...s, pages: [...s.pages, p], activeId: p.id })); };
   const delPage = (id) => { if (!confirm("Delete page?")) return; setState(s => { const pages = s.pages.filter(p => p.id !== id); const safe = pages.length ? pages : [emptyState().pages[0]]; return { pages: safe, activeId: s.activeId === id ? safe[0].id : s.activeId }; }); };
   const renamePage = (id) => { const pg = state.pages.find(p => p.id === id); const name = prompt("Rename:", pg.name); if (name) setState(s => ({ ...s, pages: s.pages.map(p => p.id === id ? { ...p, name } : p) })); };
   const dropPage = (id) => { if (!dragPage || dragPage === id) return; setState(s => { const pages = [...s.pages]; const fi = pages.findIndex(p => p.id === dragPage); const ti = pages.findIndex(p => p.id === id); const [m] = pages.splice(fi, 1); pages.splice(ti, 0, m); return { ...s, pages }; }); setDragPage(null); setOverPage(null); };
-
   const addBox = (x, y) => { const b = newBox(x, y); mut(pg => pg.boxes.push(b)); setSelBox(b.id); setSelBoxes(new Set([b.id])); setFocusId(b.lines[0].id); setSelLines(new Set()); };
   const delBox = (id) => { mut(pg => { pg.boxes = pg.boxes.filter(b => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes(prev => { const s = new Set(prev); s.delete(id); return s; }); };
   const cleanEmptyBox = (id) => { const box = page.boxes.find(b => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id); };
   const setText = (bid, lid, text) => mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
-  const addAfter = (bid, lid, cp = 0) => {
-    const n = newLine();
-    mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; n.type = h.node.type; const full = h.node.text; h.node.text = full.slice(0, cp); n.text = full.slice(cp); if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); } else h.list.splice(h.i + 1, 0, n); });
-    setFocusId(n.id); setFocusCaret(0);
-  };
-  const deleteSelectedLines = (bid) => {
-    const ids = new Set(selLinesRef.current); if (ids.size === 0) return false;
-    mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); });
-    setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true;
-  };
-
-  // OneNote-style copy: works at data level, includes collapsed children
-  const copySelected = (bid) => {
-    const ids = selLinesRef.current; if (ids.size === 0) return;
-    const box = page.boxes.find(b => b.id === bid); if (!box) return;
-    // Collect top-level selected nodes — their full subtrees are included in serializeLines
-    const selected = collectSelected(box.lines, ids);
-    const text = serializeLines(selected); // recurses into all children including collapsed
-    navigator.clipboard.writeText(text).catch(() => {});
-  };
-
-  // Ctrl+A: select ALL lines in box including collapsed ones (data-level, like OneNote)
-  const selectAll = (bid) => {
-    const box = page.boxes.find(b => b.id === bid); if (!box) return;
-    const all = allIds(box.lines); // includes collapsed children
-    setSelLines(new Set(all));
-    setLastSelLine(all[all.length - 1] || null);
-  };
-
+  const addAfter = (bid, lid, cp = 0) => { const n = newLine(); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; n.type = h.node.type; const full = h.node.text; h.node.text = full.slice(0, cp); n.text = full.slice(cp); if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); } else h.list.splice(h.i + 1, 0, n); }); setFocusId(n.id); setFocusCaret(0); };
+  const deleteSelectedLines = (bid) => { const ids = new Set(selLinesRef.current); if (ids.size === 0) return false; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); }); setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true; };
+  const copySelected = (bid) => { const ids = selLinesRef.current; if (ids.size === 0) return; const box = page.boxes.find(b => b.id === bid); if (!box) return; navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {}); };
+  const selectAll = (bid) => { const box = page.boxes.find(b => b.id === bid); if (!box) return; const all = allIds(box.lines); setSelLines(new Set(all)); setLastSelLine(all[all.length - 1] || null); };
   const bsLine = (bid, lid, cur, cp) => {
     if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
     if (cp > 0) return false;
     const box = page.boxes.find(b => b.id === bid); if (!box) return false;
-    if (cur === "") {
-      const order = vids(box.lines); const ft = order[order.indexOf(lid) - 1] || null;
-      const fth = ft ? loc(box.lines, ft) : null; const ftLen = fth ? fth.node.text.length : 0;
-      mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; if (b.lines.length === 1 && !b.lines[0].children.length) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i, 1); if (!b.lines.length) b.lines.push(newLine()); });
-      if (ft) { setFocusId(ft); setFocusCaret(ftLen); } return true;
-    } else {
-      const order = vids(box.lines); const pos = order.indexOf(lid); if (pos === 0) return false;
-      const prev = order[pos - 1]; let pl = 0;
-      mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const ph = loc(b.lines, prev); const ch = loc(b.lines, lid); if (!ph || !ch) return; pl = ph.node.text.length; ph.node.text += ch.node.text; ch.list.splice(ch.i, 1); if (!b.lines.length) b.lines.push(newLine()); });
-      setFocusId(prev); setFocusCaret(pl); return true;
-    }
+    if (cur === "") { const order = vids(box.lines); const ft = order[order.indexOf(lid) - 1] || null; const fth = ft ? loc(box.lines, ft) : null; const ftLen = fth ? fth.node.text.length : 0; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; if (b.lines.length === 1 && !b.lines[0].children.length) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i, 1); if (!b.lines.length) b.lines.push(newLine()); }); if (ft) { setFocusId(ft); setFocusCaret(ftLen); } return true; }
+    else { const order = vids(box.lines); const pos = order.indexOf(lid); if (pos === 0) return false; const prev = order[pos - 1]; let pl = 0; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const ph = loc(b.lines, prev); const ch = loc(b.lines, lid); if (!ph || !ch) return; pl = ph.node.text.length; ph.node.text += ch.node.text; ch.list.splice(ch.i, 1); if (!b.lines.length) b.lines.push(newLine()); }); setFocusId(prev); setFocusCaret(pl); return true; }
   };
   const cycleType = (bid, lid, t) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.type = h.node.type === t ? "none" : t; }); setFocusId(lid); };
   const indent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h || h.i === 0) return; const prev = h.list[h.i - 1]; h.list.splice(h.i, 1); prev.collapsed = false; if (h.node.type === "none") h.node.type = prev.type; prev.children.push(h.node); }); setFocusId(lid); };
   const outdent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const find = ns => { for (let i = 0; i < ns.length; i++) { const idx = ns[i].children.findIndex(c => c.id === lid); if (idx > -1) return { pl: ns, pi: i, idx }; const d = find(ns[i].children); if (d) return d; } return null; }; const h = find(b.lines); if (!h) return; const [node] = h.pl[h.pi].children.splice(h.idx, 1); h.pl.splice(h.pi + 1, 0, node); }); setFocusId(lid); };
   const toggle = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.collapsed = !h.node.collapsed; }, false); };
-  const fsize = (bid, lid, d) => {
-    const ids = selLinesRef.current;
-    if (ids.size > 1) { const frozen = new Set(ids); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || 14) + d)); ap(n.children); } } ap(b.lines); }); return; }
-    if (!lid) return;
-    mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + d)); });
-    setFocusId(lid);
-  };
+  const fsize = (bid, lid, d) => { const ids = selLinesRef.current; if (ids.size > 1) { const frozen = new Set(ids); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || 14) + d)); ap(n.children); } } ap(b.lines); }); return; } if (!lid) return; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + d)); }); setFocusId(lid); };
   const pasteAt = async (bid, lid) => {
     try {
       const items = await navigator.clipboard.read().catch(() => null);
-      if (items) {
-        for (const item of items) {
-          const imgType = item.types.find(t => t.startsWith("image/"));
-          if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const imgLine = { id: uid(), text: "", type: "image", src: reader.result, fontSize: 14, collapsed: false, children: [] }; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.list.splice(h.i + 1, 0, imgLine); else b.lines.push(imgLine); }); }; reader.readAsDataURL(blob); return; }
-          if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = parseHtmlToLines(await htmlBlob.text()); if (parsed.length) { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); }); setFocusId(parsed[0].id); return; } }
-        }
-      }
+      if (items) { for (const item of items) { const imgType = item.types.find(t => t.startsWith("image/")); if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const imgLine = { id: uid(), text: "", type: "image", src: reader.result, fontSize: 14, collapsed: false, children: [] }; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.list.splice(h.i + 1, 0, imgLine); else b.lines.push(imgLine); }); }; reader.readAsDataURL(blob); return; } if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = parseHtmlToLines(await htmlBlob.text()); if (parsed.length) { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); }); setFocusId(parsed[0].id); return; } } } }
       const text = await navigator.clipboard.readText(); if (!text.trim()) return;
       const parsed = parsePlainToLines(text); if (!parsed.length) return;
       mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
@@ -347,47 +269,14 @@ export default function Canvas() {
   };
   const onLineDragStart = (e, bid, lid) => { e.stopPropagation(); dragLineRef.current = { bid, lid }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", lid); };
   const onLineDragEnd = () => { dragLineRef.current = null; setLineDrop(null); };
-  const onLineDragOver = (e, lid) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!dragLineRef.current || dragLineRef.current.lid === lid) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientY - rect.top) / rect.height;
-    const zone = pct < 0.30 ? "before" : pct > 0.70 ? "after" : "child";
-    setLineDrop(prev => (prev?.id === lid && prev?.zone === zone) ? prev : { id: lid, zone });
-  };
-  const onLineDrop = (e, bid, lid) => {
-    e.preventDefault(); e.stopPropagation();
-    const src = dragLineRef.current; if (!src || !lineDrop || src.lid === lid) return;
-    const { zone } = lineDrop; const srcLid = src.lid;
-    dragLineRef.current = null; setLineDrop(null);
-    mut(pg => {
-      const b = pg.boxes.find(b => b.id === bid); if (!b) return;
-      const dh = loc(b.lines, srcLid); if (!dh) return;
-      const dragged = structuredClone(dh.node); dh.list.splice(dh.i, 1);
-      if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.unshift(dragged); return; } tgt.node.collapsed = false; tgt.node.children.unshift(dragged); }
-      else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); }
-    });
-  };
-  const onLineClick = (e, bid, lid) => {
-    e.stopPropagation();
-    if (!e.shiftKey) { setSelLines(new Set([lid])); setLastSelLine(lid); return; }
-    const box = page.boxes.find(b => b.id === bid); if (!box) return;
-    const order = vids(box.lines);
-    const from = lastSelLine ? order.indexOf(lastSelLine) : 0;
-    const to = order.indexOf(lid);
-    const [a, b2] = from <= to ? [from, to] : [to, from];
-    setSelLines(new Set(order.slice(a, b2 + 1)));
-  };
+  const onLineDragOver = (e, lid) => { e.preventDefault(); e.stopPropagation(); if (!dragLineRef.current || dragLineRef.current.lid === lid) return; const rect = e.currentTarget.getBoundingClientRect(); const pct = (e.clientY - rect.top) / rect.height; const zone = pct < 0.30 ? "before" : pct > 0.70 ? "after" : "child"; setLineDrop(prev => (prev?.id === lid && prev?.zone === zone) ? prev : { id: lid, zone }); };
+  const onLineDrop = (e, bid, lid) => { e.preventDefault(); e.stopPropagation(); const src = dragLineRef.current; if (!src || !lineDrop || src.lid === lid) return; const { zone } = lineDrop; const srcLid = src.lid; dragLineRef.current = null; setLineDrop(null); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const dh = loc(b.lines, srcLid); if (!dh) return; const dragged = structuredClone(dh.node); dh.list.splice(dh.i, 1); if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.unshift(dragged); return; } tgt.node.collapsed = false; tgt.node.children.unshift(dragged); } else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); } }); };
+  const onLineClick = (e, bid, lid) => { e.stopPropagation(); if (!e.shiftKey) { setSelLines(new Set([lid])); setLastSelLine(lid); return; } const box = page.boxes.find(b => b.id === bid); if (!box) return; const order = vids(box.lines); const from = lastSelLine ? order.indexOf(lastSelLine) : 0; const to = order.indexOf(lid); const [a, b2] = from <= to ? [from, to] : [to, from]; setSelLines(new Set(order.slice(a, b2 + 1))); };
   const kd = (e, bid, lid) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
-    // Ctrl+A — select ALL lines at data level (including collapsed children, like OneNote)
     if (e.ctrlKey && !e.shiftKey && e.key === "a") { e.preventDefault(); selectAll(bid); return; }
-    // Ctrl+C — copy selected lines + full subtrees including collapsed children
-    if (e.ctrlKey && !e.shiftKey && e.key === "c") {
-      if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; }
-      return; // single line — let browser handle
-    }
+    if (e.ctrlKey && !e.shiftKey && e.key === "c") { if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; } return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
@@ -400,18 +289,8 @@ export default function Canvas() {
     if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Enter") { e.preventDefault(); addAfter(bid, lid, e.target.selectionStart); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && selLinesRef.current.size > 1) { e.preventDefault(); deleteSelectedLines(bid); return; }
     if (e.key === "Backspace") { if (bsLine(bid, lid, e.target.value, e.target.selectionStart)) e.preventDefault(); return; }
-    if (e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      const box = page.boxes.find(b => b.id === bid); if (!box) return;
-      const order = vids(box.lines); const pos = order.indexOf(lid);
-      const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)];
-      if (next) { e.preventDefault(); setSelLines(prev => { const s = new Set(prev); s.has(next) ? s.delete(lid) : s.add(next); return s; }); setLastSelLine(next); } return;
-    }
-    if (!e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      const box = page.boxes.find(b => b.id === bid); if (!box) return;
-      const order = vids(box.lines); const pos = order.indexOf(lid);
-      const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)];
-      if (next) { e.preventDefault(); inputs.current[next]?.focus(); setSelLines(new Set([next])); setLastSelLine(next); }
-    }
+    if (e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { const box = page.boxes.find(b => b.id === bid); if (!box) return; const order = vids(box.lines); const pos = order.indexOf(lid); const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)]; if (next) { e.preventDefault(); setSelLines(prev => { const s = new Set(prev); s.has(next) ? s.delete(lid) : s.add(next); return s; }); setLastSelLine(next); } return; }
+    if (!e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { const box = page.boxes.find(b => b.id === bid); if (!box) return; const order = vids(box.lines); const pos = order.indexOf(lid); const next = order[pos + (e.key === "ArrowDown" ? 1 : -1)]; if (next) { e.preventDefault(); inputs.current[next]?.focus(); setSelLines(new Set([next])); setLastSelLine(next); } }
   };
 
   const renderLines = (bid, lines) => lines.map((n, idx) => {
@@ -421,16 +300,8 @@ export default function Canvas() {
     const isSel = selLines.has(n.id);
     return (
       <div key={n.id}>
-        <div
-          className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")}
-          onDragOver={e => onLineDragOver(e, n.id)}
-          onDragLeave={e => { e.stopPropagation(); setLineDrop(null); }}
-          onDrop={e => onLineDrop(e, bid, n.id)}
-          onClick={e => onLineClick(e, bid, n.id)}
-        >
-          <button className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")} onClick={e => { e.stopPropagation(); toggle(bid, n.id); }} tabIndex={-1}>
-            {n.children.length ? (n.collapsed ? CC : CO) : ""}
-          </button>
+        <div className={"cv-line-row" + (isSel ? " cv-sel" : "") + (dt === "before" ? " cv-drop-before" : dt === "after" ? " cv-drop-after" : dt === "child" ? " cv-drop-child" : "")} onDragOver={e => onLineDragOver(e, n.id)} onDragLeave={e => { e.stopPropagation(); setLineDrop(null); }} onDrop={e => onLineDrop(e, bid, n.id)} onClick={e => onLineClick(e, bid, n.id)}>
+          <button className={"cv-caret" + (n.children.length ? " has-kids" : "") + (n.collapsed ? " collapsed" : "")} onClick={e => { e.stopPropagation(); toggle(bid, n.id); }} tabIndex={-1}>{n.children.length ? (n.collapsed ? CC : CO) : ""}</button>
           {n.type === "image" ? (
             <img src={n.src} alt="" style={{ maxWidth: "100%", borderRadius: 4, marginTop: 2, display: "block", cursor: "grab" }} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} />
           ) : (
@@ -438,18 +309,7 @@ export default function Canvas() {
               {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{BULLET}</span>}
               {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{num}.</span>}
               {n.type === "none" && <span className="cv-marker cv-spacer cv-drag-handle" draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">&#8942;</span>}
-              <textarea
-                className="cv-input"
-                ref={el => { inputs.current[n.id] = el; autoSize(el); }}
-                style={{ fontSize: (n.fontSize || 14) + "px" }}
-                value={n.text}
-                placeholder="..."
-                rows={1}
-                onChange={e => { autoSize(e.target); setText(bid, n.id, e.target.value); }}
-                onKeyDown={e => kd(e, bid, n.id)}
-                onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines(prev => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine(prev => prev || n.id); }}
-                onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }}
-              />
+              <textarea className="cv-input" ref={el => { inputs.current[n.id] = el; autoSize(el); }} style={{ fontSize: (n.fontSize || 14) + "px" }} value={n.text} placeholder="..." rows={1} onChange={e => { autoSize(e.target); setText(bid, n.id, e.target.value); }} onKeyDown={e => kd(e, bid, n.id)} onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines(prev => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine(prev => prev || n.id); }} onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }} />
             </>
           )}
         </div>
@@ -458,11 +318,7 @@ export default function Canvas() {
     );
   });
 
-  const lassoRect = lasso ? {
-    left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy),
-    width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy),
-  } : null;
-
+  const lassoRect = lasso ? { left: Math.min(lasso.sx, lasso.ex || lasso.sx), top: Math.min(lasso.sy, lasso.ey || lasso.sy), width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy) } : null;
   const syncLabel = syncStatus === "saving" ? "\u25cc saving\u2026" : syncStatus === "saved" ? "\u2713 synced" : syncStatus === "error" ? "\u26a0 sync error" : "";
   const syncColor = syncStatus === "error" ? "#ff6666" : syncStatus === "saved" ? "#5aaa5a" : "#888";
 
@@ -470,20 +326,8 @@ export default function Canvas() {
     <>
       <div className="notes-bar">
         {state.pages.map(p => (
-          <button key={p.id}
-            className={"page-tab" + (p.id === state.activeId ? " active" : "") + (overPage === p.id && dragPage !== p.id ? " page-drag-over" : "")}
-            draggable
-            onDragStart={() => setDragPage(p.id)}
-            onDragEnd={() => { setDragPage(null); setOverPage(null); }}
-            onDragOver={e => { e.preventDefault(); setOverPage(p.id); }}
-            onDragLeave={() => setOverPage(null)}
-            onDrop={() => dropPage(p.id)}
-            onClick={() => { setState(s => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
-            onDoubleClick={() => renamePage(p.id)}
-            title="Double-click to rename"
-          >
-            {p.name}
-            <span className="x" onClick={e => { e.stopPropagation(); delPage(p.id); }}>x</span>
+          <button key={p.id} className={"page-tab" + (p.id === state.activeId ? " active" : "") + (overPage === p.id && dragPage !== p.id ? " page-drag-over" : "")} draggable onDragStart={() => setDragPage(p.id)} onDragEnd={() => { setDragPage(null); setOverPage(null); }} onDragOver={e => { e.preventDefault(); setOverPage(p.id); }} onDragLeave={() => setOverPage(null)} onDrop={() => dropPage(p.id)} onClick={() => { setState(s => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }} onDoubleClick={() => renamePage(p.id)} title="Double-click to rename">
+            {p.name}<span className="x" onClick={e => { e.stopPropagation(); delPage(p.id); }}>x</span>
           </button>
         ))}
         <button className="page-tab new" onClick={addPage}>+ New page</button>
@@ -505,27 +349,16 @@ export default function Canvas() {
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
         {syncLabel && <span style={{ fontSize: 10, color: syncColor, marginLeft: 8, letterSpacing: "0.05em" }}>{syncLabel}</span>}
-        <span className="notes-hint">Ctrl+A select all · Ctrl+C copy with children · drag &#8942; to move</span>
+        <span className="notes-hint">Ctrl+A all · Ctrl+C copy · drag &#8942; move</span>
       </div>
-      <div
-        className="cv-canvas"
-        ref={cvRef}
-        style={{ width: canvasW, minHeight: canvasH }}
+      <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
         onMouseDown={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
         onClick={e => { if (e.target === cvRef.current) { setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); } }}
       >
-        {lassoRect && lassoRect.width > 2 && (
-          <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />
-        )}
+        {lassoRect && lassoRect.width > 2 && <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />}
         {page.boxes.map(box => (
-          <div
-            key={box.id}
-            ref={el => (boxRefs.current[box.id] = el)}
-            className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")}
-            style={{ left: box.x, top: box.y, width: box.w }}
-            onClick={e => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}
-          >
+          <div key={box.id} ref={el => (boxRefs.current[box.id] = el)} className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")} style={{ left: box.x, top: box.y, width: box.w }} onClick={e => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}>
             <div className="cv-drag-bar" onMouseDown={e => { if (["TEXTAREA","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move box" />
             <div className="cv-body">{renderLines(box.id, box.lines)}</div>
             <div className="cv-resize" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
