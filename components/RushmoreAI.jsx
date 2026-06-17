@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 
-// Direct path — bypasses /api/img proxy which breaks video on mobile Safari
 const VIDEO_SRC = "/api/video";
 const STORAGE_KEY = "rushmore-chat-v1";
 
@@ -134,31 +133,72 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video FX ─────────────────────────────────────────────────
-// No mix-blend-mode (caused bleed). Radial gradient on bloom div.
-// overflow:hidden on parent clips it perfectly — no bleed possible.
-// Idle: faint green breath. Speaking: dynamic radial glow, near-zero
-// at silence, spikes bright on loud peaks via rms^0.5 power curve.
-function useVideoFX(darkRef, bloomRef) {
+// ── Video FX ─────────────────────────────────────────────────────────────
+// Glow is positioned dynamically to match the actual rendered video pixels.
+// With object-fit:contain the video has letterbox bars. We compute the
+// exact pixel rect of the video content and position the bloom div over it,
+// so the glow is strictly confined to the video frame.
+function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
   const darknessRef = useRef(0.26);
 
   useEffect(() => {
+    // Position bloom div to exactly match rendered video pixels
+    function positionBloom() {
+      const video = videoRef.current;
+      const bloom = bloomRef.current;
+      const dark  = darkRef.current;
+      const container = containerRef.current;
+      if (!video || !bloom || !container) return;
+
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      const vw = video.videoWidth  || 16;
+      const vh = video.videoHeight || 9;
+      const videoAR = vw / vh;
+      const containerAR = cw / ch;
+
+      let left, top, width, height;
+      if (videoAR > containerAR) {
+        // Letterbox top/bottom
+        width  = cw;
+        height = cw / videoAR;
+        left   = 0;
+        top    = (ch - height) / 2;
+      } else {
+        // Letterbox left/right
+        height = ch;
+        width  = ch * videoAR;
+        top    = 0;
+        left   = (cw - width) / 2;
+      }
+
+      const style = `position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${height}px;z-index:2;pointer-events:none;`;
+      bloom.style.cssText = style;
+      dark.style.cssText  = `position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${height}px;z-index:1;pointer-events:none;background:#000;opacity:0.26;`;
+    }
+
+    // Run on resize and when video metadata loads
+    const video = videoRef.current;
+    if (video) {
+      video.addEventListener("loadedmetadata", positionBloom);
+      video.addEventListener("resize", positionBloom);
+    }
+    window.addEventListener("resize", positionBloom);
+    positionBloom();
+
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
-      const dark  = darkRef.current;
       const bloom = bloomRef.current;
-      if (!dark || !bloom) return;
+      if (!bloom) return;
       const t = Date.now() / 1400;
 
       if (!analyserNode) {
-        darknessRef.current = Math.min(0.26, darknessRef.current + 0.012);
-        dark.style.opacity = darknessRef.current.toFixed(3);
-        // Idle: barely-visible soft green breath, radial so edges fade
         const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
+        // Soft oval glow covering the whole video frame, fading toward edges
         bloom.style.background =
-          `radial-gradient(ellipse 60% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 65%)`;
+          `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
         return;
       }
 
@@ -168,28 +208,38 @@ function useVideoFX(darkRef, bloomRef) {
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-      // Square-root curve: very low when quiet, spikes hard on loud peaks
       const powered = Math.pow(rms, 0.5);
 
-      // Darkness clears as voice gets louder
-      const targetDark = Math.max(0.0, 0.26 - powered * 0.26);
-      darknessRef.current += (targetDark - darknessRef.current) * 0.18;
-      dark.style.opacity = darknessRef.current.toFixed(3);
+      // Dark overlay on the video rect — managed via darkRef cssText above
+      // Just update opacity here
+      const dark = darkRef.current;
+      if (dark) {
+        const targetDark = Math.max(0.0, 0.26 - powered * 0.26);
+        darknessRef.current += (targetDark - darknessRef.current) * 0.18;
+        dark.style.opacity = darknessRef.current.toFixed(3);
+      }
 
-      // Radial glow — dynamic, centered, clipped by overflow:hidden on parent
-      // Near-zero when quiet, full brightness on loud peaks
       const r  = Math.round(20  + powered * 80);
       const g  = Math.round(180 + powered * 75);
       const b  = Math.round(20  + powered * 10);
       const a1 = Math.min(0.85, powered * 0.85).toFixed(2);
-      const a2 = Math.min(0.40, powered * 0.40).toFixed(2);
-      const a3 = Math.min(0.12, powered * 0.12).toFixed(2);
+      const a2 = Math.min(0.45, powered * 0.45).toFixed(2);
+      const a3 = Math.min(0.15, powered * 0.15).toFixed(2);
+      // Oval filling the video frame, fades to transparent before edges
       bloom.style.background =
-        `radial-gradient(ellipse 70% 80% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 40%, rgba(${r},${g},${b},${a3}) 65%, transparent 80%)`;
+        `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 45%, rgba(${r},${g},${b},${a3}) 65%, transparent 80%)`;
     };
     rafRef.current = requestAnimationFrame(loop);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [darkRef, bloomRef]);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", positionBloom);
+      if (video) {
+        video.removeEventListener("loadedmetadata", positionBloom);
+        video.removeEventListener("resize", positionBloom);
+      }
+    };
+  }, [darkRef, bloomRef, videoRef, containerRef]);
 }
 
 function TypingDots() { return <div className="ai-typing"><span /><span /><span /></div>; }
@@ -300,15 +350,16 @@ export default function RushmoreAI() {
   const darkRef        = useRef(null);
   const bloomRef       = useRef(null);
   const videoRef       = useRef(null);
+  const containerRef   = useRef(null);
 
-  useVideoFX(darkRef, bloomRef);
+  useVideoFX(darkRef, bloomRef, videoRef, containerRef);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch (_) {} }, [messages]);
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
   useEffect(() => { topRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
-  // Mobile video: listen for canplay then call play()
+  // Mobile video autoplay
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -318,10 +369,17 @@ export default function RushmoreAI() {
     return () => v.removeEventListener("canplay", tryPlay);
   }, []);
 
-  const startListening = useCallback(async () => {
-    try { if (navigator.mediaDevices?.getUserMedia) await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) {}
+  // ── Mobile mic fix ────────────────────────────────────────────────────
+  // iOS Safari breaks the user-gesture chain the moment you hit `await`.
+  // So: start SR immediately (synchronously) in the click handler.
+  // SR itself will trigger the mic permission prompt on iOS — no getUserMedia needed.
+  const startListening = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR) {
+      // Fallback: request mic permission manually on non-SR browsers
+      navigator.mediaDevices?.getUserMedia({ audio: true }).catch(() => {});
+      return;
+    }
     try { recognitionRef.current?.abort(); } catch (_) {}
     const rec = new SR();
     rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
@@ -390,8 +448,10 @@ export default function RushmoreAI() {
   return (
     <div className="ai-shell">
       <div className="ai-video-strip">
-        <div className="ai-video-sticky">
+        {/* containerRef tracks the sticky div so we can measure it for bloom positioning */}
+        <div className="ai-video-sticky" ref={containerRef}>
           <video ref={videoRef} src={VIDEO_SRC} autoPlay loop muted playsInline className="ai-video-main" />
+          {/* dark + bloom are absolutely positioned by JS to match exact video pixels */}
           <div className="ai-video-dark"  ref={darkRef}  />
           <div className="ai-video-bloom" ref={bloomRef} />
         </div>
