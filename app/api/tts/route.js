@@ -33,7 +33,7 @@ export async function POST(request) {
           similarity_boost: 0.95,
           style: 0.0,
           use_speaker_boost: true,
-          speed: 1.20, // 20% faster
+          speed: 1.0,
         },
       }),
     }
