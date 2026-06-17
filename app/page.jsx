@@ -73,17 +73,31 @@ function IconBoardChip({ label, url, icon }) {
     </a>
   );
 }
-function ContextCard({ ctx }) {
+
+function IssueBadge({ count }) {
+  if (count === null || count === undefined) return null;
+  return (
+    <span className={`issue-badge${count === 0 ? " zero" : ""}`}>
+      {count} open
+    </span>
+  );
+}
+
+function ContextCard({ ctx, issues }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
   const sp       = ctx.sharepoint     || [];
   const claude   = (ctx.launchpad || []).filter(l => l.group === "Claude");
   const logo     = CTX_LOGO[ctx.id];
+  const issueCount = issues?.[ctx.id];
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-              : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+        <div className="cmd-card-header-row">
+          {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+                : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+          <IssueBadge count={issueCount} />
+        </div>
       </div>
       {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
       {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
@@ -94,6 +108,7 @@ function ContextCard({ ctx }) {
     </div>
   );
 }
+
 function RiipenSection({ ctx }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
@@ -128,6 +143,7 @@ const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 export default function Home() {
   const [view, setView] = useState("command");
   const [msAuthed, setMsAuthed] = useState(false);
+  const [issues, setIssues] = useState({});
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -150,9 +166,10 @@ export default function Home() {
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
   const webIconMap = { "NoahTube": IMG.noahtube };
 
-  // Check auth status on load + after redirect
   useEffect(() => {
     fetch("/api/auth/status").then(r => r.json()).then(d => setMsAuthed(d.authed)).catch(() => {});
+    // Fetch GitHub issue counts
+    fetch("/api/github-issues").then(r => r.json()).then(d => setIssues(d)).catch(() => {});
   }, []);
 
   return (
@@ -175,7 +192,6 @@ export default function Home() {
 
       {view === "command" && (
         <main className="cmd-main">
-          {/* Microsoft Panel — mail, calendar, teams */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>MICROSOFT</span></div>
             <MicrosoftPanel />
@@ -206,7 +222,7 @@ export default function Home() {
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
             <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} issues={issues} />)}
             </div>
           </section>
 
