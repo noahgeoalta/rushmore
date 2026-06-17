@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 const CKEY = "rushmore-canvas-v3";
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -24,11 +24,6 @@ function vids(nodes, out = []) {
   for (const n of nodes) { out.push(n.id); if (!n.collapsed) vids(n.children, out); }
   return out;
 }
-function allIds(nodes, out = []) {
-  // Like vids but includes collapsed children too (for copy)
-  for (const n of nodes) { out.push(n.id); allIds(n.children, out); }
-  return out;
-}
 function numInList(list, idx) {
   let n = 0;
   for (let i = 0; i <= idx; i++) if (list[i].type === "number") n++;
@@ -38,11 +33,8 @@ function migrateLine(n) {
   if (!n || typeof n !== "object") return newLine();
   return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || 14, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
 }
-
-// Serialize a node tree to indented plain text
 function serializeLines(nodes, depth = 0) {
-  let out = "";
-  const indent = "  ".repeat(depth);
+  let out = ""; const indent = "  ".repeat(depth);
   for (const n of nodes) {
     if (n.type === "bullet") out += `${indent}\u2022 ${n.text}\n`;
     else if (n.type === "number") out += `${indent}1. ${n.text}\n`;
@@ -51,8 +43,6 @@ function serializeLines(nodes, depth = 0) {
   }
   return out;
 }
-
-// Collect all top-level selected nodes (skip children of already-selected parents)
 function collectSelected(nodes, ids) {
   const result = [];
   for (const n of nodes) {
@@ -61,7 +51,6 @@ function collectSelected(nodes, ids) {
   }
   return result;
 }
-
 function parseHtmlToLines(html) {
   if (typeof document === "undefined") return [];
   const div = document.createElement("div"); div.innerHTML = html;
@@ -88,7 +77,6 @@ function parsePlainToLines(text) {
   }
   return nodes;
 }
-
 function autoSize(el) {
   if (!el) return;
   el.style.height = "auto";
@@ -98,6 +86,7 @@ function autoSize(el) {
 export default function Canvas() {
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | saving | saved | error
   const [selBox, setSelBox] = useState(null);
   const [selLines, setSelLines] = useState(new Set());
   const [lastSelLine, setLastSelLine] = useState(null);
@@ -119,26 +108,68 @@ export default function Canvas() {
   const boxRefs = useRef({});
   const selLinesRef = useRef(new Set());
   const stateRef = useRef(null);
+  const saveTimer = useRef(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { selLinesRef.current = selLines; }, [selLines]);
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { Object.values(inputs.current).forEach(el => autoSize(el)); }, [state]);
 
+  // Load from cloud on mount, fall back to localStorage
   useEffect(() => {
     if (!mounted) return;
-    try {
-      const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
-      if (!raw) { setState(emptyState()); return; }
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
-      parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
-      if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
-      setState(parsed);
-    } catch { setState(emptyState()); }
+    const load = async () => {
+      try {
+        const res = await fetch("/api/notes");
+        const { data } = await res.json();
+        if (data) {
+          const parsed = JSON.parse(data);
+          if (parsed && Array.isArray(parsed.pages)) {
+            parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
+            if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
+            setState(parsed);
+            setSyncStatus("saved");
+            return;
+          }
+        }
+      } catch {}
+      // Fall back to localStorage
+      try {
+        const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
+        if (!raw) { setState(emptyState()); return; }
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.pages)) { setState(emptyState()); return; }
+        parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
+        if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
+        setState(parsed);
+      } catch { setState(emptyState()); }
+    };
+    load();
   }, [mounted]);
 
-  useEffect(() => { if (state) try { localStorage.setItem(CKEY, JSON.stringify(state)); } catch {} }, [state]);
+  // Debounced cloud save — saves 2s after last change
+  const saveToCloud = useCallback((newState) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSyncStatus("saving");
+    saveTimer.current = setTimeout(async () => {
+      try {
+        // Also keep localStorage as backup
+        try { localStorage.setItem(CKEY, JSON.stringify(newState)); } catch {}
+        await fetch("/api/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newState),
+        });
+        setSyncStatus("saved");
+      } catch {
+        setSyncStatus("error");
+      }
+    }, 2000);
+  }, []);
+
+  useEffect(() => {
+    if (state) saveToCloud(state);
+  }, [state, saveToCloud]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -180,7 +211,7 @@ export default function Canvas() {
   }, [lasso]);
 
   if (!mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
-  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
+  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }}><div style={{ padding: 20, color: "#555", fontSize: 13 }}>Loading notes…</div></div>;
 
   const page = state.pages.find(p => p.id === state.activeId) || state.pages[0];
   const canvasW = Math.max(800, ...page.boxes.map(b => b.x + b.w + 80));
@@ -205,29 +236,21 @@ export default function Canvas() {
   const delBox = (id) => { mut(pg => { pg.boxes = pg.boxes.filter(b => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes(prev => { const s = new Set(prev); s.delete(id); return s; }); };
   const cleanEmptyBox = (id) => { const box = page.boxes.find(b => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id); };
   const setText = (bid, lid, text) => mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
-
   const addAfter = (bid, lid, cp = 0) => {
     const n = newLine();
     mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; n.type = h.node.type; const full = h.node.text; h.node.text = full.slice(0, cp); n.text = full.slice(cp); if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); } else h.list.splice(h.i + 1, 0, n); });
     setFocusId(n.id); setFocusCaret(0);
   };
-
   const deleteSelectedLines = (bid) => {
     const ids = new Set(selLinesRef.current); if (ids.size === 0) return false;
     mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); });
     setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true;
   };
-
   const copySelected = (bid) => {
-    const ids = selLinesRef.current;
-    if (ids.size === 0) return;
+    const ids = selLinesRef.current; if (ids.size === 0) return;
     const box = page.boxes.find(b => b.id === bid); if (!box) return;
-    // Collect top-level selected nodes with their full subtrees
-    const selected = collectSelected(box.lines, ids);
-    const text = serializeLines(selected);
-    navigator.clipboard.writeText(text).catch(() => {});
+    navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {});
   };
-
   const bsLine = (bid, lid, cur, cp) => {
     if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
     if (cp > 0) return false;
@@ -244,12 +267,10 @@ export default function Canvas() {
       setFocusId(prev); setFocusCaret(pl); return true;
     }
   };
-
   const cycleType = (bid, lid, t) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.type = h.node.type === t ? "none" : t; }); setFocusId(lid); };
   const indent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h || h.i === 0) return; const prev = h.list[h.i - 1]; h.list.splice(h.i, 1); prev.collapsed = false; if (h.node.type === "none") h.node.type = prev.type; prev.children.push(h.node); }); setFocusId(lid); };
   const outdent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const find = ns => { for (let i = 0; i < ns.length; i++) { const idx = ns[i].children.findIndex(c => c.id === lid); if (idx > -1) return { pl: ns, pi: i, idx }; const d = find(ns[i].children); if (d) return d; } return null; }; const h = find(b.lines); if (!h) return; const [node] = h.pl[h.pi].children.splice(h.idx, 1); h.pl.splice(h.pi + 1, 0, node); }); setFocusId(lid); };
   const toggle = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.collapsed = !h.node.collapsed; }, false); };
-
   const fsize = (bid, lid, d) => {
     const ids = selLinesRef.current;
     if (ids.size > 1) { const frozen = new Set(ids); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || 14) + d)); ap(n.children); } } ap(b.lines); }); return; }
@@ -257,7 +278,6 @@ export default function Canvas() {
     mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + d)); });
     setFocusId(lid);
   };
-
   const pasteAt = async (bid, lid) => {
     try {
       const items = await navigator.clipboard.read().catch(() => null);
@@ -274,7 +294,6 @@ export default function Canvas() {
       setFocusId(parsed[0].id);
     } catch {}
   };
-
   const onLineDragStart = (e, bid, lid) => { e.stopPropagation(); dragLineRef.current = { bid, lid }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", lid); };
   const onLineDragEnd = () => { dragLineRef.current = null; setLineDrop(null); };
   const onLineDragOver = (e, lid) => {
@@ -282,7 +301,6 @@ export default function Canvas() {
     if (!dragLineRef.current || dragLineRef.current.lid === lid) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = (e.clientY - rect.top) / rect.height;
-    // Top 30% = before, bottom 30% = after, middle = child (insert at top of children)
     const zone = pct < 0.30 ? "before" : pct > 0.70 ? "after" : "child";
     setLineDrop(prev => (prev?.id === lid && prev?.zone === zone) ? prev : { id: lid, zone });
   };
@@ -294,20 +312,11 @@ export default function Canvas() {
     mut(pg => {
       const b = pg.boxes.find(b => b.id === bid); if (!b) return;
       const dh = loc(b.lines, srcLid); if (!dh) return;
-      const dragged = structuredClone(dh.node);
-      dh.list.splice(dh.i, 1);
-      if (zone === "child") {
-        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.unshift(dragged); return; }
-        tgt.node.collapsed = false;
-        // Insert at TOP of children, not bottom
-        tgt.node.children.unshift(dragged);
-      } else {
-        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; }
-        tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged);
-      }
+      const dragged = structuredClone(dh.node); dh.list.splice(dh.i, 1);
+      if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.unshift(dragged); return; } tgt.node.collapsed = false; tgt.node.children.unshift(dragged); }
+      else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); }
     });
   };
-
   const onLineClick = (e, bid, lid) => {
     e.stopPropagation();
     if (!e.shiftKey) { setSelLines(new Set([lid])); setLastSelLine(lid); return; }
@@ -318,16 +327,10 @@ export default function Canvas() {
     const [a, b2] = from <= to ? [from, to] : [to, from];
     setSelLines(new Set(order.slice(a, b2 + 1)));
   };
-
   const kd = (e, bid, lid) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
-    // Ctrl+C: copy selected lines with full subtree
-    if (e.ctrlKey && !e.shiftKey && e.key === "c") {
-      if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; }
-      // If only one line selected and has text, let browser handle it
-      return;
-    }
+    if (e.ctrlKey && !e.shiftKey && e.key === "c") { if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; } return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
@@ -403,6 +406,9 @@ export default function Canvas() {
     width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy),
   } : null;
 
+  const syncLabel = syncStatus === "saving" ? "\u25cc saving…" : syncStatus === "saved" ? "\u2713 synced" : syncStatus === "error" ? "\u26a0 sync error" : "";
+  const syncColor = syncStatus === "error" ? "#ff6666" : syncStatus === "saved" ? "#5aaa5a" : "#888";
+
   return (
     <>
       <div className="notes-bar">
@@ -428,20 +434,21 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Bullet (Ctrl+.)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "bullet"); }}>{"\u2022"}</button>
-          <button className="notes-btn" title="Number (Ctrl+/)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "number"); }}>1.</button>
+          <button className="notes-btn" title="Bullet" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "bullet"); }}>{"\u2022"}</button>
+          <button className="notes-btn" title="Number" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "number"); }}>1.</button>
           <span className="notes-sep" />
           <button className="notes-btn" title="Indent" onMouseDown={e => { e.preventDefault(); focusedId && selBox && indent(selBox, focusedId); }}>{"\u2192"}</button>
           <button className="notes-btn" title="Outdent" onMouseDown={e => { e.preventDefault(); focusedId && selBox && outdent(selBox, focusedId); }}>{"\u2190"}</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Smaller" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
-          <button className="notes-btn" title="Larger" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
+          <button className="notes-btn" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
+          <button className="notes-btn" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
           <span className="notes-sep" />
           {selBox && selLines.size > 1 && <button className="notes-btn" onClick={() => copySelected(selBox)}>Copy</button>}
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box · drag &#8942; to move · Shift+click to multi-select</span>
+        {syncLabel && <span style={{ fontSize: 10, color: syncColor, marginLeft: 8, letterSpacing: "0.05em" }}>{syncLabel}</span>}
+        <span className="notes-hint">Dbl-click for box · drag &#8942; to move</span>
       </div>
       <div
         className="cv-canvas"
