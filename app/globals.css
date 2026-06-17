@@ -116,7 +116,6 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
 }
 
-/* Full-width black strip — video centred inside */
 .ai-video-strip {
   flex-shrink: 0;
   background: #000;
@@ -125,7 +124,6 @@ a { color: inherit; text-decoration: none; }
   justify-content: center;
 }
 
-/* Capped video frame — consistent zoom at all window widths */
 .ai-video-sticky {
   position: relative;
   width: 100%;
@@ -143,11 +141,6 @@ a { color: inherit; text-decoration: none; }
   object-position: center 35%;
 }
 
-/*
-  Dark overlay — sits between video and bloom.
-  z-index 1, opacity animated by JS (high = dark idle, low = speaking).
-  Starts at opacity 0 (JS sets it immediately on first frame).
-*/
 .ai-video-dark {
   position: absolute;
   inset: 0;
@@ -157,11 +150,6 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.65;
 }
 
-/*
-  Bloom glow — ON TOP of dark overlay.
-  mix-blend-mode: screen means it only brightens, never darkens.
-  JS sets background every RAF frame.
-*/
 .ai-video-bloom {
   position: absolute;
   inset: 0;
@@ -169,7 +157,7 @@ a { color: inherit; text-decoration: none; }
   pointer-events: none;
   mix-blend-mode: screen;
   background: radial-gradient(ellipse 70% 70% at 50% 50%,
-    rgba(30, 180, 30, 0.06) 0%, transparent 70%);
+    rgba(30, 180, 30, 0.04) 0%, transparent 70%);
 }
 
 /* Status bar */
@@ -183,47 +171,23 @@ a { color: inherit; text-decoration: none; }
 .ai-header-right { display: flex; gap: 6px; flex-shrink: 0; }
 .ai-ctrl-btn { padding: 4px 10px; background: none; border: 1px solid #2a2a2a; border-radius: 4px; color: var(--faint); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; white-space: nowrap; transition: all 0.1s; }
 .ai-ctrl-btn:hover { border-color: var(--edge2); color: var(--dim); }
-.ai-ctrl-btn.active { color: var(--orange); border-color: var(--orange-edge); background: var(--orange-bg); }
-
-/* Usage */
 .ai-usage { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .ai-usage-tok { color: var(--dim); }
 .ai-usage-sep { color: var(--faint); }
 .ai-usage-cost { color: var(--orange); font-weight: 700; }
 .ai-usage-calls { color: var(--faint); }
 
-/* Feed */
-.ai-feed { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
-.ai-feed::-webkit-scrollbar { width: 4px; }
-.ai-feed::-webkit-scrollbar-track { background: transparent; }
-.ai-feed::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
-.ai-msg { display: flex; flex-direction: column; gap: 4px; max-width: 760px; }
-.ai-msg-user { align-self: flex-end; align-items: flex-end; }
-.ai-msg-rushmore { align-self: flex-start; align-items: flex-start; }
-.ai-msg-label { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; color: var(--orange); margin-bottom: 2px; }
-.ai-msg-bubble { padding: 10px 14px; border-radius: 8px; font-size: 14px; line-height: 1.6; }
-.ai-msg-rushmore .ai-msg-bubble { background: #141414; border: 1px solid #222; color: var(--text); border-radius: 2px 8px 8px 8px; }
-.ai-msg-user .ai-msg-bubble { background: #1e1000; border: 1px solid #3a2200; color: #e8c090; border-radius: 8px 2px 8px 8px; }
-.ai-msg-bubble p { margin: 0; }
-.ai-msg-bubble p + p { margin-top: 8px; }
-.ai-typing { display: flex; gap: 5px; align-items: center; padding: 4px 0; }
-.ai-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); animation: blink 1.2s ease-in-out infinite; }
-.ai-typing span:nth-child(2) { animation-delay: 0.2s; }
-.ai-typing span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
-
-/* Input bar */
+/* Input bar — now sits ABOVE the feed (border-bottom, not border-top) */
 .ai-input-bar {
   display: flex;
   align-items: flex-end;
   gap: 8px;
   padding: 12px 20px;
-  border-top: 1px solid #1e1e1e;
+  border-bottom: 1px solid #1e1e1e;
   background: #0d0d0d;
   flex-shrink: 0;
 }
 
-/* Voice button cluster — mic + voice out, stacked bottom-left */
 .ai-voice-btns {
   display: flex;
   flex-direction: column;
@@ -245,7 +209,6 @@ a { color: inherit; text-decoration: none; }
   transition: all 0.15s;
   display: grid;
   place-items: center;
-  /* Increase tap target on mobile */
   touch-action: manipulation;
 }
 .ai-mic-btn:hover { border-color: var(--orange-edge); color: var(--orange); }
@@ -254,6 +217,12 @@ a { color: inherit; text-decoration: none; }
   color: #ff4444;
   background: #1a0000;
   animation: pulse 0.8s ease-in-out infinite;
+}
+/* Latched continuous — orange glow when waiting between turns */
+.ai-mic-btn.continuous {
+  border-color: var(--orange-edge);
+  color: var(--orange);
+  background: var(--orange-bg);
 }
 
 .ai-voice-out-btn {
@@ -310,6 +279,36 @@ a { color: inherit; text-decoration: none; }
 }
 .ai-send-btn:hover:not(:disabled) { background: #3a1800; border-color: var(--orange); }
 .ai-send-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* Feed — reversed order, newest at top */
+.ai-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+.ai-feed::-webkit-scrollbar { width: 4px; }
+.ai-feed::-webkit-scrollbar-track { background: transparent; }
+.ai-feed::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+.ai-msg { display: flex; flex-direction: column; gap: 4px; max-width: 760px; }
+.ai-msg-user { align-self: flex-end; align-items: flex-end; }
+.ai-msg-rushmore { align-self: flex-start; align-items: flex-start; }
+.ai-msg-label { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; color: var(--orange); margin-bottom: 2px; }
+.ai-msg-bubble { padding: 10px 14px; border-radius: 8px; font-size: 14px; line-height: 1.6; }
+.ai-msg-rushmore .ai-msg-bubble { background: #141414; border: 1px solid #222; color: var(--text); border-radius: 2px 8px 8px 8px; }
+.ai-msg-user .ai-msg-bubble { background: #1e1000; border: 1px solid #3a2200; color: #e8c090; border-radius: 8px 2px 8px 8px; }
+.ai-msg-bubble p { margin: 0; }
+.ai-msg-bubble p + p { margin-top: 8px; }
+.ai-typing { display: flex; gap: 5px; align-items: center; padding: 4px 0; }
+.ai-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); animation: blink 1.2s ease-in-out infinite; }
+.ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+.ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
 
 /* GitHub issues panel */
 .gh-section { margin-top: 6px; }
