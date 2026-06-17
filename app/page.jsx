@@ -62,7 +62,6 @@ function ImgIcon({ src, size = 15 }) {
 }
 function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   const href = resolveUrl(url, desktop);
-  // desktop links use claude:// — no target blank, let OS handle it
   const isDesktop = desktop && href?.startsWith("claude://");
   return (
     <a
@@ -105,11 +104,11 @@ function GitHubSection({ ctx, issues }) {
     <div className="gh-section">
       <div className="gh-section-label"><span>GITHUB</span></div>
       <div className="cmd-board-row">
-        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="\u229e" />)}
+        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
         {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
       </div>
-      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading\u2026</div>}
-      {!loading && !hasAny && <div className="gh-no-issues">No open issues assigned to you \u2714</div>}
+      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>}
+      {!loading && !hasAny && <div className="gh-no-issues">No open issues assigned to you ✔</div>}
       {!loading && hasAny && (
         <div className="gh-issues">
           {rocks.map(i => (
@@ -120,7 +119,7 @@ function GitHubSection({ ctx, issues }) {
           ))}
           {bugCount > 0 && (
             <div className="gh-bug-line">
-              <span className="gh-bug-icon">\ud83d\udc1b</span>
+              <span className="gh-bug-icon">🐛</span>
               <span className="gh-bug-text">{bugCount} bug{bugCount !== 1 ? "s" : ""} assigned</span>
             </div>
           )}
@@ -200,6 +199,7 @@ export default function Home() {
   const ORDER1_REPO   = personalRepos.find(r => r.label === "The Order Repo");
   const ORDER2_REPO   = personalRepos.find(r => r.label === "TheGame Repo");
   const RUSHMORE_REPO = personalRepos.find(r => r.label === "Rushmore Repo");
+  const RUSHMORE_CHAT = personalRepos.find(r => r.label === "Rushmore Chat");
   const row1Claude = personalClaude.filter(l => ORDER1_LABELS.includes(l.label));
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
   const webIconMap = { "NoahTube": IMG.noahtube };
@@ -252,12 +252,13 @@ export default function Home() {
                 <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
                 <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
                 {RUSHMORE_REPO && <Chip label="Rushmore Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
+                {RUSHMORE_CHAT && <Chip label="Rushmore Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
               </div>
             </div>
           </section>
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK \u2014 GITHUB</span></div>
+            <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
             <div className="cmd-cards-row">
               {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} issues={issues} />)}
             </div>
