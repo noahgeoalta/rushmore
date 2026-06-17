@@ -107,61 +107,58 @@ a { color: inherit; text-decoration: none; }
 .cv-del-btn:hover { background: #1a0000 !important; color: #ff4444 !important; }
 
 /* ── RUSHMORE AI ── */
-.ai-shell { display: flex; flex-direction: column; flex: 1; height: calc(100vh - 53px); background: #0a0a0a; }
-
-/*
-  Banner: padding-top = 951/1784 * 100 = 53.31% locks the exact aspect ratio.
-  NO vh cap — that was causing the squish. Image fills without distortion.
-  The banner will be tall on wide screens; that's correct and intended.
-*/
-.ai-panel-banner {
-  position: relative;
-  width: 100%;
-  padding-top: 53.31%;
-  flex-shrink: 0;
-  border-bottom: 1px solid #1e1e1e;
-  background: #000;
+.ai-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: calc(100vh - 53px);
+  background: #0a0a0a;
   overflow: hidden;
 }
 
-/* object-fit: contain — never stretches, never crops, always shows full image */
-.ai-panel-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center center;
-  display: block;
-  opacity: 0.93;
+/* Sticky video strip — stays fixed at top, chat scrolls below */
+.ai-video-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #000;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0 12px;
+  flex-shrink: 0;
 }
 
-/*
-  Face video — object-fit: contain so the whole video frame fits inside
-  the octagon bounding box without being cropped or zoomed in.
-  Rounded edges via border-radius + overflow:hidden on a wrapper (set in JSX).
-*/
-.ai-face-video {
-  position: absolute;
-  object-fit: contain;
-  mix-blend-mode: screen;
-  filter: brightness(0.45) saturate(0.6);
+/* Aura wrapper — the box-shadow glow radiates from here */
+.ai-video-aura {
+  position: relative;
+  border-radius: 50%;
+  /* glow is set via JS box-shadow — initial idle state */
+  box-shadow: 0 0 30px 8px rgba(60,200,60,0.08);
+  transition: box-shadow 0.05s linear;
+  line-height: 0; /* remove gap under video */
+}
+
+/* The video itself — natural size, no stretch */
+.ai-video-main {
+  display: block;
+  width: auto;
+  height: 220px; /* comfortable height, adjust if needed */
+  max-width: 90vw;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .ai-panel-overlay {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 6px;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 2;
   pointer-events: none;
 }
-.ai-panel-logo { height: 22px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.95)); opacity: 0.85; }
-
-/* Hidden SVG filter for rounded clip-path effect */
-.ai-svg-defs { position: absolute; width: 0; height: 0; }
+.ai-panel-logo { height: 18px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.95)); opacity: 0.75; }
 
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
 .ai-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
@@ -213,7 +210,8 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  .ai-panel-logo { height: 16px; }
+  .ai-video-main { height: 140px; }
+  .ai-panel-logo { height: 14px; }
   .ai-feed { padding: 14px 14px; }
   .ai-input-bar { padding: 10px 14px; }
   .ai-header { padding: 6px 14px; }
