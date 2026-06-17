@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -3.8;  // was -2.0 — 10% lower pitch (2^(-1.8/12) ≈ 0.90)
+const BASE  = -2.0;  // restored — was -3.8
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -224,7 +224,6 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       const r  = Math.round(20  + powered * 80);
       const g  = Math.round(180 + powered * 75);
       const b  = Math.round(20  + powered * 10);
-      // Halved alphas — subtler glow, less dominating
       const a1 = Math.min(0.40, powered * 0.40).toFixed(2);
       const a2 = Math.min(0.20, powered * 0.20).toFixed(2);
       const a3 = Math.min(0.07, powered * 0.07).toFixed(2);
