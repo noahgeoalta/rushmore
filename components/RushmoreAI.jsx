@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -4.0;
+const BASE  = -2.0;  // was -4.0 — raised 50% (2 semitones up)
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -117,17 +117,18 @@ async function speakWithFX(text, onDone) {
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.2, 4.0);
+      // Reverb — shorter durations (was 1.2/2.2/3.5s, now 0.6/1.0/1.4s)
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.6, 4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;
       compGain.connect(plate); plate.connect(plateGain);
 
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025;
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 2.2, 2.8);
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.0, 2.8);
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.70;
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055;
-      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 3.5, 2.0);
+      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.4, 2.0);
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
@@ -190,11 +191,10 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video FX: darkness 50% lighter (idle cap 0.43, speaking 0.20) ──────────
 function useVideoFX(darkRef, bloomRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
-  const darknessRef = useRef(0.43); // start at idle target
+  const darknessRef = useRef(0.43);
 
   useEffect(() => {
     const loop = () => {
@@ -205,7 +205,6 @@ function useVideoFX(darkRef, bloomRef) {
       const t = Date.now() / 1400;
 
       if (!analyserNode) {
-        // Idle: ease up to 0.43 (was 0.65 — 50% less dark)
         darknessRef.current = Math.min(0.43, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
         const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
@@ -221,7 +220,6 @@ function useVideoFX(darkRef, bloomRef) {
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Speaking: ease down to 0.20 (was 0.30 — lighter when active too)
       const targetDark = Math.max(0.0, 0.20 - rms * 0.20);
       darknessRef.current += (targetDark - darknessRef.current) * 0.12;
       dark.style.opacity = darknessRef.current.toFixed(3);
@@ -265,13 +263,16 @@ export default function RushmoreAI() {
   const [messages,  setMessages]  = useState([BOOT_MSG]);
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
-  const [voiceOut,  setVoiceOut]  = useState(true);   // ON by default
+  const [voiceOut,  setVoiceOut]  = useState(true);
   const [listening, setListening] = useState(false);
   const [speaking,  setSpeaking]  = useState(false);
   const [usage,     setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
-  const voiceOutRef    = useRef(true);  // ON by default
+  const voiceOutRef    = useRef(true);
+  // continuousRef tracks whether the MIC button is "latched on"
+  // so after RUSHMORE finishes speaking it auto-restarts listening
+  const continuousRef  = useRef(false);
   const darkRef        = useRef(null);
   const bloomRef       = useRef(null);
 
@@ -298,6 +299,7 @@ export default function RushmoreAI() {
   }, []); // eslint-disable-line
 
   const stopListening = useCallback(() => {
+    continuousRef.current = false;
     try { recognitionRef.current?.stop(); } catch (_) {}
     setListening(false);
   }, []);
@@ -328,7 +330,18 @@ export default function RushmoreAI() {
       }
       if (voiceOutRef.current) {
         setSpeaking(true);
-        speakWithFX(reply, () => setSpeaking(false));
+        speakWithFX(reply, () => {
+          setSpeaking(false);
+          // After RUSHMORE finishes speaking, restart mic if it was latched on
+          if (continuousRef.current) {
+            setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
+          }
+        });
+      } else {
+        // No voice out — still restart mic if latched
+        if (continuousRef.current) {
+          setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
+        }
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
@@ -336,9 +349,23 @@ export default function RushmoreAI() {
   };
 
   const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(true); voiceOutRef.current = true; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
-  const toggleMic   = () => { if (listening) { stopListening(); } else { startListening(); } };
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+
+  // MIC button: tap once to start one-shot listen; tap again to stop.
+  // Hold latch: if already listening when tapped again, it latches continuous mode.
+  // Actually simpler: first tap = latch on (continuous), second tap = stop.
+  const toggleMic = () => {
+    if (continuousRef.current) {
+      // Already latched — stop everything
+      stopListening();
+    } else {
+      // Latch on continuous mode and start listening
+      continuousRef.current = true;
+      startListening();
+    }
+  };
+
   const cost     = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
 
@@ -386,15 +413,13 @@ export default function RushmoreAI() {
 
       <div className="ai-input-bar">
         <div className="ai-voice-btns">
-          {/* Mic button — no emoji, plain text label */}
           <button
-            className={`ai-mic-btn${listening ? " listening" : ""}`}
+            className={`ai-mic-btn${continuousRef.current || listening ? " listening" : ""}`}
             onClick={toggleMic}
-            title={listening ? "Stop listening" : "Tap to speak"}
+            title={continuousRef.current ? "Continuous on — tap to stop" : "Tap to talk (continuous)"}
           >
             {listening ? "\u25cf" : "MIC"}
           </button>
-          {/* Voice out toggle — no emoji, plain text */}
           <button
             className={`ai-voice-out-btn${voiceOut ? " active" : ""}`}
             onClick={toggleVoice}
