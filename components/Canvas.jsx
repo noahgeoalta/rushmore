@@ -24,6 +24,11 @@ function vids(nodes, out = []) {
   for (const n of nodes) { out.push(n.id); if (!n.collapsed) vids(n.children, out); }
   return out;
 }
+function allIds(nodes, out = []) {
+  // Like vids but includes collapsed children too (for copy)
+  for (const n of nodes) { out.push(n.id); allIds(n.children, out); }
+  return out;
+}
 function numInList(list, idx) {
   let n = 0;
   for (let i = 0; i <= idx; i++) if (list[i].type === "number") n++;
@@ -33,6 +38,30 @@ function migrateLine(n) {
   if (!n || typeof n !== "object") return newLine();
   return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || 14, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
 }
+
+// Serialize a node tree to indented plain text
+function serializeLines(nodes, depth = 0) {
+  let out = "";
+  const indent = "  ".repeat(depth);
+  for (const n of nodes) {
+    if (n.type === "bullet") out += `${indent}\u2022 ${n.text}\n`;
+    else if (n.type === "number") out += `${indent}1. ${n.text}\n`;
+    else out += `${indent}${n.text}\n`;
+    if (n.children.length) out += serializeLines(n.children, depth + 1);
+  }
+  return out;
+}
+
+// Collect all top-level selected nodes (skip children of already-selected parents)
+function collectSelected(nodes, ids) {
+  const result = [];
+  for (const n of nodes) {
+    if (ids.has(n.id)) { result.push(n); }
+    else if (n.children.length) { result.push(...collectSelected(n.children, ids)); }
+  }
+  return result;
+}
+
 function parseHtmlToLines(html) {
   if (typeof document === "undefined") return [];
   const div = document.createElement("div"); div.innerHTML = html;
@@ -60,7 +89,6 @@ function parsePlainToLines(text) {
   return nodes;
 }
 
-// Auto-resize a textarea to fit its content
 function autoSize(el) {
   if (!el) return;
   el.style.height = "auto";
@@ -90,14 +118,12 @@ export default function Canvas() {
   const dragLineRef = useRef(null);
   const boxRefs = useRef({});
   const selLinesRef = useRef(new Set());
+  const stateRef = useRef(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { selLinesRef.current = selLines; }, [selLines]);
-
-  // Re-autosize all textareas whenever state changes
-  useEffect(() => {
-    Object.values(inputs.current).forEach(el => autoSize(el));
-  }, [state]);
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { Object.values(inputs.current).forEach(el => autoSize(el)); }, [state]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -116,12 +142,7 @@ export default function Canvas() {
 
   useEffect(() => {
     if (!focusId) return;
-    const go = () => {
-      const el = inputs.current[focusId]; if (!el) return;
-      el.focus();
-      if (focusCaret !== null) { try { el.setSelectionRange(focusCaret, focusCaret); } catch {} setFocusCaret(null); }
-      setFocusId(null);
-    };
+    const go = () => { const el = inputs.current[focusId]; if (!el) return; el.focus(); if (focusCaret !== null) { try { el.setSelectionRange(focusCaret, focusCaret); } catch {} setFocusCaret(null); } setFocusId(null); };
     go(); const raf = requestAnimationFrame(go); return () => cancelAnimationFrame(raf);
   }, [focusId, focusCaret, state]);
 
@@ -146,7 +167,7 @@ export default function Canvas() {
         const minX = Math.min(lasso.sx, ex), maxX = Math.max(lasso.sx, ex);
         const minY = Math.min(lasso.sy, ey), maxY = Math.max(lasso.sy, ey);
         if (maxX - minX > 4 || maxY - minY > 4) {
-          const pg = state?.pages.find(p => p.id === state.activeId) || state?.pages[0];
+          const pg = stateRef.current?.pages.find(p => p.id === stateRef.current.activeId) || stateRef.current?.pages[0];
           const hit = new Set();
           pg?.boxes.forEach(b => { if (b.x >= minX && b.y >= minY && b.x <= maxX && b.y <= maxY) hit.add(b.id); });
           setSelBoxes(hit); if (hit.size === 1) setSelBox([...hit][0]);
@@ -156,7 +177,7 @@ export default function Canvas() {
     };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-  }, [lasso, state]);
+  }, [lasso]);
 
   if (!mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
   if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
@@ -195,6 +216,16 @@ export default function Canvas() {
     const ids = new Set(selLinesRef.current); if (ids.size === 0) return false;
     mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); });
     setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true;
+  };
+
+  const copySelected = (bid) => {
+    const ids = selLinesRef.current;
+    if (ids.size === 0) return;
+    const box = page.boxes.find(b => b.id === bid); if (!box) return;
+    // Collect top-level selected nodes with their full subtrees
+    const selected = collectSelected(box.lines, ids);
+    const text = serializeLines(selected);
+    navigator.clipboard.writeText(text).catch(() => {});
   };
 
   const bsLine = (bid, lid, cur, cp) => {
@@ -251,7 +282,8 @@ export default function Canvas() {
     if (!dragLineRef.current || dragLineRef.current.lid === lid) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = (e.clientY - rect.top) / rect.height;
-    const zone = pct < 0.28 ? "before" : pct > 0.72 ? "after" : "child";
+    // Top 30% = before, bottom 30% = after, middle = child (insert at top of children)
+    const zone = pct < 0.30 ? "before" : pct > 0.70 ? "after" : "child";
     setLineDrop(prev => (prev?.id === lid && prev?.zone === zone) ? prev : { id: lid, zone });
   };
   const onLineDrop = (e, bid, lid) => {
@@ -264,8 +296,15 @@ export default function Canvas() {
       const dh = loc(b.lines, srcLid); if (!dh) return;
       const dragged = structuredClone(dh.node);
       dh.list.splice(dh.i, 1);
-      if (zone === "child") { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.node.collapsed = false; tgt.node.children.push(dragged); }
-      else { const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; } tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged); }
+      if (zone === "child") {
+        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.unshift(dragged); return; }
+        tgt.node.collapsed = false;
+        // Insert at TOP of children, not bottom
+        tgt.node.children.unshift(dragged);
+      } else {
+        const tgt = loc(b.lines, lid); if (!tgt) { b.lines.push(dragged); return; }
+        tgt.list.splice(zone === "before" ? tgt.i : tgt.i + 1, 0, dragged);
+      }
     });
   };
 
@@ -283,6 +322,12 @@ export default function Canvas() {
   const kd = (e, bid, lid) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
+    // Ctrl+C: copy selected lines with full subtree
+    if (e.ctrlKey && !e.shiftKey && e.key === "c") {
+      if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; }
+      // If only one line selected and has text, let browser handle it
+      return;
+    }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
@@ -335,10 +380,7 @@ export default function Canvas() {
               {n.type === "none" && <span className="cv-marker cv-spacer cv-drag-handle" draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">&#8942;</span>}
               <textarea
                 className="cv-input"
-                ref={el => {
-                  inputs.current[n.id] = el;
-                  autoSize(el);
-                }}
+                ref={el => { inputs.current[n.id] = el; autoSize(el); }}
                 style={{ fontSize: (n.fontSize || 14) + "px" }}
                 value={n.text}
                 placeholder="..."
@@ -395,10 +437,11 @@ export default function Canvas() {
           <button className="notes-btn" title="Smaller" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
           <button className="notes-btn" title="Larger" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
           <span className="notes-sep" />
+          {selBox && selLines.size > 1 && <button className="notes-btn" onClick={() => copySelected(selBox)}>Copy</button>}
           {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
-        <span className="notes-hint">Dbl-click canvas for box · drag &#8942; to move lines</span>
+        <span className="notes-hint">Dbl-click canvas for box · drag &#8942; to move · Shift+click to multi-select</span>
       </div>
       <div
         className="cv-canvas"
