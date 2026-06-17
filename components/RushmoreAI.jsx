@@ -40,16 +40,6 @@ function makeImpulse(ctx, duration, decay) {
   return buf;
 }
 
-function makeDistCurve(amount) {
-  const n = 256;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
-    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
-  }
-  return curve;
-}
-
 let audioCtx      = null;
 let analyserNode  = null;
 let activeSources = [];
@@ -91,7 +81,7 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ — V-shape (bass+treble up, mids scooped) ──
+      // ── EQ — V-shape: bass+treble up, mids scooped ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
@@ -109,25 +99,24 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Compressor ──
+      // ── Compressor — conservative makeup gain to avoid clipping ──
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -18; comp.knee.value = 8;
-      comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
-      const compGain = ctx.createGain(); compGain.gain.value = 1.6;
+      comp.threshold.value = -18;
+      comp.knee.value      =  8;
+      comp.ratio.value     =  4;
+      comp.attack.value    =  0.005;
+      comp.release.value   =  0.120;
+      // Makeup gain conservative — just restores level, doesn’t boost
+      const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       brilliance.connect(comp); comp.connect(compGain);
+      // compGain is the clean, normalised signal from here on
 
-      // ── Distortion ──
-      const distPre = ctx.createGain(); distPre.gain.value = 1.4;
-      const dist = ctx.createWaveShaper(); dist.curve = makeDistCurve(8); dist.oversample = "2x";
-      const distPost = ctx.createGain(); distPost.gain.value = 0.75;
-      compGain.connect(distPre); distPre.connect(dist); dist.connect(distPost);
-
-      // ── "In a computer" bandpass layer — transmitted/electronic feel ──
-      // Bandpass at ~2kHz simulates a speaker/radio transmission character
+      // ── "Computer transmission" bandpass blend ──
+      // Adds a narrowband mid layer that sounds like it’s coming through a speaker/system
       const bandpass = ctx.createBiquadFilter();
       bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
-      const bpGain = ctx.createGain(); bpGain.gain.value = 0.30; // blended under the main signal
-      distPost.connect(bandpass); bandpass.connect(bpGain);
+      const bpGain = ctx.createGain(); bpGain.gain.value = 0.25;
+      compGain.connect(bandpass); bandpass.connect(bpGain);
 
       // ── Analyser ──
       const analyser = ctx.createAnalyser();
@@ -138,46 +127,46 @@ async function speakWithFX(text, onDone) {
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(1.5); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
-        distPost.connect(d); d.connect(g); return g;
+        compGain.connect(d); d.connect(g); return g;
       };
-      const e1=makeEcho(0.060,0.40); const e2=makeEcho(0.110,0.30); const e3=makeEcho(0.175,0.22);
-      const e4=makeEcho(0.260,0.15); const e5=makeEcho(0.370,0.10); const e6=makeEcho(0.500,0.06);
-      const e7=makeEcho(0.660,0.04); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
+      const e1=makeEcho(0.060,0.38); const e2=makeEcho(0.110,0.28); const e3=makeEcho(0.175,0.20);
+      const e4=makeEcho(0.260,0.13); const e5=makeEcho(0.370,0.08); const e6=makeEcho(0.500,0.05);
+      const e7=makeEcho(0.660,0.03); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
 
-      // ── Reverb: plate + hall + chamber — all boosted for more wetness ──
+      // ── Reverb: plate + hall + chamber ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx,1.0,4.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.55; // was 0.32
-      distPost.connect(plate); plate.connect(plateGain);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.50;
+      compGain.connect(plate); plate.connect(plateGain);
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx,1.8,3.0);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.40; // was 0.24
-      distPost.connect(hall); hall.connect(hallGain);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.36;
+      compGain.connect(hall); hall.connect(hallGain);
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx,2.8,2.2);
-      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.22; // was 0.12
-      distPost.connect(chamber); chamber.connect(chamberGain);
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.18;
+      compGain.connect(chamber); chamber.connect(chamberGain);
 
       // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-      const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
-      const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
 
       // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
-      const underGain = ctx.createGain(); underGain.gain.value = 0.22;
+      const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
-      // ── Master — dry pulled down so reverb/echo dominate, vol -25% ──
-      const master = ctx.createGain(); master.gain.value = 0.51; // 0.68 * 0.75
+      // ── Master — conservative, headroom for all the wet layers ──
+      const master = ctx.createGain(); master.gain.value = 0.50;
 
       // ── Routing ──
       srcMain.connect(hiPass);
-      distPost.connect(analyser); analyser.connect(master);
+      compGain.connect(analyser); analyser.connect(master);
 
-      // Dry: pulled way down so wet layers dominate
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.45; // was 1.0
-      distPost.connect(dryGain); dryGain.connect(master);
+      // Dry signal: pulled back so reverb/echo dominate
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.45;
+      compGain.connect(dryGain); dryGain.connect(master);
 
-      // Bandpass "computer" layer
+      // Computer transmission layer
       bpGain.connect(master);
 
       // Echoes
