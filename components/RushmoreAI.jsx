@@ -14,26 +14,18 @@ function calcCost(inTok, outTok) {
 
 // ── Audio FX ────────────────────────────────────────────────────────────
 
-// Large hall impulse response
-function makeImpulse(ctx, duration = 3.0, decay = 2.5) {
+// Shorter, tighter hall impulse
+function makeImpulse(ctx, duration = 1.0, decay = 4.0) {
   const rate   = ctx.sampleRate;
   const length = Math.floor(rate * duration);
   const buf    = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
     const ch = buf.getChannelData(c);
     for (let i = 0; i < length; i++) {
-      // Slightly different L/R for width
       ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.95);
     }
   }
   return buf;
-}
-
-// Simple chorus: delayed + pitch-modulated copy of signal
-function makeChorusBuf(ctx, delayMs = 25, depth = 0.003) {
-  // We approximate chorus with a static delay + slight detune
-  // Real chorus needs an LFO; we use two static offset copies for the ethereal layer
-  return delayMs / 1000;
 }
 
 let audioCtx = null;
@@ -49,10 +41,11 @@ let currentSource  = null;
 let currentSource2 = null;
 let currentSource3 = null;
 
+// -1.5 semitones = 2^(-1.5/12)
+const PITCH_BASE = Math.pow(2, -1.5 / 12); // ~0.9159
+
 async function speakWithFX(text, onDone) {
   if (typeof window === "undefined") return;
-
-  // Stop anything playing
   try { currentSource?.stop();  } catch (_) {}
   try { currentSource2?.stop(); } catch (_) {}
   try { currentSource3?.stop(); } catch (_) {}
@@ -73,113 +66,137 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── Shared FX nodes ──
-
-      // High-pass: cut everything below 180Hz — Templars are NOT bassy
+      // ── EQ ──
+      // High-pass: kill boom below 200Hz
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass";
-      hiPass.frequency.value = 180;
-      hiPass.Q.value = 0.7;
+      hiPass.frequency.value = 200;
+      hiPass.Q.value = 0.8;
 
-      // Air shelf: boost 8kHz+ for that bright crystalline quality
-      const airShelf = ctx.createBiquadFilter();
-      airShelf.type = "highshelf";
-      airShelf.frequency.value = 8000;
-      airShelf.gain.value = 4; // +4dB air
+      // Low-mid notch: scoop out ~400Hz muddiness
+      const midNotch = ctx.createBiquadFilter();
+      midNotch.type = "peaking";
+      midNotch.frequency.value = 420;
+      midNotch.Q.value = 1.5;
+      midNotch.gain.value = -5;
 
-      // Presence peak: forward, clear, cuts through reverb
+      // Presence: forward clarity
       const presence = ctx.createBiquadFilter();
       presence.type = "peaking";
       presence.frequency.value = 3200;
       presence.Q.value = 1.0;
-      presence.gain.value = 3;
+      presence.gain.value = 4;
 
-      // Large hall reverb
+      // Air: crystalline high end
+      const airShelf = ctx.createBiquadFilter();
+      airShelf.type = "highshelf";
+      airShelf.frequency.value = 8000;
+      airShelf.gain.value = 5;
+
+      // Brilliance sparkle at 12kHz
+      const brilliance = ctx.createBiquadFilter();
+      brilliance.type = "peaking";
+      brilliance.frequency.value = 12000;
+      brilliance.Q.value = 0.8;
+      brilliance.gain.value = 3;
+
+      // ── Reverb ── short + tight (1.0s, fast decay)
       const convolver = ctx.createConvolver();
-      convolver.buffer = makeImpulse(ctx, 3.0, 2.5);
+      convolver.buffer = makeImpulse(ctx, 1.0, 4.0);
 
-      // Short echo 1 — 40ms, the near ghost-layer
+      // ── Echoes ──
+      // Near echo: 40ms — the tight ghost
       const echo1 = ctx.createDelay(0.5);
       echo1.delayTime.value = 0.04;
       const echo1Gain = ctx.createGain();
-      echo1Gain.gain.value = 0.35;
+      echo1Gain.gain.value = 0.32;
 
-      // Short echo 2 — 130ms, the further ghost
+      // Mid echo: 95ms — second ghost, replaced the too-long 130ms
       const echo2 = ctx.createDelay(0.5);
-      echo2.delayTime.value = 0.13;
+      echo2.delayTime.value = 0.095;
       const echo2Gain = ctx.createGain();
-      echo2Gain.gain.value = 0.20;
+      echo2Gain.gain.value = 0.16;
 
-      // Chorus layer A — slightly detuned copy at 20ms
-      const chorusA = ctx.createDelay(0.1);
-      chorusA.delayTime.value = 0.020;
-      const chorusAGain = ctx.createGain();
-      chorusAGain.gain.value = 0.18;
+      // ── Stereo width — pan chorus copies L/R ──
+      const panL = ctx.createStereoPanner();
+      panL.pan.value = -0.4;
+      const panR = ctx.createStereoPanner();
+      panR.pan.value = 0.4;
 
-      // Chorus layer B — slightly detuned copy at 35ms (opposite phase offset = width)
-      const chorusB = ctx.createDelay(0.1);
-      chorusB.delayTime.value = 0.035;
-      const chorusBGain = ctx.createGain();
-      chorusBGain.gain.value = 0.14;
+      // ── Gains ──
+      const dryGain   = ctx.createGain(); dryGain.gain.value   = 1.0;
+      const reverbGain = ctx.createGain(); reverbGain.gain.value = 0.18; // tighter reverb mix
+      const chorusAGain = ctx.createGain(); chorusAGain.gain.value = 0.18;
+      const chorusBGain = ctx.createGain(); chorusBGain.gain.value = 0.14;
+      const master = ctx.createGain(); master.gain.value = 0.82;
 
-      // Wet/dry
-      const dryGain = ctx.createGain();  dryGain.gain.value  = 1.0;
-      const reverbGain = ctx.createGain(); reverbGain.gain.value = 0.30;
-
-      // Master — keep headroom
-      const master = ctx.createGain(); master.gain.value = 0.85;
-
-      // ── Source 1: main voice (no pitch shift) ──
+      // ── 3 sources: base + chorus detuned copies ──
+      // Base: -1.5 semitones
       const src1 = ctx.createBufferSource();
       src1.buffer = decoded;
-      src1.playbackRate.value = 1.0; // NO pitch shift
+      src1.playbackRate.value = PITCH_BASE;
       currentSource = src1;
 
-      // ── Source 2: chorus copy A, very slightly faster (tiny pitch up) ──
+      // Chorus A: -1.5 semitones + 14 cents up
       const src2 = ctx.createBufferSource();
       src2.buffer = decoded;
-      src2.playbackRate.value = 1.008; // ~14 cents up
+      src2.playbackRate.value = PITCH_BASE * 1.008;
       currentSource2 = src2;
 
-      // ── Source 3: chorus copy B, very slightly slower (tiny pitch down) ──
+      // Chorus B: -1.5 semitones + 12 cents down
       const src3 = ctx.createBufferSource();
       src3.buffer = decoded;
-      src3.playbackRate.value = 0.993; // ~12 cents down
+      src3.playbackRate.value = PITCH_BASE * 0.993;
       currentSource3 = src3;
 
-      // ── Main chain ──
-      // src1 → hiPass → presence → airShelf → dry + echo1 + echo2 + reverb
-      src1.connect(hiPass);
-      hiPass.connect(presence);
+      // ── Routing ──
+      // Main EQ chain
+      const eqChain = (src) => {
+        src.connect(hiPass);
+      };
+      hiPass.connect(midNotch);
+      midNotch.connect(presence);
       presence.connect(airShelf);
+      airShelf.connect(brilliance);
 
-      airShelf.connect(dryGain);   // dry
+      // Main voice through full EQ
+      src1.connect(hiPass);
+
+      // Dry
+      brilliance.connect(dryGain);
       dryGain.connect(master);
 
-      airShelf.connect(echo1);     // 40ms echo
+      // Echoes
+      brilliance.connect(echo1);
       echo1.connect(echo1Gain);
       echo1Gain.connect(master);
 
-      airShelf.connect(echo2);     // 130ms echo
+      brilliance.connect(echo2);
       echo2.connect(echo2Gain);
       echo2Gain.connect(master);
 
-      airShelf.connect(convolver); // hall reverb
+      // Reverb
+      brilliance.connect(convolver);
       convolver.connect(reverbGain);
       reverbGain.connect(master);
 
-      // ── Chorus copies go through same EQ then into master at lower volume ──
-      const chorusEQ = ctx.createBiquadFilter();
-      chorusEQ.type = "highpass";
-      chorusEQ.frequency.value = 300; // chorus layers are thinner
+      // Chorus A → pan left
+      const chorusHiPass = ctx.createBiquadFilter();
+      chorusHiPass.type = "highpass";
+      chorusHiPass.frequency.value = 300;
+      src2.connect(chorusHiPass);
+      chorusHiPass.connect(chorusAGain);
+      chorusAGain.connect(panL);
+      panL.connect(master);
 
-      src2.connect(chorusEQ);
-      chorusEQ.connect(chorusAGain);
-      chorusAGain.connect(master);
-
-      src3.connect(chorusEQ);
-      chorusEQ.connect(chorusBGain);
-      chorusBGain.connect(master);
+      // Chorus B → pan right
+      const chorusHiPass2 = ctx.createBiquadFilter();
+      chorusHiPass2.type = "highpass";
+      chorusHiPass2.frequency.value = 300;
+      src3.connect(chorusHiPass2);
+      chorusHiPass2.connect(chorusBGain);
+      chorusBGain.connect(panR);
+      panR.connect(master);
 
       master.connect(ctx.destination);
 
@@ -188,7 +205,6 @@ async function speakWithFX(text, onDone) {
         if (!ended) { ended = true; currentSource = currentSource2 = currentSource3 = null; onDone?.(); }
       };
 
-      // Start all three in sync
       const t = ctx.currentTime + 0.01;
       src1.start(t);
       src2.start(t);
@@ -221,7 +237,6 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Components ────────────────────────────────────────────────────────────────
 function TypingDots() {
   return <div className="ai-typing"><span /><span /><span /></div>;
 }
@@ -245,7 +260,6 @@ const BOOT_MSG = {
   content: "RUSHMORE online. All systems nominal.\n\nI have full context on GeoAlta, GeoComforter, ChronoSlate, NMGCO, The Order, and TheGame. GitHub actions and Microsoft Graph are not yet wired \u2014 everything else, ask away."
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
 export default function RushmoreAI() {
   const [messages,   setMessages]   = useState([BOOT_MSG]);
   const [input,      setInput]      = useState("");
@@ -309,9 +323,7 @@ export default function RushmoreAI() {
         setSpeaking(true);
         speakWithFX(reply, () => {
           setSpeaking(false);
-          if (continuousRef.current) {
-            setTimeout(() => { if (continuousRef.current) startListening(); }, 600);
-          }
+          if (continuousRef.current) setTimeout(() => { if (continuousRef.current) startListening(); }, 600);
         });
       } else if (continuousRef.current) {
         setTimeout(() => { if (continuousRef.current) startListening(); }, 300);
@@ -329,23 +341,12 @@ export default function RushmoreAI() {
   };
 
   const toggleContinuous = () => {
-    if (continuous) {
-      setContinuous(false); continuousRef.current = false;
-      stopListening(); stopSpeech();
-    } else {
-      setContinuous(true); continuousRef.current = true;
-      setTtsOn(true); startListening();
-    }
+    if (continuous) { setContinuous(false); continuousRef.current = false; stopListening(); stopSpeech(); }
+    else { setContinuous(true); continuousRef.current = true; setTtsOn(true); startListening(); }
   };
 
-  const toggleOneShotMic = () => {
-    if (listening) { stopListening(); return; }
-    startListening();
-  };
-
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  };
+  const toggleOneShotMic = () => { if (listening) { stopListening(); return; } startListening(); };
+  const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   const cost     = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
@@ -354,11 +355,8 @@ export default function RushmoreAI() {
     <div className="ai-shell">
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" />
-        <div className="ai-panel-overlay">
-          <img src={LOGO} alt="" className="ai-panel-logo" />
-        </div>
+        <div className="ai-panel-overlay"><img src={LOGO} alt="" className="ai-panel-logo" /></div>
       </div>
-
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
@@ -375,25 +373,17 @@ export default function RushmoreAI() {
           {speaking && <span className="ai-speaking-label">\u25b6 SPEAKING</span>}
         </div>
         <div className="ai-header-right">
-          <button
-            className={`ai-ctrl-btn${continuous ? " active" : ""}`}
-            onClick={toggleContinuous}
-          >
-            {continuous
-              ? (listening ? "\u25cf LISTENING" : speaking ? "\u25b6 SPEAKING" : "\u25cc WAITING")
-              : "\u25cb CONTINUOUS"}
+          <button className={`ai-ctrl-btn${continuous ? " active" : ""}`} onClick={toggleContinuous}>
+            {continuous ? (listening ? "\u25cf LISTENING" : speaking ? "\u25b6 SPEAKING" : "\u25cc WAITING") : "\u25cb CONTINUOUS"}
           </button>
-          <button
-            className={`ai-ctrl-btn${ttsOn && !continuous ? " active" : ""}`}
+          <button className={`ai-ctrl-btn${ttsOn && !continuous ? " active" : ""}`}
             onClick={() => { if (continuous) return; setTtsOn(t => !t); if (ttsOn) stopSpeech(); }}
-            style={{ opacity: continuous ? 0.35 : 1 }}
-          >
+            style={{ opacity: continuous ? 0.35 : 1 }}>
             {ttsOn ? "\u25c9 VOICE OUT" : "\u25cb VOICE OUT"}
           </button>
           <button className="ai-ctrl-btn" onClick={resetAll}>CLEAR</button>
         </div>
       </div>
-
       <div className="ai-feed">
         {messages.map((msg, i) => <Message key={i} msg={msg} />)}
         {loading && (
@@ -404,27 +394,15 @@ export default function RushmoreAI() {
         )}
         <div ref={bottomRef} />
       </div>
-
       <div className="ai-input-bar">
-        <button
-          className={`ai-mic-btn${listening ? " listening" : ""}${continuous ? " continuous" : ""}`}
-          onClick={continuous ? toggleContinuous : toggleOneShotMic}
-        >
+        <button className={`ai-mic-btn${listening ? " listening" : ""}${continuous ? " continuous" : ""}`}
+          onClick={continuous ? toggleContinuous : toggleOneShotMic}>
           {continuous ? (listening ? "\u25cf" : speaking ? "\u25b6" : "\u25cc") : (listening ? "\u25cf" : "\uD83C\uDFA4")}
         </button>
-        <textarea
-          className="ai-textarea"
-          value={input}
-          onChange={e => setInput(e.target.value)}
+        <textarea className="ai-textarea" value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={
-            continuous
-              ? (listening ? "Listening..." : speaking ? "RUSHMORE speaking..." : "Waiting for your voice...")
-              : (listening ? "Listening..." : "Command RUSHMORE...")
-          }
-          rows={1}
-          spellCheck={false}
-        />
+          placeholder={continuous ? (listening ? "Listening..." : speaking ? "RUSHMORE speaking..." : "Waiting for your voice...") : (listening ? "Listening..." : "Command RUSHMORE...")}
+          rows={1} spellCheck={false} />
         <button className="ai-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>SEND</button>
       </div>
     </div>
