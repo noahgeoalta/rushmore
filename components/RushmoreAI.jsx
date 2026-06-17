@@ -7,21 +7,11 @@ const PANEL = img("images/Rushmore/Rushmore Panel.png");
 const LOGO  = img("images/Rushmore/Rushmore Logo.png");
 const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
 
-// Face bounding box as % of 1784x1481 panel image
-// TL(530,66) TR(1192,69) BL(573,507) BR(1170,513)
 const FACE = {
-  left:   530  / 1784 * 100,  // 29.71%
-  top:    66   / 1481 * 100,  // 4.46%
-  width:  662  / 1784 * 100,  // 37.11%
-  height: 447  / 1481 * 100,  // 30.18%
-  // trapezoid: bottom is ~40px wider and shifted right ~43px vs top
-  // we encode this as a clip-path polygon (% of the element)
-  // top-left, top-right, bottom-right, bottom-left
-  // relative offsets from the bounding box:
-  // TL offset from box-left: 0px -> 0%
-  // TR offset: 662px -> 100%
-  // BR: (1170-530)=640px from left -> 640/662=96.7%, bottom
-  // BL: (573-530)=43px from left -> 43/662=6.5%, bottom
+  left:   530  / 1784 * 100,
+  top:    66   / 1481 * 100,
+  width:  662  / 1784 * 100,
+  height: 447  / 1481 * 100,
   clipPath: "polygon(0% 0%, 100% 0%, 96.7% 100%, 6.5% 100%)",
 };
 
@@ -32,7 +22,15 @@ function calcCost(inTok, outTok) {
 }
 
 // ── Audio FX ────────────────────────────────────────────────────────────
+// Semitones to playback rate
 const st = (n) => Math.pow(2, n / 12);
+
+// All pitches now -2.0 base (-1.5 - 0.5 more)
+// Undertone at -2.25 (-1.75 - 0.5)
+const BASE    = -2.0;
+const CHO_A   = BASE + 14 / 100;  // +14 cents
+const CHO_B   = BASE - 12 / 100;  // -12 cents
+const UNDER   = -2.25;
 
 function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
@@ -47,8 +45,8 @@ function makeImpulse(ctx, duration, decay) {
   return buf;
 }
 
-let audioCtx    = null;
-let analyserNode = null; // shared analyser so the RAF loop can read it
+let audioCtx     = null;
+let analyserNode = null;
 let activeSources = [];
 
 function getCtx() {
@@ -87,49 +85,62 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      const srcMain  = makeSource(ctx, decoded, -1.5);
-      const srcChoA  = makeSource(ctx, decoded, -1.5 + 14/100);
-      const srcChoB  = makeSource(ctx, decoded, -1.5 - 12/100);
-      const srcUnder = makeSource(ctx, decoded, -1.75);
+      // ── Sources ──
+      const srcMain  = makeSource(ctx, decoded, BASE);
+      const srcChoA  = makeSource(ctx, decoded, CHO_A);
+      const srcChoB  = makeSource(ctx, decoded, CHO_B);
+      const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // EQ
+      // ── EQ chain ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
+
       const midNotch = ctx.createBiquadFilter();
       midNotch.type = "peaking"; midNotch.frequency.value = 420; midNotch.Q.value = 1.5; midNotch.gain.value = -5;
+
       const presence = ctx.createBiquadFilter();
       presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 1.0; presence.gain.value = 4;
+
       const airShelf = ctx.createBiquadFilter();
       airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
+
       const brilliance = ctx.createBiquadFilter();
       brilliance.type = "peaking"; brilliance.frequency.value = 12000; brilliance.Q.value = 0.8; brilliance.gain.value = 3;
-      hiPass.connect(midNotch); midNotch.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // Analyser for glow
+      hiPass.connect(midNotch); midNotch.connect(presence);
+      presence.connect(airShelf); airShelf.connect(brilliance);
+
+      // ── Analyser for glow ──
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.75;
       analyserNode = analyser;
 
-      // Tight echoes
+      // ── Echoes — only POST-voice taps, no pre-echo ──
+      // 18ms and 36ms removed — they were smearing into the voice
+      // Only 60ms and 95ms remain — sit clearly behind the voice
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(0.5); d.delayTime.value = dt;
         const g = ctx.createGain();    g.gain.value = gain;
         brilliance.connect(d); d.connect(g);
         return g;
       };
-      const e1out = makeEcho(0.018, 0.55);
-      const e2out = makeEcho(0.036, 0.40);
-      const e3out = makeEcho(0.060, 0.25);
-      const e4out = makeEcho(0.095, 0.14);
+      const e1out = makeEcho(0.060, 0.38); // 60ms
+      const e2out = makeEcho(0.095, 0.22); // 95ms
 
-      // Plate reverb
+      // ── Reverb — boosted: plate + hall ──
       const plate = ctx.createConvolver();
-      plate.buffer = makeImpulse(ctx, 0.8, 4.5);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.15;
-      brilliance.connect(plate); plate.connect(plateGain);
+      plate.buffer = makeImpulse(ctx, 1.0, 4.0); // slightly longer plate
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.28; // was 0.15
 
-      // Chorus
+      const hall = ctx.createConvolver();
+      hall.buffer = makeImpulse(ctx, 1.8, 3.0); // medium hall
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.20; // added hall
+
+      brilliance.connect(plate); plate.connect(plateGain);
+      brilliance.connect(hall);  hall.connect(hallGain);
+
+      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter();
@@ -137,26 +148,29 @@ async function speakWithFX(text, onDone) {
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
 
-      // Undertone
+      // ── Undertone ──
       const underLow  = ctx.createBiquadFilter();
       underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
 
-      // Master
-      const master = ctx.createGain(); master.gain.value = 0.80;
+      // ── Master ──
+      const master = ctx.createGain(); master.gain.value = 0.78; // slight reduction for extra reverb headroom
 
-      // Routing: main → EQ → analyser → dry+echoes+reverb → master
+      // ── Routing ──
       srcMain.connect(hiPass);
-      brilliance.connect(analyser); // tap for glow
+      brilliance.connect(analyser);
+      analyser.connect(master); // analyser is pass-through to master
+
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
       brilliance.connect(dryGain); dryGain.connect(master);
-      e1out.connect(master); e2out.connect(master); e3out.connect(master); e4out.connect(master);
-      plateGain.connect(master);
-      analyser.connect(master); // analyser is pass-through
+
+      e1out.connect(master); e2out.connect(master);
+      plateGain.connect(master); hallGain.connect(master);
 
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
+
       master.connect(ctx.destination);
 
       let ended = false;
@@ -170,7 +184,7 @@ async function speakWithFX(text, onDone) {
     }
   } catch (_) {}
 
-  // Browser TTS fallback
+  // ── Browser TTS fallback ──
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
   const preferred =
@@ -194,31 +208,25 @@ function stopSpeech() {
 
 // ── Voice-reactive glow hook ──
 function useVoiceGlow(videoRef) {
-  const rafRef = useRef(null);
+  const rafRef  = useRef(null);
   const dataArr = useRef(null);
 
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
       if (!analyserNode || !videoRef.current) return;
-
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount) {
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       }
       analyserNode.getByteFrequencyData(dataArr.current);
-
-      // RMS amplitude
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1
-
-      // Map to glow intensity
-      const glow   = Math.round(rms * 60);        // px spread 0-60
-      const bright = 1 + rms * 0.8;               // brightness 1.0-1.8
-      const r = Math.round(80  + rms * 175);      // red channel
-      const g = Math.round(20  + rms * 60);       // green channel
-      const b = Math.round(200 + rms * 55);       // blue/purple channel
-
+      const rms    = Math.sqrt(sum / dataArr.current.length) / 255;
+      const glow   = Math.round(rms * 60);
+      const bright = 1 + rms * 0.8;
+      const r = Math.round(80  + rms * 175);
+      const g = Math.round(20  + rms * 60);
+      const b = Math.round(200 + rms * 55);
       videoRef.current.style.filter =
         `brightness(${bright.toFixed(2)}) drop-shadow(0 0 ${glow}px rgba(${r},${g},${b},0.9))`;
       videoRef.current.style.boxShadow =
@@ -350,28 +358,21 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      {/* Panel + overlaid video */}
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
-
-        {/* Video overlay — positioned over the face area using % coords */}
         <video
           ref={videoRef}
           src={VIDEO_SRC}
-          autoPlay
-          loop
-          muted
-          playsInline
+          autoPlay loop muted playsInline
           className="ai-face-video"
           style={{
-            left:      `${FACE.left}%`,
-            top:       `${FACE.top}%`,
-            width:     `${FACE.width}%`,
-            height:    `${FACE.height}%`,
-            clipPath:  FACE.clipPath,
+            left:     `${FACE.left}%`,
+            top:      `${FACE.top}%`,
+            width:    `${FACE.width}%`,
+            height:   `${FACE.height}%`,
+            clipPath: FACE.clipPath,
           }}
         />
-
         <div className="ai-panel-overlay">
           <img src={LOGO} alt="" className="ai-panel-logo" />
         </div>
