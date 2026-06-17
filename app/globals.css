@@ -114,12 +114,13 @@ a { color: inherit; text-decoration: none; }
 .ai-panel-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; pointer-events: none; }
 .ai-panel-logo { height: 36px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9)); opacity: 0.9; }
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
-.ai-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ai-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .ai-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff8c3a; box-shadow: 0 0 6px #ff8c3a; animation: pulse 2.5s ease-in-out infinite; flex-shrink: 0; }
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 6px #ff8c3a; } 50% { opacity: 0.5; box-shadow: 0 0 12px #ff8c3a; } }
 .ai-online-label { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: var(--orange); flex-shrink: 0; }
+.ai-speaking-label { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; color: #5b9bd5; animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
 .ai-header-right { display: flex; gap: 6px; flex-shrink: 0; }
-.ai-ctrl-btn { padding: 4px 10px; background: none; border: 1px solid #2a2a2a; border-radius: 4px; color: var(--faint); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; transition: all 0.1s; }
+.ai-ctrl-btn { padding: 4px 10px; background: none; border: 1px solid #2a2a2a; border-radius: 4px; color: var(--faint); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; white-space: nowrap; transition: all 0.1s; }
 .ai-ctrl-btn:hover { border-color: var(--edge2); color: var(--dim); }
 .ai-ctrl-btn.active { color: var(--orange); border-color: var(--orange-edge); background: var(--orange-bg); }
 .ai-feed { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
@@ -144,6 +145,7 @@ a { color: inherit; text-decoration: none; }
 .ai-mic-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 16px; cursor: pointer; flex-shrink: 0; transition: all 0.15s; display: grid; place-items: center; }
 .ai-mic-btn:hover { border-color: var(--orange-edge); color: var(--orange); }
 .ai-mic-btn.listening { border-color: #ff4444; color: #ff4444; background: #1a0000; animation: pulse 1s ease-in-out infinite; }
+.ai-mic-btn.continuous { border-color: var(--orange-edge); background: var(--orange-bg); color: var(--orange); }
 .ai-textarea { flex: 1; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 12px; color: var(--text); font: inherit; font-size: 14px; outline: none; resize: none; line-height: 1.5; max-height: 120px; overflow-y: auto; min-width: 0; }
 .ai-textarea:focus { border-color: #3a3a3a; }
 .ai-textarea::placeholder { color: var(--faint); }
