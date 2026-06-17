@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
-const VIDEO_SRC = img("images/Rushmore/RushMORE (1).mp4");
+// Direct path — bypasses /api/img proxy which breaks video on mobile Safari
+const VIDEO_SRC = "/api/video";
 const STORAGE_KEY = "rushmore-chat-v1";
 
 const PRICE_IN  = 3.00;
@@ -135,9 +135,10 @@ function stopSpeech() {
 }
 
 // ── Video FX ─────────────────────────────────────────────────
-// Bloom is now a FLAT RECTANGLE (no radial-gradient, no mix-blend-mode)
-// Just rgba background colour — zero bleed, perfectly contained.
-// Idle: very faint green tint. Speaking: bright green rect flashes with voice.
+// No mix-blend-mode (caused bleed). Radial gradient on bloom div.
+// overflow:hidden on parent clips it perfectly — no bleed possible.
+// Idle: faint green breath. Speaking: dynamic radial glow, near-zero
+// at silence, spikes bright on loud peaks via rms^0.5 power curve.
 function useVideoFX(darkRef, bloomRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
@@ -152,12 +153,12 @@ function useVideoFX(darkRef, bloomRef) {
       const t = Date.now() / 1400;
 
       if (!analyserNode) {
-        // Idle: settle to 0.26 darkness
         darknessRef.current = Math.min(0.26, darknessRef.current + 0.012);
         dark.style.opacity = darknessRef.current.toFixed(3);
-        // Flat rect: barely-visible green breath
-        const a = (0.018 + 0.010 * Math.sin(t)).toFixed(3);
-        bloom.style.background = `rgba(20,180,20,${a})`;
+        // Idle: barely-visible soft green breath, radial so edges fade
+        const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
+        bloom.style.background =
+          `radial-gradient(ellipse 60% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 65%)`;
         return;
       }
 
@@ -167,21 +168,24 @@ function useVideoFX(darkRef, bloomRef) {
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-      // Power curve — very dynamic, spikes hard on loud peaks
+      // Square-root curve: very low when quiet, spikes hard on loud peaks
       const powered = Math.pow(rms, 0.5);
 
-      // Dark overlay clears when loud
-      const targetDark = Math.max(0.0, 0.20 - powered * 0.20);
+      // Darkness clears as voice gets louder
+      const targetDark = Math.max(0.0, 0.26 - powered * 0.26);
       darknessRef.current += (targetDark - darknessRef.current) * 0.18;
       dark.style.opacity = darknessRef.current.toFixed(3);
 
-      // Flat rectangular green glow — no radial, no bleed
-      // Near-zero when quiet, flashes bright green on peaks
-      const r = Math.round(20  + powered * 60);
-      const g = Math.round(180 + powered * 75);
-      const b = Math.round(20  + powered * 10);
-      const a = Math.min(0.55, powered * 0.55).toFixed(3);
-      bloom.style.background = `rgba(${r},${g},${b},${a})`;
+      // Radial glow — dynamic, centered, clipped by overflow:hidden on parent
+      // Near-zero when quiet, full brightness on loud peaks
+      const r  = Math.round(20  + powered * 80);
+      const g  = Math.round(180 + powered * 75);
+      const b  = Math.round(20  + powered * 10);
+      const a1 = Math.min(0.85, powered * 0.85).toFixed(2);
+      const a2 = Math.min(0.40, powered * 0.40).toFixed(2);
+      const a3 = Math.min(0.12, powered * 0.12).toFixed(2);
+      bloom.style.background =
+        `radial-gradient(ellipse 70% 80% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 40%, rgba(${r},${g},${b},${a3}) 65%, transparent 80%)`;
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
@@ -304,16 +308,14 @@ export default function RushmoreAI() {
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
   useEffect(() => { topRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
-  // Mobile video: attach play() to loadedmetadata instead of mount
-  // so it fires after the video has enough data — works on iOS Safari
+  // Mobile video: listen for canplay then call play()
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
     const tryPlay = () => v.play().catch(() => {});
-    v.addEventListener("loadedmetadata", tryPlay);
-    // Also try immediately in case already loaded
+    v.addEventListener("canplay", tryPlay);
     tryPlay();
-    return () => v.removeEventListener("loadedmetadata", tryPlay);
+    return () => v.removeEventListener("canplay", tryPlay);
   }, []);
 
   const startListening = useCallback(async () => {
@@ -362,28 +364,26 @@ export default function RushmoreAI() {
     } finally { setLoading(false); }
   };
 
-  const sendMessage = () => { const content = input.trim(); if (!content || loading) return; setInput(""); sendMessageWith(messagesRef.current, content); };
-  const handleEdit  = (index, newContent) => { const fi = messages.length - 1 - index; sendMessageWith(messages.slice(0, fi), newContent); };
-  const handleReplay = (content) => { if (speaking) return; setSpeaking(true); speakWithFX(content, () => setSpeaking(false)); };
+  const sendMessage  = () => { const c = input.trim(); if (!c || loading) return; setInput(""); sendMessageWith(messagesRef.current, c); };
+  const handleEdit   = (i, nc) => { const fi = messages.length - 1 - i; sendMessageWith(messages.slice(0, fi), nc); };
+  const handleReplay = (c) => { if (speaking) return; setSpeaking(true); speakWithFX(c, () => setSpeaking(false)); };
 
   const resetAll = () => {
     stopSpeech(); stopListening(); setVoiceOut(true); voiceOutRef.current = true;
     setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 });
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
   };
-
   const newChat = () => {
     stopSpeech(); stopListening();
     try { const arc = localStorage.getItem(STORAGE_KEY); if (arc) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, arc); localStorage.removeItem(STORAGE_KEY); } catch (_) {}
     setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 });
   };
-
   const loadPastChat = (msgs) => { setMessages(msgs); setShowPastChats(false); };
   const toggleVoice  = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey    = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const toggleMic    = () => { if (continuousRef.current) { stopListening(); } else { continuousRef.current = true; startListening(); } };
 
-  const cost     = calcCost(usage.inTok, usage.outTok);
+  const cost = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
   const reversed = [...messages].reverse();
 
@@ -391,10 +391,8 @@ export default function RushmoreAI() {
     <div className="ai-shell">
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
-          {/* video: loadedmetadata triggers play() for iOS Safari */}
           <video ref={videoRef} src={VIDEO_SRC} autoPlay loop muted playsInline className="ai-video-main" />
           <div className="ai-video-dark"  ref={darkRef}  />
-          {/* bloom is now a plain rgba rect — no radial-gradient, no mix-blend-mode, no bleed */}
           <div className="ai-video-bloom" ref={bloomRef} />
         </div>
       </div>
