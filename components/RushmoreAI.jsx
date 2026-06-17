@@ -12,18 +12,28 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
-// ── Audio FX chain ────────────────────────────────────────────────────────────
-function makeImpulse(ctx, duration = 2.2, decay = 3.2) {
+// ── Audio FX ────────────────────────────────────────────────────────────
+
+// Large hall impulse response
+function makeImpulse(ctx, duration = 3.0, decay = 2.5) {
   const rate   = ctx.sampleRate;
-  const length = rate * duration;
+  const length = Math.floor(rate * duration);
   const buf    = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
     const ch = buf.getChannelData(c);
     for (let i = 0; i < length; i++) {
-      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      // Slightly different L/R for width
+      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.95);
     }
   }
   return buf;
+}
+
+// Simple chorus: delayed + pitch-modulated copy of signal
+function makeChorusBuf(ctx, delayMs = 25, depth = 0.003) {
+  // We approximate chorus with a static delay + slight detune
+  // Real chorus needs an LFO; we use two static offset copies for the ethereal layer
+  return delayMs / 1000;
 }
 
 let audioCtx = null;
@@ -35,17 +45,22 @@ function getCtx() {
   return audioCtx;
 }
 
-let currentSource = null;
+let currentSource  = null;
+let currentSource2 = null;
+let currentSource3 = null;
 
 async function speakWithFX(text, onDone) {
   if (typeof window === "undefined") return;
-  try { currentSource?.stop(); } catch (_) {}
-  currentSource = null;
+
+  // Stop anything playing
+  try { currentSource?.stop();  } catch (_) {}
+  try { currentSource2?.stop(); } catch (_) {}
+  try { currentSource3?.stop(); } catch (_) {}
+  currentSource = currentSource2 = currentSource3 = null;
   window.speechSynthesis?.cancel();
 
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
 
-  // ── ElevenLabs + Web Audio FX ──
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
@@ -58,70 +73,126 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // Source node
-      const source = ctx.createBufferSource();
-      source.buffer = decoded;
-      currentSource = source;
+      // ── Shared FX nodes ──
 
-      // 1. Slight pitch shift down — just enough to add weight without muffling
-      source.playbackRate.value = 0.88; // ~2 semitones down
-
-      // 2. High-pass to remove muddiness in low-mids
+      // High-pass: cut everything below 180Hz — Templars are NOT bassy
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass";
-      hiPass.frequency.value = 120; // cut rumble below 120Hz
+      hiPass.frequency.value = 180;
+      hiPass.Q.value = 0.7;
 
-      // 3. Subtle presence boost — keeps voice crisp and clear (High Templar clarity)
+      // Air shelf: boost 8kHz+ for that bright crystalline quality
+      const airShelf = ctx.createBiquadFilter();
+      airShelf.type = "highshelf";
+      airShelf.frequency.value = 8000;
+      airShelf.gain.value = 4; // +4dB air
+
+      // Presence peak: forward, clear, cuts through reverb
       const presence = ctx.createBiquadFilter();
       presence.type = "peaking";
-      presence.frequency.value = 2800;
-      presence.Q.value = 1.2;
-      presence.gain.value = 3; // +3dB presence, not harsh
+      presence.frequency.value = 3200;
+      presence.Q.value = 1.0;
+      presence.gain.value = 3;
 
-      // 4. Short predelay echo — the psionic near-doubling effect (~80ms)
-      const preDelay = ctx.createDelay(0.2);
-      preDelay.delayTime.value = 0.08; // 80ms
-      const preDelayGain = ctx.createGain();
-      preDelayGain.gain.value = 0.28; // subtle, not an obvious slap
-
-      // 5. Far chamber reverb — the long tail
+      // Large hall reverb
       const convolver = ctx.createConvolver();
-      convolver.buffer = makeImpulse(ctx, 2.2, 3.2);
+      convolver.buffer = makeImpulse(ctx, 3.0, 2.5);
 
-      // 6. Wet/dry mix — 20% reverb keeps it spacious without mud
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.80;
-      const wetGain = ctx.createGain(); wetGain.gain.value = 0.20;
-      const echoGain = ctx.createGain(); echoGain.gain.value = 0.28;
+      // Short echo 1 — 40ms, the near ghost-layer
+      const echo1 = ctx.createDelay(0.5);
+      echo1.delayTime.value = 0.04;
+      const echo1Gain = ctx.createGain();
+      echo1Gain.gain.value = 0.35;
 
-      // 7. Master — slight reduction to prevent clipping from echo layers
-      const master = ctx.createGain(); master.gain.value = 0.90;
+      // Short echo 2 — 130ms, the further ghost
+      const echo2 = ctx.createDelay(0.5);
+      echo2.delayTime.value = 0.13;
+      const echo2Gain = ctx.createGain();
+      echo2Gain.gain.value = 0.20;
 
-      // Chain:
-      // source → hiPass → presence → [dry path]
-      //                             → [predelay echo path]
-      //                             → [convolver reverb path]
-      // all paths → master → destination
-      source.connect(hiPass);
+      // Chorus layer A — slightly detuned copy at 20ms
+      const chorusA = ctx.createDelay(0.1);
+      chorusA.delayTime.value = 0.020;
+      const chorusAGain = ctx.createGain();
+      chorusAGain.gain.value = 0.18;
+
+      // Chorus layer B — slightly detuned copy at 35ms (opposite phase offset = width)
+      const chorusB = ctx.createDelay(0.1);
+      chorusB.delayTime.value = 0.035;
+      const chorusBGain = ctx.createGain();
+      chorusBGain.gain.value = 0.14;
+
+      // Wet/dry
+      const dryGain = ctx.createGain();  dryGain.gain.value  = 1.0;
+      const reverbGain = ctx.createGain(); reverbGain.gain.value = 0.30;
+
+      // Master — keep headroom
+      const master = ctx.createGain(); master.gain.value = 0.85;
+
+      // ── Source 1: main voice (no pitch shift) ──
+      const src1 = ctx.createBufferSource();
+      src1.buffer = decoded;
+      src1.playbackRate.value = 1.0; // NO pitch shift
+      currentSource = src1;
+
+      // ── Source 2: chorus copy A, very slightly faster (tiny pitch up) ──
+      const src2 = ctx.createBufferSource();
+      src2.buffer = decoded;
+      src2.playbackRate.value = 1.008; // ~14 cents up
+      currentSource2 = src2;
+
+      // ── Source 3: chorus copy B, very slightly slower (tiny pitch down) ──
+      const src3 = ctx.createBufferSource();
+      src3.buffer = decoded;
+      src3.playbackRate.value = 0.993; // ~12 cents down
+      currentSource3 = src3;
+
+      // ── Main chain ──
+      // src1 → hiPass → presence → airShelf → dry + echo1 + echo2 + reverb
+      src1.connect(hiPass);
       hiPass.connect(presence);
+      presence.connect(airShelf);
 
-      // dry
-      presence.connect(dryGain);
+      airShelf.connect(dryGain);   // dry
       dryGain.connect(master);
 
-      // short echo
-      presence.connect(preDelay);
-      preDelay.connect(preDelayGain);
-      preDelayGain.connect(master);
+      airShelf.connect(echo1);     // 40ms echo
+      echo1.connect(echo1Gain);
+      echo1Gain.connect(master);
 
-      // far reverb
-      presence.connect(convolver);
-      convolver.connect(wetGain);
-      wetGain.connect(master);
+      airShelf.connect(echo2);     // 130ms echo
+      echo2.connect(echo2Gain);
+      echo2Gain.connect(master);
+
+      airShelf.connect(convolver); // hall reverb
+      convolver.connect(reverbGain);
+      reverbGain.connect(master);
+
+      // ── Chorus copies go through same EQ then into master at lower volume ──
+      const chorusEQ = ctx.createBiquadFilter();
+      chorusEQ.type = "highpass";
+      chorusEQ.frequency.value = 300; // chorus layers are thinner
+
+      src2.connect(chorusEQ);
+      chorusEQ.connect(chorusAGain);
+      chorusAGain.connect(master);
+
+      src3.connect(chorusEQ);
+      chorusEQ.connect(chorusBGain);
+      chorusBGain.connect(master);
 
       master.connect(ctx.destination);
 
-      source.onended = () => { currentSource = null; onDone?.(); };
-      source.start(0);
+      let ended = false;
+      src1.onended = () => {
+        if (!ended) { ended = true; currentSource = currentSource2 = currentSource3 = null; onDone?.(); }
+      };
+
+      // Start all three in sync
+      const t = ctx.currentTime + 0.01;
+      src1.start(t);
+      src2.start(t);
+      src3.start(t);
       return;
     }
   } catch (_) {}
@@ -136,15 +207,17 @@ async function speakWithFX(text, onDone) {
     voices.find(v => v.lang === "en-GB") ||
     voices.find(v => v.lang.startsWith("en"));
   if (preferred) utt.voice = preferred;
-  utt.rate = 0.88; utt.pitch = 0.75; utt.volume = 1;
+  utt.rate = 0.92; utt.pitch = 1.0; utt.volume = 1;
   utt.onend  = () => onDone?.();
   utt.onerror = () => onDone?.();
   window.speechSynthesis.speak(utt);
 }
 
 function stopSpeech() {
-  try { currentSource?.stop(); } catch (_) {}
-  currentSource = null;
+  try { currentSource?.stop();  } catch (_) {}
+  try { currentSource2?.stop(); } catch (_) {}
+  try { currentSource3?.stop(); } catch (_) {}
+  currentSource = currentSource2 = currentSource3 = null;
   window.speechSynthesis?.cancel();
 }
 
