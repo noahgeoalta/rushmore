@@ -91,63 +91,43 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ — V-shaped: boost lows + highs, scoop mids ──
-      // Low shelf: +5dB below 250Hz — body and weight
-      const lowShelf = ctx.createBiquadFilter();
-      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = 5;
-
-      // High-pass: still kill sub-rumble below 120Hz
+      // ── EQ — V-shape (bass+treble up, mids scooped) ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
-
-      // Mid scoop: -7dB at 600Hz — lower mids hollow out, less boxiness
+      const lowShelf = ctx.createBiquadFilter();
+      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = 5;
       const midLo = ctx.createBiquadFilter();
       midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
-
-      // Upper-mid scoop: -4dB at 1.8kHz — reduce harshness
       const midHi = ctx.createBiquadFilter();
       midHi.type = "peaking"; midHi.frequency.value = 1800; midHi.Q.value = 1.0; midHi.gain.value = -4;
-
-      // Presence: +5dB at 3.5kHz — cuts through reverb clearly
       const presence = ctx.createBiquadFilter();
       presence.type = "peaking"; presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
-
-      // Air shelf: +7dB above 8kHz — bright, crystalline top end
       const airShelf = ctx.createBiquadFilter();
       airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
-
-      // Brilliance: +4dB at 14kHz — extra sparkle
       const brilliance = ctx.createBiquadFilter();
       brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
-
-      // Chain: hiPass → lowShelf → midLo → midHi → presence → airShelf → brilliance
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Compressor — normalises peaks, tightens dynamics ──
-      // threshold: starts compressing at -18dB
-      // knee: 8dB soft knee = gentle onset
-      // ratio: 4:1 = solid compression without squashing
-      // attack: 5ms = fast enough to catch transients
-      // release: 120ms = natural release, not pumpy
+      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -18;
-      comp.knee.value      =   8;
-      comp.ratio.value     =   4;
-      comp.attack.value    =   0.005;
-      comp.release.value   =   0.120;
-      // Makeup gain after compression
+      comp.threshold.value = -18; comp.knee.value = 8;
+      comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.6;
       brilliance.connect(comp); comp.connect(compGain);
-      // compGain is now the normalised, EQ'd signal
 
-      // ── Subtle distortion after compression ──
-      const distPre  = ctx.createGain(); distPre.gain.value = 1.4;
-      const dist     = ctx.createWaveShaper();
-      dist.curve     = makeDistCurve(8);
-      dist.oversample = "2x";
+      // ── Distortion ──
+      const distPre = ctx.createGain(); distPre.gain.value = 1.4;
+      const dist = ctx.createWaveShaper(); dist.curve = makeDistCurve(8); dist.oversample = "2x";
       const distPost = ctx.createGain(); distPost.gain.value = 0.75;
       compGain.connect(distPre); distPre.connect(dist); dist.connect(distPost);
+
+      // ── "In a computer" bandpass layer — transmitted/electronic feel ──
+      // Bandpass at ~2kHz simulates a speaker/radio transmission character
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
+      const bpGain = ctx.createGain(); bpGain.gain.value = 0.30; // blended under the main signal
+      distPost.connect(bandpass); bandpass.connect(bpGain);
 
       // ── Analyser ──
       const analyser = ctx.createAnalyser();
@@ -164,15 +144,15 @@ async function speakWithFX(text, onDone) {
       const e4=makeEcho(0.260,0.15); const e5=makeEcho(0.370,0.10); const e6=makeEcho(0.500,0.06);
       const e7=makeEcho(0.660,0.04); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
 
-      // ── Reverb: plate + hall + chamber ──
+      // ── Reverb: plate + hall + chamber — all boosted for more wetness ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx,1.0,4.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.32;
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.55; // was 0.32
       distPost.connect(plate); plate.connect(plateGain);
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx,1.8,3.0);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.24;
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.40; // was 0.24
       distPost.connect(hall); hall.connect(hallGain);
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx,2.8,2.2);
-      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.12;
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.22; // was 0.12
       distPost.connect(chamber); chamber.connect(chamberGain);
 
       // ── Stereo chorus ──
@@ -186,19 +166,33 @@ async function speakWithFX(text, onDone) {
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
 
-      // ── Master ──
-      const master = ctx.createGain(); master.gain.value = 0.68;
+      // ── Master — dry pulled down so reverb/echo dominate, vol -25% ──
+      const master = ctx.createGain(); master.gain.value = 0.51; // 0.68 * 0.75
 
       // ── Routing ──
       srcMain.connect(hiPass);
       distPost.connect(analyser); analyser.connect(master);
-      const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
+
+      // Dry: pulled way down so wet layers dominate
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.45; // was 1.0
       distPost.connect(dryGain); dryGain.connect(master);
+
+      // Bandpass "computer" layer
+      bpGain.connect(master);
+
+      // Echoes
       [e1,e2,e3,e4,e5,e6,e7,e8,e9].forEach(e => e.connect(master));
+
+      // Reverbs
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
+
+      // Chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+
+      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
+
       master.connect(ctx.destination);
 
       let ended = false;
@@ -375,25 +369,7 @@ export default function RushmoreAI() {
         <svg width="0" height="0" style={{ position: "absolute" }}>
           <defs>
             <clipPath id="tv-oct" clipPathUnits="objectBoundingBox">
-              <path d="
-                M 0.475,0.01
-                Q 0.475,0    0.485,0.001
-                L 0.907,0.038
-                Q 0.917,0.039  0.921,0.048
-                L 0.998,0.468
-                Q 1.0,0.475    0.998,0.482
-                L 0.948,0.904
-                Q 0.945,0.913  0.936,0.916
-                L 0.482,0.998
-                Q 0.475,1.0    0.468,0.998
-                L 0.078,0.921
-                Q 0.069,0.918  0.066,0.909
-                L 0.003,0.482
-                Q 0.0,0.475    0.003,0.468
-                L 0.077,0.052
-                Q 0.080,0.043  0.089,0.041
-                Z
-              " />
+              <path d="M 0.475,0.01 Q 0.475,0 0.485,0.001 L 0.907,0.038 Q 0.917,0.039 0.921,0.048 L 0.998,0.468 Q 1.0,0.475 0.998,0.482 L 0.948,0.904 Q 0.945,0.913 0.936,0.916 L 0.482,0.998 Q 0.475,1.0 0.468,0.998 L 0.078,0.921 Q 0.069,0.918 0.066,0.909 L 0.003,0.482 Q 0.0,0.475 0.003,0.468 L 0.077,0.052 Q 0.080,0.043 0.089,0.041 Z" />
             </clipPath>
           </defs>
         </svg>
