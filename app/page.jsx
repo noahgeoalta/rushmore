@@ -48,16 +48,34 @@ function spIcon(ctxId, label) {
   return null;
 }
 
+// Convert https://claude.ai/... to claude://claude.ai/... for desktop app links
+function resolveUrl(url, desktop) {
+  if (desktop && url?.startsWith("https://claude.ai/")) {
+    return url.replace("https://", "claude://");
+  }
+  return url;
+}
+
 function ImgIcon({ src, size = 15 }) {
   if (!src) return null;
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
-function Chip({ label, url, img: imgSrc, symbol }) {
+function Chip({ label, url, img: imgSrc, symbol, desktop }) {
+  const href = resolveUrl(url, desktop);
+  // desktop links use claude:// — no target blank, let OS handle it
+  const isDesktop = desktop && href?.startsWith("claude://");
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
+    <a
+      href={href}
+      target={isDesktop ? undefined : "_blank"}
+      rel={isDesktop ? undefined : "noreferrer"}
+      className="cmd-chip"
+      title={isDesktop ? "Opens in Claude desktop app" : undefined}
+    >
       {imgSrc  && <ImgIcon src={imgSrc} size={15} />}
       {symbol  && <span className="cmd-chip-icon">{symbol}</span>}
       {label}
+      {isDesktop && <span style={{ fontSize: 9, color: "var(--faint)", marginLeft: 2 }}>↗app</span>}
     </a>
   );
 }
@@ -86,33 +104,23 @@ function GitHubSection({ ctx, issues }) {
   return (
     <div className="gh-section">
       <div className="gh-section-label"><span>GITHUB</span></div>
-
-      {/* Repo + Board chips */}
       <div className="cmd-board-row">
-        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
+        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="\u229e" />)}
         {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
       </div>
-
-      {/* Issues */}
-      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>}
-
-      {!loading && !hasAny && (
-        <div className="gh-no-issues">No open issues assigned to you ✔</div>
-      )}
-
+      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading\u2026</div>}
+      {!loading && !hasAny && <div className="gh-no-issues">No open issues assigned to you \u2714</div>}
       {!loading && hasAny && (
         <div className="gh-issues">
-          {/* Rocks — listed individually */}
           {rocks.map(i => (
             <a key={i.number} href={i.url} target="_blank" rel="noreferrer" className="gh-issue">
               <span className="gh-issue-num">#{i.number}</span>
               <span className="gh-issue-title">{i.title}</span>
             </a>
           ))}
-          {/* Bugs — single count line */}
           {bugCount > 0 && (
             <div className="gh-bug-line">
-              <span className="gh-bug-icon">🐛</span>
+              <span className="gh-bug-icon">\ud83d\udc1b</span>
               <span className="gh-bug-text">{bugCount} bug{bugCount !== 1 ? "s" : ""} assigned</span>
             </div>
           )}
@@ -132,7 +140,7 @@ function ContextCard({ ctx, issues }) {
         {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
               : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-      {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
+      {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
       <GitHubSection ctx={ctx} issues={issues} />
     </div>
@@ -154,7 +162,7 @@ function RiipenSection({ ctx }) {
       <div className="cmd-riipen">
         <div className="cmd-riipen-top">
           {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
-          {riipenOverlord && <Chip label="Riipen Overlord" url={riipenOverlord.url} img={IMG.claude} />}
+          {riipenOverlord && <Chip label="Riipen Overlord" url={riipenOverlord.url} img={IMG.claude} desktop={riipenOverlord.desktop} />}
         </div>
         {teamKeys.map(key => (
           <div key={key} className="cmd-riipen-row">
@@ -230,12 +238,12 @@ export default function Home() {
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
               <div className="cmd-row">
-                {row1Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon} />)}
+                {row1Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon} desktop={l.desktop} />)}
                 {ORDER1_BOARD && <IconBoardChip label={ORDER1_BOARD.label} url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
                 {ORDER1_REPO  && <Chip label={ORDER1_REPO.label} url={ORDER1_REPO.url} img={IMG.orderIcon} />}
               </div>
               <div className="cmd-row">
-                {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} />)}
+                {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
                 {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
                 {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
               </div>
@@ -249,7 +257,7 @@ export default function Home() {
           </section>
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
+            <div className="cmd-section-header"><span>WORK \u2014 GITHUB</span></div>
             <div className="cmd-cards-row">
               {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} issues={issues} />)}
             </div>
