@@ -7,13 +7,12 @@ const PANEL     = img("images/Rushmore/Rushmore Panel.png");
 const LOGO      = img("images/Rushmore/Rushmore Logo.png");
 const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
 
-// Panel: 1784 x 951
-// TV octagon — scaled down ~15% from measured coords to fit inside bezel
+// Panel: 1784 x 951 — original measured octagon coords
 const FACE = {
-  left:   580  / 1784 * 100,
-  top:    80   / 951  * 100,
-  width:  620  / 1784 * 100,
-  height: 390  / 951  * 100,
+  left:   516  / 1784 * 100,
+  top:    60   / 951  * 100,
+  width:  703  / 1784 * 100,
+  height: 482  / 951  * 100,
   clipPath: "polygon(47.5% 0%, 91.7% 3.7%, 100% 47.5%, 94.3% 91.1%, 47.5% 100%, 7.1% 92.5%, 0% 47.5%, 7.3% 4.8%)",
 };
 
@@ -101,10 +100,9 @@ async function speakWithFX(text, onDone) {
 
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.6; // snappier response for glow
+      analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // 6-tap echo
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(1.0); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -185,8 +183,8 @@ function useVoiceGlow(videoRef, glowRef) {
       rafRef.current = requestAnimationFrame(loop);
 
       if (!analyserNode) {
-        // Not speaking — reset both elements
-        if (videoRef.current)  videoRef.current.style.filter  = "brightness(0.45) saturate(0.7)";
+        // Not speaking — dark and still
+        if (videoRef.current)  videoRef.current.style.filter  = "brightness(0.45) saturate(0.6)";
         if (glowRef.current)   glowRef.current.style.opacity  = "0";
         return;
       }
@@ -197,29 +195,27 @@ function useVoiceGlow(videoRef, glowRef) {
       analyserNode.getByteFrequencyData(dataArr.current);
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Video: darker base, flashes bright on peaks
-      const bright = 0.45 + rms * 1.4;  // 0.45 (dark) → 1.85 (bright flash)
+      const bright = 0.45 + rms * 1.6;  // dark → very bright flash
       const glow   = Math.round(rms * 90);
       const r = Math.round(40  + rms * 180);
       const g = Math.round(160 + rms * 95);
-      const b = Math.round(20  + rms * 60);
+      const b = Math.round(20  + rms * 40);
       const col = `rgba(${r},${g},${b},0.9)`;
 
       if (videoRef.current) {
         videoRef.current.style.filter =
-          `brightness(${bright.toFixed(2)}) saturate(1.3) drop-shadow(0 0 ${glow}px ${col})`;
+          `brightness(${bright.toFixed(2)}) saturate(1.4) drop-shadow(0 0 ${glow}px ${col})`;
       }
 
-      // Glow overlay: very visible inset flash
       if (glowRef.current) {
-        const intensity = Math.min(rms * 2.0, 1.0); // amplified so even quiet speech glows
+        const intensity = Math.min(rms * 2.2, 1.0);
         glowRef.current.style.opacity = intensity.toFixed(2);
         glowRef.current.style.background =
-          `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.45) 0%, transparent 70%)`;
+          `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.5) 0%, transparent 70%)`;
         glowRef.current.style.boxShadow =
-          `inset 0 0 ${glow * 2}px ${glow}px rgba(${r},${g},${b},0.5)`;
+          `inset 0 0 ${glow * 2}px ${glow}px rgba(${r},${g},${b},0.55)`;
       }
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -350,7 +346,6 @@ export default function RushmoreAI() {
       <div className="ai-panel-banner">
         <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
 
-        {/* Video — darker by default, flashes on speech */}
         <video
           ref={videoRef}
           src={VIDEO_SRC}
@@ -362,11 +357,10 @@ export default function RushmoreAI() {
             width:    `${FACE.width}%`,
             height:   `${FACE.height}%`,
             clipPath: FACE.clipPath,
-            filter:   "brightness(0.45) saturate(0.7)",
+            filter:   "brightness(0.45) saturate(0.6)",
           }}
         />
 
-        {/* Glow overlay — flashes green/yellow with voice amplitude */}
         <div
           ref={glowRef}
           style={{
@@ -378,7 +372,6 @@ export default function RushmoreAI() {
             clipPath:      FACE.clipPath,
             opacity:       0,
             pointerEvents: "none",
-            borderRadius:  4,
             zIndex:        2,
           }}
         />
