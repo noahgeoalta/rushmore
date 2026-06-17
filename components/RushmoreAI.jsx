@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.0;  // was -4.0 — raised 50% (2 semitones up)
+const BASE  = -2.0;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -30,7 +30,8 @@ function makeImpulse(ctx, duration, decay) {
   return buf;
 }
 
-function makeSatCurve(amount = 25) {
+function makeSatCurve(amount = 12) {
+  // was 25 — reduced to 12, barely-there texture, no distortion
   const n = 256;
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -80,10 +81,11 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
+      // ── EQ ── (bass cut to fix muffled/bassy sound)
       const hiPass = ctx.createBiquadFilter();
-      hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
+      hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7; // was 120 — cut more low end
       const lowShelf = ctx.createBiquadFilter();
-      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = 5;
+      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3; // was +5 — now cuts bass
       const midLo = ctx.createBiquadFilter();
       midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
       const midHi = ctx.createBiquadFilter();
@@ -97,14 +99,16 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
+      // ── Saturation — very light (was 25, now 12) ──
       const sat = ctx.createWaveShaper();
-      sat.curve = makeSatCurve(25);
+      sat.curve = makeSatCurve(12);
       sat.oversample = "2x";
       brilliance.connect(sat);
 
+      // ── Compressor — gentler to stop clipping (ratio 4→2.5, threshold -18→-14) ──
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -18; comp.knee.value = 8;
-      comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
+      comp.threshold.value = -14; comp.knee.value = 8;
+      comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       sat.connect(comp); comp.connect(compGain);
 
@@ -117,7 +121,7 @@ async function speakWithFX(text, onDone) {
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // Reverb — shorter durations (was 1.2/2.2/3.5s, now 0.6/1.0/1.4s)
+      // ── Reverb ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.6, 4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;
       compGain.connect(plate); plate.connect(plateGain);
@@ -132,15 +136,17 @@ async function speakWithFX(text, onDone) {
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
+      // ── Tighter robot echo — shorter delays, crisper repeats ──
+      // was 150/300/550/850ms — now 80/160/280/420ms
       const makeTrailEcho = (dt, gain) => {
-        const d = ctx.createDelay(1.0); d.delayTime.value = dt;
+        const d = ctx.createDelay(0.5); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
-      const t1 = makeTrailEcho(0.150, 0.32);
-      const t2 = makeTrailEcho(0.300, 0.20);
-      const t3 = makeTrailEcho(0.550, 0.11);
-      const t4 = makeTrailEcho(0.850, 0.05);
+      const t1 = makeTrailEcho(0.080, 0.30);
+      const t2 = makeTrailEcho(0.160, 0.18);
+      const t3 = makeTrailEcho(0.280, 0.09);
+      const t4 = makeTrailEcho(0.420, 0.04);
 
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
@@ -148,8 +154,9 @@ async function speakWithFX(text, onDone) {
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
 
+      // ── Undertone — pulled way back (was 0.18, now 0.08) to reduce muddiness ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
-      const underGain = ctx.createGain(); underGain.gain.value = 0.18;
+      const underGain = ctx.createGain(); underGain.gain.value = 0.08;
 
       const master = ctx.createGain(); master.gain.value = 0.35;
 
@@ -270,8 +277,6 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const voiceOutRef    = useRef(true);
-  // continuousRef tracks whether the MIC button is "latched on"
-  // so after RUSHMORE finishes speaking it auto-restarts listening
   const continuousRef  = useRef(false);
   const darkRef        = useRef(null);
   const bloomRef       = useRef(null);
@@ -332,13 +337,11 @@ export default function RushmoreAI() {
         setSpeaking(true);
         speakWithFX(reply, () => {
           setSpeaking(false);
-          // After RUSHMORE finishes speaking, restart mic if it was latched on
           if (continuousRef.current) {
             setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
           }
         });
       } else {
-        // No voice out — still restart mic if latched
         if (continuousRef.current) {
           setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
         }
@@ -351,19 +354,9 @@ export default function RushmoreAI() {
   const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(true); voiceOutRef.current = true; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-
-  // MIC button: tap once to start one-shot listen; tap again to stop.
-  // Hold latch: if already listening when tapped again, it latches continuous mode.
-  // Actually simpler: first tap = latch on (continuous), second tap = stop.
-  const toggleMic = () => {
-    if (continuousRef.current) {
-      // Already latched — stop everything
-      stopListening();
-    } else {
-      // Latch on continuous mode and start listening
-      continuousRef.current = true;
-      startListening();
-    }
+  const toggleMic   = () => {
+    if (continuousRef.current) { stopListening(); }
+    else { continuousRef.current = true; startListening(); }
   };
 
   const cost     = calcCost(usage.inTok, usage.outTok);
