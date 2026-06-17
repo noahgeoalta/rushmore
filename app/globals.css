@@ -117,35 +117,51 @@ a { color: inherit; text-decoration: none; }
 }
 
 /*
-  Sticky strip — hugs the top, background black so no gaps show.
-  overflow:visible lets the drop-shadow glow spill outside the box.
+  Video wrapper — receives the box-shadow glow from JS.
+  overflow:hidden crops the black bars baked into the video.
+  position:relative so the bloom div can be absolutely placed inside.
+  z-index context isolates it from the rest of the page.
 */
 .ai-video-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  position: relative;
+  flex-shrink: 0;
   background: #000;
   border-bottom: 1px solid #1a1a1a;
-  flex-shrink: 0;
-  /* must NOT be overflow:hidden — that clips the glow */
-  overflow: visible;
-  line-height: 0;
+  overflow: hidden;           /* ← crops black letterbox bars */
+  /* box-shadow set by JS — no overflow:visible needed since
+     box-shadow renders outside the border but the browser paints
+     it even when overflow:hidden (unlike filter:drop-shadow) */
+  --glow-rgba: rgba(30, 180, 30, 0.08);
+  transition: box-shadow 0.05s linear;
 }
 
 /*
-  The video element itself:
-  - width:100%  — fills the strip edge to edge
-  - height:auto — natural aspect ratio, zero letterbox
-  - max-height   — cap so it doesn’t eat too much viewport
-  - display:block removes the inline baseline gap
-  - filter is set by JS (drop-shadow glow)
+  Gradient bloom — sits BEHIND the video, fills the whole frame.
+  Uses the --glow-rgba CSS variable updated by the RAF loop.
+  Radial gradient from center so the whole area glows, not just edges.
+*/
+.ai-video-bloom {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, var(--glow-rgba) 0%, transparent 70%);
+  mix-blend-mode: screen;
+}
+
+/*
+  The video: object-fit cover + vertical position crops the black bars.
+  z-index:2 so it sits above the bloom layer.
 */
 .ai-video-main {
   display: block;
+  position: relative;
+  z-index: 2;
   width: 100%;
-  height: auto;
+  height: 42vh;
+  object-fit: cover;          /* ← fills frame, crops black bars */
+  object-position: center 18%; /* ← nudge down slightly to center the face */
   max-height: 42vh;
-  object-fit: contain;
 }
 
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
@@ -158,6 +174,11 @@ a { color: inherit; text-decoration: none; }
 .ai-ctrl-btn { padding: 4px 10px; background: none; border: 1px solid #2a2a2a; border-radius: 4px; color: var(--faint); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; white-space: nowrap; transition: all 0.1s; }
 .ai-ctrl-btn:hover { border-color: var(--edge2); color: var(--dim); }
 .ai-ctrl-btn.active { color: var(--orange); border-color: var(--orange-edge); background: var(--orange-bg); }
+.ai-usage { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.ai-usage-tok { color: var(--dim); }
+.ai-usage-sep { color: var(--faint); }
+.ai-usage-cost { color: var(--orange); font-weight: 700; }
+.ai-usage-calls { color: var(--faint); }
 .ai-feed { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
 .ai-feed::-webkit-scrollbar { width: 4px; }
 .ai-feed::-webkit-scrollbar-track { background: transparent; }
@@ -188,6 +209,17 @@ a { color: inherit; text-decoration: none; }
 .ai-send-btn:hover:not(:disabled) { background: #3a1800; border-color: var(--orange); }
 .ai-send-btn:disabled { opacity: 0.3; cursor: default; }
 
+/* GitHub issues panel */
+.gh-section { margin-top: 6px; }
+.gh-section-label { font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: var(--faint); text-transform: uppercase; margin-bottom: 6px; }
+.gh-no-issues { font-size: 12px; color: var(--faint); padding: 4px 0; }
+.gh-issues { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.gh-issue { display: flex; gap: 6px; align-items: baseline; padding: 4px 7px; background: rgba(255,255,255,0.02); border: 1px solid var(--edge); border-radius: 4px; font-size: 12px; text-decoration: none; transition: background 0.1s; }
+.gh-issue:hover { background: rgba(255,255,255,0.05); }
+.gh-issue-num { color: var(--faint); flex-shrink: 0; font-weight: 600; }
+.gh-issue-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-bug-line { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c87070; padding: 3px 0; }
+
 @media (max-width: 700px) {
   html { font-size: 15px; }
   .app-bar { padding: 8px 14px; gap: 10px; }
@@ -198,7 +230,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  .ai-video-main { max-height: 28vh; }
+  .ai-video-main { height: 28vh; max-height: 28vh; }
   .ai-feed { padding: 14px 14px; }
   .ai-input-bar { padding: 10px 14px; }
   .ai-header { padding: 6px 14px; }
