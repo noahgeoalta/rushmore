@@ -11,12 +11,11 @@ export async function POST(request) {
   const { text } = await request.json();
   if (!text?.trim()) return new Response("No text", { status: 400 });
 
-  // Strip markdown symbols and collapse whitespace
   const clean = text
     .replace(/[#*`_~\[\]()>]/g, "")
     .replace(/\n+/g, " ")
     .trim()
-    .slice(0, 1000); // ElevenLabs free tier limit
+    .slice(0, 1000);
 
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
@@ -28,11 +27,11 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         text: clean,
-        model_id: "eleven_turbo_v2_5", // fastest, lowest latency
+        model_id: "eleven_turbo_v2_5",
         voice_settings: {
-          stability: 0.45,        // some variation = more character
-          similarity_boost: 0.82, // stay close to the voice clone
-          style: 0.35,            // slight style exaggeration
+          stability: 0.25,        // low = more natural, faster, less robotic
+          similarity_boost: 0.95, // stay very close to the actual voice
+          style: 0.0,             // 0 = no style processing overhead, pure voice
           use_speaker_boost: true,
         },
       }),
@@ -44,7 +43,6 @@ export async function POST(request) {
     return new Response(`ElevenLabs error: ${err}`, { status: res.status });
   }
 
-  // Stream the audio back directly
   return new Response(res.body, {
     status: 200,
     headers: {
