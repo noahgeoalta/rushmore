@@ -72,7 +72,6 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
@@ -90,25 +89,21 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -18; comp.knee.value = 8;
       comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       brilliance.connect(comp); comp.connect(compGain);
 
-      // ── Computer transmission bandpass ──
       const bandpass = ctx.createBiquadFilter();
       bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
       const bpGain = ctx.createGain(); bpGain.gain.value = 0.25;
       compGain.connect(bandpass); bandpass.connect(bpGain);
 
-      // ── Analyser ──
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // ── 9-tap echo ──
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(1.5); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -118,43 +113,34 @@ async function speakWithFX(text, onDone) {
       const e4=makeEcho(0.260,0.13); const e5=makeEcho(0.370,0.08); const e6=makeEcho(0.500,0.05);
       const e7=makeEcho(0.660,0.03); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
 
-      // ── Reverb — all boosted + pre-delay on hall/chamber for distance ──
-      // Plate — immediate space, no pre-delay
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.2, 4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.55;
       compGain.connect(plate); plate.connect(plateGain);
 
-      // Hall — 25ms pre-delay makes it feel further back in a room
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025;
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 2.2, 2.8);
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.50;
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      // Chamber — 55ms pre-delay, long tail, very distant
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055;
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 3.5, 2.0);
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.30;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
 
-      // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
-      // ── Master ──
       const master = ctx.createGain(); master.gain.value = 0.50;
 
-      // ── Routing — dry pulled very low so reverb dominates ──
       srcMain.connect(hiPass);
       compGain.connect(analyser); analyser.connect(master);
 
-      // Dry: 0.20 — very recessed, just enough for intelligibility
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.20;
       compGain.connect(dryGain); dryGain.connect(master);
 
@@ -188,18 +174,27 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Aura glow — drop-shadow on the whole video element ──
-function useAuraGlow(videoRef) {
+// ── Aura glow ───────────────────────────────────────────────────────────
+// Targets the WRAPPER div, not the video element.
+// Uses box-shadow (renders outside, never clipped by video) + CSS custom
+// property --glow-rgba so the ::after gradient bloom also reacts.
+function useAuraGlow(wrapperRef) {
   const rafRef  = useRef(null);
   const dataArr = useRef(null);
+
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
-      if (!videoRef.current) return;
+      const el = wrapperRef.current;
+      if (!el) return;
 
       if (!analyserNode) {
-        // Idle: very faint green glow
-        videoRef.current.style.filter = "drop-shadow(0 0 12px rgba(40,180,40,0.15))";
+        // Idle — faint green pulse
+        const idleA = (0.10 + 0.05 * Math.sin(Date.now() / 1200)).toFixed(3);
+        el.style.boxShadow =
+          `0 0 18px 4px  rgba(30,180,30,${idleA}),` +
+          `0 0 60px 16px rgba(30,180,30,${(idleA * 0.4).toFixed(3)})`;
+        el.style.setProperty("--glow-rgba", `rgba(30,180,30,${idleA})`);
         return;
       }
 
@@ -210,22 +205,25 @@ function useAuraGlow(videoRef) {
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      const px1 = Math.round(14 + rms * 80);   // inner glow size
-      const px2 = Math.round(30 + rms * 160);  // outer glow size
-      const r   = Math.round(40  + rms * 200);
-      const g   = Math.round(180 + rms * 75);
-      const b   = Math.round(20  + rms * 30);
-      const a1  = (0.20 + rms * 0.70).toFixed(2);
-      const a2  = (0.08 + rms * 0.35).toFixed(2);
+      const r  = Math.round(40  + rms * 215);
+      const g  = Math.round(180 + rms * 75);
+      const b  = Math.round(20  + rms * 30);
+      const a1 = Math.min(0.95, 0.25 + rms * 0.70).toFixed(2);
+      const a2 = Math.min(0.50, 0.08 + rms * 0.42).toFixed(2);
+      const a3 = Math.min(0.20, 0.03 + rms * 0.17).toFixed(2);
 
-      // Two drop-shadow layers: tight bright inner + wide soft outer
-      videoRef.current.style.filter =
-        `drop-shadow(0 0 ${px1}px rgba(${r},${g},${b},${a1})) ` +
-        `drop-shadow(0 0 ${px2}px rgba(${r},${g},${b},${a2}))`;
+      // Three-layer box-shadow: tight rim → mid bloom → wide ambient
+      el.style.boxShadow =
+        `0 0 ${Math.round(10 + rms * 40)}px  ${Math.round(2  + rms * 8)}px  rgba(${r},${g},${b},${a1}),` +
+        `0 0 ${Math.round(40 + rms * 120)}px ${Math.round(10 + rms * 30)}px rgba(${r},${g},${b},${a2}),` +
+        `0 0 ${Math.round(80 + rms * 220)}px ${Math.round(20 + rms * 60)}px rgba(${r},${g},${b},${a3})`;
+
+      // CSS var drives the ::after gradient bloom inside globals.css
+      el.style.setProperty("--glow-rgba", `rgba(${r},${g},${b},${Math.min(0.45, rms * 0.55).toFixed(2)})`);
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [videoRef]);
+  }, [wrapperRef]);
 }
 
 function TypingDots() { return <div className="ai-typing"><span /><span /><span /></div>; }
@@ -261,9 +259,9 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const continuousRef  = useRef(false);
-  const videoRef       = useRef(null);
+  const wrapperRef     = useRef(null);   // glow target — the container, not the video
 
-  useAuraGlow(videoRef);
+  useAuraGlow(wrapperRef);
 
   useEffect(() => { continuousRef.current = continuous; }, [continuous]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -338,10 +336,16 @@ export default function RushmoreAI() {
   return (
     <div className="ai-shell">
 
-      {/* Sticky video strip — full width, no crop, no stretch, glows as one unit */}
-      <div className="ai-video-sticky">
+      {/*
+        Wrapper div gets the box-shadow glow via JS.
+        overflow:hidden crops the video's black bars.
+        position:relative + z-index so the ::after gradient bloom
+        sits BEHIND the video but INSIDE the wrapper bounds.
+      */}
+      <div className="ai-video-sticky" ref={wrapperRef}>
+        {/* Gradient bloom layer — rendered behind video via z-index */}
+        <div className="ai-video-bloom" />
         <video
-          ref={videoRef}
           src={VIDEO_SRC}
           autoPlay loop muted playsInline
           className="ai-video-main"
