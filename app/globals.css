@@ -117,51 +117,52 @@ a { color: inherit; text-decoration: none; }
 }
 
 /*
-  Video wrapper — receives the box-shadow glow from JS.
-  overflow:hidden crops the black bars baked into the video.
-  position:relative so the bloom div can be absolutely placed inside.
-  z-index context isolates it from the rest of the page.
+  Fixed 360px height — never changes with window size.
+  overflow:hidden crops the black letterbox bars in the video.
+  No box-shadow here — glow is handled by the overlay div inside.
 */
 .ai-video-sticky {
   position: relative;
   flex-shrink: 0;
+  height: 360px;
   background: #000;
   border-bottom: 1px solid #1a1a1a;
-  overflow: hidden;           /* ← crops black letterbox bars */
-  /* box-shadow set by JS — no overflow:visible needed since
-     box-shadow renders outside the border but the browser paints
-     it even when overflow:hidden (unlike filter:drop-shadow) */
-  --glow-rgba: rgba(30, 180, 30, 0.08);
-  transition: box-shadow 0.05s linear;
+  overflow: hidden;
 }
 
 /*
-  Gradient bloom — sits BEHIND the video, fills the whole frame.
-  Uses the --glow-rgba CSS variable updated by the RAF loop.
-  Radial gradient from center so the whole area glows, not just edges.
+  The video fills the fixed-height container exactly.
+  object-fit:cover fills the frame and crops black bars.
+  object-position: center 35% skips the black bar at top
+  and centres on the face area.
+  No z-index needed — natural stacking order puts it below the overlay.
+*/
+.ai-video-main {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 35%;
+}
+
+/*
+  Glow overlay — sits ON TOP of the video (z-index:1 above video's auto).
+  pointer-events:none so it doesn't block clicks.
+  mix-blend-mode:screen makes it additive — brightens what's under it.
+  background is set inline by JS every RAF frame via the bloomRef.
+  The radial gradient radiates from center so the whole face area glows.
 */
 .ai-video-bloom {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, var(--glow-rgba) 0%, transparent 70%);
   mix-blend-mode: screen;
-}
-
-/*
-  The video: object-fit cover + vertical position crops the black bars.
-  z-index:2 so it sits above the bloom layer.
-*/
-.ai-video-main {
-  display: block;
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  height: 42vh;
-  object-fit: cover;          /* ← fills frame, crops black bars */
-  object-position: center 18%; /* ← nudge down slightly to center the face */
-  max-height: 42vh;
+  /* default idle glow — JS overrides this every frame */
+  background: radial-gradient(ellipse 80% 80% at 50% 50%,
+    rgba(30, 180, 30, 0.08) 0%,
+    rgba(30, 180, 30, 0.03) 50%,
+    transparent 75%);
 }
 
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
@@ -230,7 +231,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  .ai-video-main { height: 28vh; max-height: 28vh; }
+  .ai-video-sticky { height: 220px; }
   .ai-feed { padding: 14px 14px; }
   .ai-input-bar { padding: 10px 14px; }
   .ai-header { padding: 6px 14px; }
