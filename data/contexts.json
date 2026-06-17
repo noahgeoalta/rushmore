@@ -22,10 +22,10 @@
         ]
       },
       "launchpad": [
-        { "label": "Claude: GeoAlta Priv", "url": "https://claude.ai/project/019d4049-52da-76a2-84a0-899b1afac517", "group": "Claude" },
-        { "label": "Claude: GeoAlta Website", "url": "https://claude.ai/project/019c97fb-5fad-73ef-acb5-0ba5ad7a9d3c", "group": "Claude" },
-        { "label": "Claude: Meeting Organizer", "url": "https://claude.ai/project/019e8555-1dfd-7065-8a5e-80994b92d1cb", "group": "Claude" },
-        { "label": "Claude: QuestLog Project Creator", "url": "https://claude.ai/project/019e3c62-974d-74d0-8034-b18fdefb3837", "group": "Claude" }
+        { "label": "Claude: GeoAlta Priv", "url": "https://claude.ai/project/019d4049-52da-76a2-84a0-899b1afac517", "group": "Claude", "desktop": true },
+        { "label": "Claude: GeoAlta Website", "url": "https://claude.ai/project/019c97fb-5fad-73ef-acb5-0ba5ad7a9d3c", "group": "Claude", "desktop": true },
+        { "label": "Claude: Meeting Organizer", "url": "https://claude.ai/project/019e8555-1dfd-7065-8a5e-80994b92d1cb", "group": "Claude", "desktop": true },
+        { "label": "Claude: QuestLog Project Creator", "url": "https://claude.ai/project/019e3c62-974d-74d0-8034-b18fdefb3837", "group": "Claude", "desktop": true }
       ]
     },
     {
@@ -51,22 +51,22 @@
         ]
       },
       "launchpad": [
-        { "label": "Claude: Riipen Overlord", "url": "https://claude.ai/project/019eb41b-8b12-7374-b999-1d56201a08bb", "group": "Claude" },
-        { "label": "Claude: GeoComforter QuestLog", "url": "https://claude.ai/project/019e7b93-37d0-738f-b073-9d8a557cfcd6", "group": "Claude" },
+        { "label": "Claude: Riipen Overlord", "url": "https://claude.ai/project/019eb41b-8b12-7374-b999-1d56201a08bb", "group": "Claude", "desktop": true },
+        { "label": "Claude: GeoComforter QuestLog", "url": "https://claude.ai/project/019e7b93-37d0-738f-b073-9d8a557cfcd6", "group": "Claude", "desktop": true },
         { "label": "Riipen Home", "url": "https://app.riipen.com/emp/dashboard", "group": "Riipen" },
         { "label": "Project RRC", "url": "https://app.riipen.com/inbox/vLQZvNaV", "group": "Riipen" },
-        { "label": "Chat", "url": "https://app.riipen.com/inbox/wzPWoe1O", "group": "Riipen · Team 2 — Smoke/PM2.5" },
-        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%202%20-%20Smoke_PM2.5", "group": "Riipen · Team 2 — Smoke/PM2.5" },
-        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%202%20x%20GeoAlta%20(Smoke_PM2.5)?csf=1&web=1&e=EqR5Nn", "group": "Riipen · Team 2 — Smoke/PM2.5" },
-        { "label": "Chat", "url": "https://app.riipen.com/inbox/rV04xxaV", "group": "Riipen · Team 3 — CO2" },
-        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%203%20-%20CO2", "group": "Riipen · Team 3 — CO2" },
-        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%203%20x%20GeoAlta%20(CO2)?csf=1&web=1&e=xfIgzy", "group": "Riipen · Team 3 — CO2" },
-        { "label": "Chat", "url": "https://app.riipen.com/inbox/8VJxxw2z", "group": "Riipen · Team 4 — Temp/Humidity" },
-        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%204%20-%20Temp%20Humidity", "group": "Riipen · Team 4 — Temp/Humidity" },
-        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%204%20x%20GeoAlta%20(Temp_Humidity)?csf=1&web=1&e=xX1aAr", "group": "Riipen · Team 4 — Temp/Humidity" },
-        { "label": "Chat", "url": "https://app.riipen.com/inbox/XOB49JgL", "group": "Riipen · Team 5 — Radon" },
-        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%205%20-%20Radon", "group": "Riipen · Team 5 — Radon" },
-        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%205%20x%20GeoAlta%20(Radon)?csf=1&web=1&e=RRuhKR", "group": "Riipen · Team 5 — Radon" }
+        { "label": "Chat", "url": "https://app.riipen.com/inbox/wzPWoe1O", "group": "Riipen \u00b7 Team 2 \u2014 Smoke/PM2.5" },
+        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%202%20-%20Smoke_PM2.5", "group": "Riipen \u00b7 Team 2 \u2014 Smoke/PM2.5" },
+        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%202%20x%20GeoAlta%20(Smoke_PM2.5)?csf=1&web=1&e=EqR5Nn", "group": "Riipen \u00b7 Team 2 \u2014 Smoke/PM2.5" },
+        { "label": "Chat", "url": "https://app.riipen.com/inbox/rV04xxaV", "group": "Riipen \u00b7 Team 3 \u2014 CO2" },
+        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%203%20-%20CO2", "group": "Riipen \u00b7 Team 3 \u2014 CO2" },
+        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%203%20x%20GeoAlta%20(CO2)?csf=1&web=1&e=xfIgzy", "group": "Riipen \u00b7 Team 3 \u2014 CO2" },
+        { "label": "Chat", "url": "https://app.riipen.com/inbox/8VJxxw2z", "group": "Riipen \u00b7 Team 4 \u2014 Temp/Humidity" },
+        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%204%20-%20Temp%20Humidity", "group": "Riipen \u00b7 Team 4 \u2014 Temp/Humidity" },
+        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%204%20x%20GeoAlta%20(Temp_Humidity)?csf=1&web=1&e=xX1aAr", "group": "Riipen \u00b7 Team 4 \u2014 Temp/Humidity" },
+        { "label": "Chat", "url": "https://app.riipen.com/inbox/XOB49JgL", "group": "Riipen \u00b7 Team 5 \u2014 Radon" },
+        { "label": "GH Folder", "url": "https://github.com/GeoAltaSolutions/GeoComforter-QuestLog/tree/main/Riipen/Project%20RRC%20Sensors/Team%205%20-%20Radon", "group": "Riipen \u00b7 Team 5 \u2014 Radon" },
+        { "label": "SP Folder", "url": "https://geoalta.sharepoint.com/:f:/r/sites/GeoAltaBusinessGrowth/Shared%20Documents/Business%20Development/Riipen/Projects/Sensor%20(Red%20River%20College)/Team%205%20x%20GeoAlta%20(Radon)?csf=1&web=1&e=RRuhKR", "group": "Riipen \u00b7 Team 5 \u2014 Radon" }
       ]
     },
     {
@@ -90,7 +90,7 @@
         ]
       },
       "launchpad": [
-        { "label": "Claude: NMGCO QuestLog", "url": "https://claude.ai/project/019e7b93-adbd-7118-b9a0-9782a89db928", "group": "Claude" }
+        { "label": "Claude: NMGCO QuestLog", "url": "https://claude.ai/project/019e7b93-adbd-7118-b9a0-9782a89db928", "group": "Claude", "desktop": true }
       ]
     },
     {
@@ -115,7 +115,7 @@
         ]
       },
       "launchpad": [
-        { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude" }
+        { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude", "desktop": true }
       ]
     },
     {
