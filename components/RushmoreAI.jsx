@@ -14,10 +14,8 @@ function calcCost(inTok, outTok) {
 
 // ── Audio FX ────────────────────────────────────────────────────────────
 
-// Semitones to playback rate
 const st = (n) => Math.pow(2, n / 12);
 
-// Impulse response generator
 function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
   const length = Math.floor(rate * duration);
@@ -42,7 +40,6 @@ function getCtx() {
   return audioCtx;
 }
 
-// Track all active sources so stopSpeech kills everything
 let activeSources = [];
 
 function makeSource(ctx, decoded, semitones) {
@@ -73,20 +70,13 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── Sources ──
-      // Main voice: -1.5 semitones
-      const srcMain = makeSource(ctx, decoded, -1.5);
+      // ── 4 sources ──
+      const srcMain  = makeSource(ctx, decoded, -1.5);          // main
+      const srcChoA  = makeSource(ctx, decoded, -1.5 + 14/100); // chorus L
+      const srcChoB  = makeSource(ctx, decoded, -1.5 - 12/100); // chorus R
+      const srcUnder = makeSource(ctx, decoded, -1.75);         // undertone
 
-      // Chorus A: -1.5 + 14 cents up → pan left
-      const srcChoA = makeSource(ctx, decoded, -1.5 + 14/100);
-
-      // Chorus B: -1.5 + 12 cents down → pan right
-      const srcChoB = makeSource(ctx, decoded, -1.5 - 12/100);
-
-      // Undertone: -1.75 semitones (-1.5 - 0.25), blended quietly beneath
-      const srcUnder = makeSource(ctx, decoded, -1.75);
-
-      // ── Shared EQ chain (main + undertone go through this) ──
+      // ── EQ ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
 
@@ -105,84 +95,60 @@ async function speakWithFX(text, onDone) {
       brilliance.type = "peaking"; brilliance.frequency.value = 12000;
       brilliance.Q.value = 0.8; brilliance.gain.value = 3;
 
-      // EQ chain: hiPass → midNotch → presence → airShelf → brilliance
       hiPass.connect(midNotch); midNotch.connect(presence);
       presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Echo cascade ── (4 taps, each feeding the next for natural decay)
+      // ── Tight robotic echoes — all branch directly from brilliance, equal footing ──
+      // No cascading. Each echo is an independent branch at near-equal volume.
+      // They cluster RIGHT behind the voice, not after it.
       const makeEcho = (dt, gain) => {
-        const d = ctx.createDelay(1.0); d.delayTime.value = dt;
+        const d = ctx.createDelay(0.5); d.delayTime.value = dt;
         const g = ctx.createGain();    g.gain.value = gain;
-        return { d, g };
+        brilliance.connect(d); d.connect(g);
+        return g;
       };
-      const e1 = makeEcho(0.040, 0.34); // 40ms
-      const e2 = makeEcho(0.090, 0.22); // 90ms
-      const e3 = makeEcho(0.170, 0.13); // 170ms
-      const e4 = makeEcho(0.280, 0.07); // 280ms — distant tail
 
-      // Each echo feeds the next for cascading decay
-      brilliance.connect(e1.d); e1.d.connect(e1.g);
-      e1.g.connect(e2.d);       e2.d.connect(e2.g);
-      e2.g.connect(e3.d);       e3.d.connect(e3.g);
-      e3.g.connect(e4.d);       e4.d.connect(e4.g);
+      const e1out = makeEcho(0.018, 0.55); // 18ms  — almost on top of voice
+      const e2out = makeEcho(0.036, 0.40); // 36ms  — tight double
+      const e3out = makeEcho(0.060, 0.25); // 60ms  — robotic tail start
+      const e4out = makeEcho(0.095, 0.14); // 95ms  — just a whisper of space
 
-      // ── Reverb: two rooms — short plate + longer hall ──
+      // ── Reverb: short plate only — space without long tail ──
       const plate = ctx.createConvolver();
-      plate.buffer = makeImpulse(ctx, 0.6, 5.0); // tight plate
-
-      const hall = ctx.createConvolver();
-      hall.buffer = makeImpulse(ctx, 1.4, 3.5);  // medium hall
-
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.14;
-      const hallGain  = ctx.createGain(); hallGain.gain.value  = 0.18;
-
+      plate.buffer = makeImpulse(ctx, 0.8, 4.5);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.15;
       brilliance.connect(plate); plate.connect(plateGain);
-      brilliance.connect(hall);  hall.connect(hallGain);
 
-      // ── Stereo panning for chorus ──
+      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
-
       const choHiPass = ctx.createBiquadFilter();
       choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
 
-      // Undertone through a low-pass so it's felt not heard
-      const underLow = ctx.createBiquadFilter();
+      // ── Undertone: low-passed, quiet ──
+      const underLow  = ctx.createBiquadFilter();
       underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
 
       // ── Master ──
       const master = ctx.createGain(); master.gain.value = 0.80;
 
-      // ── Routing ──
-      // Main voice → EQ chain
+      // Main → EQ → dry + echoes + reverb → master
       srcMain.connect(hiPass);
-
-      // Dry
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
       brilliance.connect(dryGain); dryGain.connect(master);
+      e1out.connect(master); e2out.connect(master);
+      e3out.connect(master); e4out.connect(master);
+      plateGain.connect(master);
 
-      // Echoes
-      e1.g.connect(master); e2.g.connect(master);
-      e3.g.connect(master); e4.g.connect(master);
+      // Chorus L/R
+      srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
+      srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
 
-      // Reverbs
-      plateGain.connect(master); hallGain.connect(master);
-
-      // Chorus A → L
-      srcChoA.connect(choHiPass); choHiPass.connect(choAGain);
-      choAGain.connect(panL); panL.connect(master);
-
-      // Chorus B → R
-      srcChoB.connect(choHiPass); choHiPass.connect(choBGain);
-      choBGain.connect(panR); panR.connect(master);
-
-      // Undertone → low-passed, quiet, centered
-      srcUnder.connect(underLow); underLow.connect(underGain);
-      underGain.connect(master);
+      // Undertone
+      srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
 
       master.connect(ctx.destination);
 
