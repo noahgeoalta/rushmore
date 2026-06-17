@@ -3,16 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
 const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
-const PANEL     = img("images/Rushmore/Rushmore Panel.png");
 const LOGO      = img("images/Rushmore/Rushmore Logo.png");
-const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
-
-const FACE = {
-  left:   516  / 1784 * 100,
-  top:    60   / 951  * 100,
-  width:  703  / 1784 * 100,
-  height: 482  / 951  * 100,
-};
+const VIDEO_SRC = img("images/Rushmore/RushMORE (1).mp4");
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -75,13 +67,11 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── Sources ──
       const srcMain  = makeSource(ctx, decoded, BASE);
       const srcChoA  = makeSource(ctx, decoded, CHO_A);
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ — V-shape: bass+treble up, mids scooped ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
@@ -99,31 +89,21 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Compressor — conservative makeup gain to avoid clipping ──
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -18;
-      comp.knee.value      =  8;
-      comp.ratio.value     =  4;
-      comp.attack.value    =  0.005;
-      comp.release.value   =  0.120;
-      // Makeup gain conservative — just restores level, doesn’t boost
+      comp.threshold.value = -18; comp.knee.value = 8;
+      comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       brilliance.connect(comp); comp.connect(compGain);
-      // compGain is the clean, normalised signal from here on
 
-      // ── "Computer transmission" bandpass blend ──
-      // Adds a narrowband mid layer that sounds like it’s coming through a speaker/system
       const bandpass = ctx.createBiquadFilter();
       bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
       const bpGain = ctx.createGain(); bpGain.gain.value = 0.25;
       compGain.connect(bandpass); bandpass.connect(bpGain);
 
-      // ── Analyser ──
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // ── 9-tap echo ──
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(1.5); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -133,7 +113,6 @@ async function speakWithFX(text, onDone) {
       const e4=makeEcho(0.260,0.13); const e5=makeEcho(0.370,0.08); const e6=makeEcho(0.500,0.05);
       const e7=makeEcho(0.660,0.03); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
 
-      // ── Reverb: plate + hall + chamber ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx,1.0,4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.50;
       compGain.connect(plate); plate.connect(plateGain);
@@ -144,44 +123,26 @@ async function speakWithFX(text, onDone) {
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.18;
       compGain.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
-
-      // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
-      // ── Master — conservative, headroom for all the wet layers ──
       const master = ctx.createGain(); master.gain.value = 0.50;
 
-      // ── Routing ──
       srcMain.connect(hiPass);
       compGain.connect(analyser); analyser.connect(master);
-
-      // Dry signal: pulled back so reverb/echo dominate
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.45;
       compGain.connect(dryGain); dryGain.connect(master);
-
-      // Computer transmission layer
       bpGain.connect(master);
-
-      // Echoes
       [e1,e2,e3,e4,e5,e6,e7,e8,e9].forEach(e => e.connect(master));
-
-      // Reverbs
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
-
-      // Chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
-
-      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
-
       master.connect(ctx.destination);
 
       let ended = false;
@@ -206,16 +167,17 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Voice-reactive glow ──
-function useVoiceGlow(wrapRef, glowRef) {
+// ── Aura glow hook — drives radial glow around the video ──
+function useAuraGlow(auraRef) {
   const rafRef  = useRef(null);
   const dataArr = useRef(null);
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
+      if (!auraRef.current) return;
       if (!analyserNode) {
-        if (wrapRef.current)  wrapRef.current.style.filter  = "brightness(0.45) saturate(0.6)";
-        if (glowRef.current)  glowRef.current.style.opacity = "0";
+        // Idle — very faint constant glow
+        auraRef.current.style.boxShadow = "0 0 30px 8px rgba(60,200,60,0.08)";
         return;
       }
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount)
@@ -223,25 +185,22 @@ function useVoiceGlow(wrapRef, glowRef) {
       analyserNode.getByteFrequencyData(dataArr.current);
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms    = Math.sqrt(sum / dataArr.current.length) / 255;
-      const bright = 0.45 + rms * 1.6;
-      const glow   = Math.round(rms * 90);
-      const r = Math.round(40  + rms * 180);
-      const g = Math.round(160 + rms * 95);
-      const b = Math.round(20  + rms * 40);
-      const col = `rgba(${r},${g},${b},0.9)`;
-      if (wrapRef.current)
-        wrapRef.current.style.filter = `brightness(${bright.toFixed(2)}) saturate(1.4) drop-shadow(0 0 ${glow}px ${col})`;
-      if (glowRef.current) {
-        const intensity = Math.min(rms * 2.2, 1.0);
-        glowRef.current.style.opacity = intensity.toFixed(2);
-        glowRef.current.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.5) 0%, transparent 70%)`;
-        glowRef.current.style.boxShadow  = `inset 0 0 ${glow*2}px ${glow}px rgba(${r},${g},${b},0.55)`;
-      }
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
+
+      // Aura: green→yellow based on amplitude
+      const spread = Math.round(30  + rms * 120);
+      const blur   = Math.round(20  + rms * 80);
+      const r = Math.round(40  + rms * 200);
+      const g = Math.round(180 + rms * 75);
+      const b = Math.round(20  + rms * 30);
+      const alpha = 0.12 + rms * 0.65;
+      auraRef.current.style.boxShadow =
+        `0 0 ${blur}px ${spread}px rgba(${r},${g},${b},${alpha.toFixed(2)}),
+         0 0 ${blur*2}px ${spread*2}px rgba(${r},${g},${b},${(alpha*0.4).toFixed(2)})`;
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [wrapRef, glowRef]);
+  }, [auraRef]);
 }
 
 function TypingDots() { return <div className="ai-typing"><span /><span /><span /></div>; }
@@ -277,10 +236,9 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const continuousRef  = useRef(false);
-  const wrapRef        = useRef(null);
-  const glowRef        = useRef(null);
+  const auraRef        = useRef(null);
 
-  useVoiceGlow(wrapRef, glowRef);
+  useAuraGlow(auraRef);
 
   useEffect(() => { continuousRef.current = continuous; }, [continuous]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -354,23 +312,16 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      <div className="ai-panel-banner">
-        <svg width="0" height="0" style={{ position: "absolute" }}>
-          <defs>
-            <clipPath id="tv-oct" clipPathUnits="objectBoundingBox">
-              <path d="M 0.475,0.01 Q 0.475,0 0.485,0.001 L 0.907,0.038 Q 0.917,0.039 0.921,0.048 L 0.998,0.468 Q 1.0,0.475 0.998,0.482 L 0.948,0.904 Q 0.945,0.913 0.936,0.916 L 0.482,0.998 Q 0.475,1.0 0.468,0.998 L 0.078,0.921 Q 0.069,0.918 0.066,0.909 L 0.003,0.482 Q 0.0,0.475 0.003,0.468 L 0.077,0.052 Q 0.080,0.043 0.089,0.041 Z" />
-            </clipPath>
-          </defs>
-        </svg>
 
-        <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
-
-        <div ref={wrapRef} style={{ position:"absolute", left:`${FACE.left}%`, top:`${FACE.top}%`, width:`${FACE.width}%`, height:`${FACE.height}%`, clipPath:"url(#tv-oct)", filter:"brightness(0.45) saturate(0.6)", overflow:"hidden" }}>
-          <video src={VIDEO_SRC} autoPlay loop muted playsInline style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"contain", mixBlendMode:"screen" }} />
+      {/* Sticky video — stays at top as chat scrolls */}
+      <div className="ai-video-sticky">
+        <div ref={auraRef} className="ai-video-aura">
+          <video
+            src={VIDEO_SRC}
+            autoPlay loop muted playsInline
+            className="ai-video-main"
+          />
         </div>
-
-        <div ref={glowRef} style={{ position:"absolute", left:`${FACE.left}%`, top:`${FACE.top}%`, width:`${FACE.width}%`, height:`${FACE.height}%`, clipPath:"url(#tv-oct)", opacity:0, pointerEvents:"none", zIndex:2 }} />
-
         <div className="ai-panel-overlay">
           <img src={LOGO} alt="" className="ai-panel-logo" />
         </div>
