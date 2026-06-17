@@ -20,10 +20,19 @@ function loc(nodes, id) {
   }
   return null;
 }
+
+// Visible IDs only (respects collapsed state) — used for arrow nav
 function vids(nodes, out = []) {
   for (const n of nodes) { out.push(n.id); if (!n.collapsed) vids(n.children, out); }
   return out;
 }
+
+// ALL IDs including collapsed children — used for Ctrl+A and copy
+function allIds(nodes, out = []) {
+  for (const n of nodes) { out.push(n.id); allIds(n.children, out); }
+  return out;
+}
+
 function numInList(list, idx) {
   let n = 0;
   for (let i = 0; i <= idx; i++) if (list[i].type === "number") n++;
@@ -33,24 +42,30 @@ function migrateLine(n) {
   if (!n || typeof n !== "object") return newLine();
   return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || 14, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
 }
+
+// Serialize full tree including collapsed children — like OneNote's clipboard
 function serializeLines(nodes, depth = 0) {
   let out = ""; const indent = "  ".repeat(depth);
   for (const n of nodes) {
     if (n.type === "bullet") out += `${indent}\u2022 ${n.text}\n`;
     else if (n.type === "number") out += `${indent}1. ${n.text}\n`;
     else out += `${indent}${n.text}\n`;
+    // Always recurse into children regardless of collapsed state
     if (n.children.length) out += serializeLines(n.children, depth + 1);
   }
   return out;
 }
+
+// Collect top-level selected nodes with full subtrees (skip children of selected parents)
 function collectSelected(nodes, ids) {
   const result = [];
   for (const n of nodes) {
-    if (ids.has(n.id)) { result.push(n); }
+    if (ids.has(n.id)) { result.push(n); } // include whole subtree
     else if (n.children.length) { result.push(...collectSelected(n.children, ids)); }
   }
   return result;
 }
+
 function parseHtmlToLines(html) {
   if (typeof document === "undefined") return [];
   const div = document.createElement("div"); div.innerHTML = html;
@@ -61,22 +76,58 @@ function parseHtmlToLines(html) {
   for (const child of div.children) walkEl(child);
   return lines;
 }
+
+// Parse indented plain text back into a tree — properly handles nested lines
 function parsePlainToLines(text) {
-  const rawLines = text.split("\n").filter(l => l.trim()); const nodes = []; let i = 0;
-  while (i < rawLines.length) {
-    const raw = rawLines[i]; const spaces = raw.match(/^([\t ]*)/)[1].length;
-    if (spaces > 0) { i++; continue; }
-    const content = raw.trimStart(); let type = "none", t = content;
-    if (content.startsWith("* ") || content.startsWith("\u2022 ")) { type = "bullet"; t = content.slice(2); }
-    else if (/^\d+\. /.test(content)) { type = "number"; t = content.replace(/^\d+\. /, ""); }
-    const childLines = []; let j = i + 1;
-    while (j < rawLines.length && rawLines[j].match(/^([\t ]*)/)[1].length > 0) { childLines.push(rawLines[j].slice(rawLines[j].match(/^(\t| {2})/)?.[0]?.length || 1)); j++; }
-    const node = newLine(type); node.text = t;
-    if (childLines.length) node.children = parsePlainToLines(childLines.join("\n"));
-    nodes.push(node); i = j;
+  const rawLines = text.split("\n");
+  
+  function parseLevel(lines, baseIndent) {
+    const nodes = [];
+    let i = 0;
+    while (i < lines.length) {
+      const raw = lines[i];
+      if (!raw.trim()) { i++; continue; }
+      const indentMatch = raw.match(/^([\t ]*)/);
+      const indent = indentMatch ? indentMatch[1].length : 0;
+      if (indent < baseIndent) break; // belongs to parent level
+      if (indent > baseIndent) { i++; continue; } // skip orphaned deeper lines
+      
+      const content = raw.slice(baseIndent).trimStart();
+      let type = "none", t = content;
+      if (content.startsWith("\u2022 ")) { type = "bullet"; t = content.slice(2); }
+      else if (content.startsWith("* ")) { type = "bullet"; t = content.slice(2); }
+      else if (/^\d+\. /.test(content)) { type = "number"; t = content.replace(/^\d+\. /, ""); }
+      
+      const node = newLine(type); node.text = t.trim();
+      
+      // Collect child lines (deeper indent)
+      const childLines = [];
+      let j = i + 1;
+      while (j < lines.length) {
+        const nextRaw = lines[j];
+        if (!nextRaw.trim()) { j++; continue; }
+        const nextIndent = (nextRaw.match(/^([\t ]*)/)?.[1]?.length ?? 0);
+        if (nextIndent <= indent) break;
+        childLines.push(nextRaw);
+        j++;
+      }
+      if (childLines.length) {
+        const childBaseIndent = (childLines[0].match(/^([\t ]*)/)?.[1]?.length ?? 0);
+        node.children = parseLevel(childLines, childBaseIndent);
+      }
+      
+      nodes.push(node);
+      i = j;
+    }
+    return nodes;
   }
-  return nodes;
+  
+  const nonEmpty = rawLines.filter(l => l.trim());
+  if (!nonEmpty.length) return [];
+  const baseIndent = nonEmpty[0].match(/^([\t ]*)/)?.[1]?.length ?? 0;
+  return parseLevel(rawLines, baseIndent);
 }
+
 function autoSize(el) {
   if (!el) return;
   el.style.height = "auto";
@@ -86,7 +137,7 @@ function autoSize(el) {
 export default function Canvas() {
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState(null);
-  const [syncStatus, setSyncStatus] = useState("idle"); // idle | saving | saved | error
+  const [syncStatus, setSyncStatus] = useState("idle");
   const [selBox, setSelBox] = useState(null);
   const [selLines, setSelLines] = useState(new Set());
   const [lastSelLine, setLastSelLine] = useState(null);
@@ -115,7 +166,6 @@ export default function Canvas() {
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { Object.values(inputs.current).forEach(el => autoSize(el)); }, [state]);
 
-  // Load from cloud on mount, fall back to localStorage
   useEffect(() => {
     if (!mounted) return;
     const load = async () => {
@@ -127,13 +177,10 @@ export default function Canvas() {
           if (parsed && Array.isArray(parsed.pages)) {
             parsed.pages = parsed.pages.map(p => ({ ...p, boxes: Array.isArray(p.boxes) ? p.boxes.map(b => ({ ...b, lines: Array.isArray(b.lines) ? b.lines.map(migrateLine) : [newLine()] })) : [] }));
             if (!parsed.activeId || !parsed.pages.find(p => p.id === parsed.activeId)) parsed.activeId = parsed.pages[0]?.id || uid();
-            setState(parsed);
-            setSyncStatus("saved");
-            return;
+            setState(parsed); setSyncStatus("saved"); return;
           }
         }
       } catch {}
-      // Fall back to localStorage
       try {
         const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
         if (!raw) { setState(emptyState()); return; }
@@ -147,29 +194,19 @@ export default function Canvas() {
     load();
   }, [mounted]);
 
-  // Debounced cloud save — saves 2s after last change
   const saveToCloud = useCallback((newState) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSyncStatus("saving");
     saveTimer.current = setTimeout(async () => {
       try {
-        // Also keep localStorage as backup
         try { localStorage.setItem(CKEY, JSON.stringify(newState)); } catch {}
-        await fetch("/api/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newState),
-        });
+        await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newState) });
         setSyncStatus("saved");
-      } catch {
-        setSyncStatus("error");
-      }
+      } catch { setSyncStatus("error"); }
     }, 2000);
   }, []);
 
-  useEffect(() => {
-    if (state) saveToCloud(state);
-  }, [state, saveToCloud]);
+  useEffect(() => { if (state) saveToCloud(state); }, [state, saveToCloud]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -211,7 +248,7 @@ export default function Canvas() {
   }, [lasso]);
 
   if (!mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
-  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }}><div style={{ padding: 20, color: "#555", fontSize: 13 }}>Loading notes…</div></div>;
+  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }}><div style={{ padding: 20, color: "#555", fontSize: 13 }}>Loading notes\u2026</div></div>;
 
   const page = state.pages.find(p => p.id === state.activeId) || state.pages[0];
   const canvasW = Math.max(800, ...page.boxes.map(b => b.x + b.w + 80));
@@ -246,11 +283,25 @@ export default function Canvas() {
     mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); });
     setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true;
   };
+
+  // OneNote-style copy: works at data level, includes collapsed children
   const copySelected = (bid) => {
     const ids = selLinesRef.current; if (ids.size === 0) return;
     const box = page.boxes.find(b => b.id === bid); if (!box) return;
-    navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {});
+    // Collect top-level selected nodes — their full subtrees are included in serializeLines
+    const selected = collectSelected(box.lines, ids);
+    const text = serializeLines(selected); // recurses into all children including collapsed
+    navigator.clipboard.writeText(text).catch(() => {});
   };
+
+  // Ctrl+A: select ALL lines in box including collapsed ones (data-level, like OneNote)
+  const selectAll = (bid) => {
+    const box = page.boxes.find(b => b.id === bid); if (!box) return;
+    const all = allIds(box.lines); // includes collapsed children
+    setSelLines(new Set(all));
+    setLastSelLine(all[all.length - 1] || null);
+  };
+
   const bsLine = (bid, lid, cur, cp) => {
     if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
     if (cp > 0) return false;
@@ -330,7 +381,13 @@ export default function Canvas() {
   const kd = (e, bid, lid) => {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
-    if (e.ctrlKey && !e.shiftKey && e.key === "c") { if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; } return; }
+    // Ctrl+A — select ALL lines at data level (including collapsed children, like OneNote)
+    if (e.ctrlKey && !e.shiftKey && e.key === "a") { e.preventDefault(); selectAll(bid); return; }
+    // Ctrl+C — copy selected lines + full subtrees including collapsed children
+    if (e.ctrlKey && !e.shiftKey && e.key === "c") {
+      if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; }
+      return; // single line — let browser handle
+    }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
@@ -406,7 +463,7 @@ export default function Canvas() {
     width: Math.abs((lasso.ex || lasso.sx) - lasso.sx), height: Math.abs((lasso.ey || lasso.sy) - lasso.sy),
   } : null;
 
-  const syncLabel = syncStatus === "saving" ? "\u25cc saving…" : syncStatus === "saved" ? "\u2713 synced" : syncStatus === "error" ? "\u26a0 sync error" : "";
+  const syncLabel = syncStatus === "saving" ? "\u25cc saving\u2026" : syncStatus === "saved" ? "\u2713 synced" : syncStatus === "error" ? "\u26a0 sync error" : "";
   const syncColor = syncStatus === "error" ? "#ff6666" : syncStatus === "saved" ? "#5aaa5a" : "#888";
 
   return (
@@ -448,7 +505,7 @@ export default function Canvas() {
           {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
         </div>
         {syncLabel && <span style={{ fontSize: 10, color: syncColor, marginLeft: 8, letterSpacing: "0.05em" }}>{syncLabel}</span>}
-        <span className="notes-hint">Dbl-click for box · drag &#8942; to move</span>
+        <span className="notes-hint">Ctrl+A select all · Ctrl+C copy with children · drag &#8942; to move</span>
       </div>
       <div
         className="cv-canvas"
