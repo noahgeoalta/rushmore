@@ -118,9 +118,6 @@ a { color: inherit; text-decoration: none; }
   height: 280px;
   background: #000;
   overflow: hidden;
-  /* isolation: isolate confines mix-blend-mode: screen strictly inside this box
-     so the glow can never bleed past the video edges into the black bars */
-  isolation: isolate;
 }
 
 .ai-video-main {
@@ -131,12 +128,21 @@ a { color: inherit; text-decoration: none; }
   background: #000;
 }
 
-/* Dark overlay — opacity controlled by JS */
-.ai-video-dark { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #000; opacity: 0.26; }
+/* Dark overlay — JS sets opacity (idle ~0.26, clears when speaking) */
+.ai-video-dark {
+  position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+  background: #000;
+  opacity: 0.26;
+}
 
-/* Bloom — 50% ellipse, centred, fully clipped by isolation:isolate above */
-.ai-video-bloom { position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: screen;
-  background: radial-gradient(ellipse 50% 60% at 50% 50%, rgba(30,180,30,0.02) 0%, transparent 70%); }
+/* Bloom — plain rgba rect, NO mix-blend-mode, NO radial-gradient
+   Completely contained, zero bleed. JS sets background: rgba(...) */
+.ai-video-bloom {
+  position: absolute; inset: 0; z-index: 2;
+  pointer-events: none;
+  background: rgba(20,180,20,0.018);
+}
 
 /* Status bar */
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
@@ -249,6 +255,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
+  /* Mobile video: explicit px height, no aspect-ratio collapse */
   .ai-video-sticky { height: 200px; }
   .ai-feed { padding: 12px 14px; }
   .ai-input-bar { padding: 10px 14px; gap: 6px; }
