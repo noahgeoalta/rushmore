@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
 const VIDEO_SRC = img("images/Rushmore/RushMORE (1).mp4");
+const STORAGE_KEY = "rushmore-chat-v1";
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -80,7 +81,6 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
@@ -98,13 +98,11 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Saturation ──
       const sat = ctx.createWaveShaper();
       sat.curve = makeSatCurve(12);
       sat.oversample = "2x";
       brilliance.connect(sat);
 
-      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -14; comp.knee.value = 8;
       comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
@@ -120,7 +118,6 @@ async function speakWithFX(text, onDone) {
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // ── Reverb ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.6, 4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;
       compGain.connect(plate); plate.connect(plateGain);
@@ -135,7 +132,6 @@ async function speakWithFX(text, onDone) {
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Echo taps (original 4 unchanged, + 2 new taps added) ──
       const makeTrailEcho = (dt, gain, maxDt = 0.8) => {
         const d = ctx.createDelay(maxDt); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -145,7 +141,6 @@ async function speakWithFX(text, onDone) {
       const t2 = makeTrailEcho(0.160, 0.18);
       const t3 = makeTrailEcho(0.280, 0.09);
       const t4 = makeTrailEcho(0.420, 0.04);
-      // NEW: two extra taps for a slightly longer robot tail
       const t5 = makeTrailEcho(0.560, 0.02);
       const t6 = makeTrailEcho(0.700, 0.01);
 
@@ -198,6 +193,10 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
+// ── Video FX ──────────────────────────────────────────────────────────────
+// Idle: dark overlay at 0.43, very faint green breath
+// Speaking: dark clears toward 0, bloom pulses — but peak values halved
+//   so the flash on voice activation is more dramatic
 function useVideoFX(darkRef, bloomRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
@@ -214,7 +213,6 @@ function useVideoFX(darkRef, bloomRef) {
       if (!analyserNode) {
         darknessRef.current = Math.min(0.43, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
-        // CHANGED: idle bloom much dimmer (was 0.06/0.04) so speaking glow pops
         const a = (0.02 + 0.015 * Math.sin(t)).toFixed(3);
         bloom.style.background =
           `radial-gradient(ellipse 70% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
@@ -235,9 +233,11 @@ function useVideoFX(darkRef, bloomRef) {
       const r  = Math.round(30  + rms * 200);
       const g  = Math.round(200 + rms * 55);
       const b  = Math.round(10  + rms * 20);
-      const a1 = Math.min(0.90, 0.20 + rms * 0.70).toFixed(2);
-      const a2 = Math.min(0.45, 0.07 + rms * 0.38).toFixed(2);
-      const a3 = Math.min(0.15, 0.02 + rms * 0.13).toFixed(2);
+      // Halved peak alphas so the bloom is subtler during speech —
+      // the flash at voice-start pops much more by contrast
+      const a1 = Math.min(0.45, 0.10 + rms * 0.35).toFixed(2);
+      const a2 = Math.min(0.22, 0.03 + rms * 0.19).toFixed(2);
+      const a3 = Math.min(0.08, 0.01 + rms * 0.07).toFixed(2);
       bloom.style.background =
         `radial-gradient(ellipse 85% 85% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 45%, rgba(${r},${g},${b},${a3}) 65%, transparent 82%)`;
     };
@@ -267,15 +267,27 @@ const BOOT_MSG = {
   content: "RUSHMORE online. All systems nominal.\n\nI have full context on GeoAlta, GeoComforter, ChronoSlate, NMGCO, The Order, and TheGame. GitHub actions and Microsoft Graph are not yet wired \u2014 everything else, ask away."
 };
 
+function loadHistory() {
+  if (typeof window === "undefined") return [BOOT_MSG];
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return [BOOT_MSG];
+}
+
 export default function RushmoreAI() {
-  const [messages,  setMessages]  = useState([BOOT_MSG]);
+  const [messages,  setMessages]  = useState(() => loadHistory());
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
   const [voiceOut,  setVoiceOut]  = useState(true);
   const [listening, setListening] = useState(false);
   const [speaking,  setSpeaking]  = useState(false);
   const [usage,     setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
-  const bottomRef      = useRef(null);
+  const topRef         = useRef(null);   // scroll target — top of feed (newest msg)
   const recognitionRef = useRef(null);
   const voiceOutRef    = useRef(true);
   const continuousRef  = useRef(false);
@@ -284,8 +296,17 @@ export default function RushmoreAI() {
 
   useVideoFX(darkRef, bloomRef);
 
+  // Persist chat to localStorage whenever messages change
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch (_) {}
+  }, [messages]);
+
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  // Scroll to TOP of feed (newest message) whenever messages update
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   const startListening = useCallback(async () => {
     if (navigator.mediaDevices?.getUserMedia) {
@@ -326,7 +347,8 @@ export default function RushmoreAI() {
       });
       const data  = await res.json();
       const reply = data.content?.[0]?.text || data.error?.message || "[No response]";
-      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+      const updated = [...history, { role: "assistant", content: reply }];
+      setMessages(updated);
       if (data.usage) {
         setUsage(prev => ({
           inTok:  prev.inTok  + (data.usage.input_tokens  || 0),
@@ -338,6 +360,7 @@ export default function RushmoreAI() {
         setSpeaking(true);
         speakWithFX(reply, () => {
           setSpeaking(false);
+          // Re-latch mic after speech ends if continuous mode is still on
           if (continuousRef.current) {
             setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
           }
@@ -352,16 +375,30 @@ export default function RushmoreAI() {
     } finally { setLoading(false); }
   };
 
-  const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(true); voiceOutRef.current = true; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
+  const resetAll = () => {
+    stopSpeech(); stopListening();
+    setVoiceOut(true); voiceOutRef.current = true;
+    setMessages([BOOT_MSG]);
+    setUsage({ inTok: 0, outTok: 0, calls: 0 });
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  };
+
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const toggleMic   = () => {
-    if (continuousRef.current) { stopListening(); }
-    else { continuousRef.current = true; startListening(); }
+    if (continuousRef.current) {
+      stopListening(); // unlatch
+    } else {
+      continuousRef.current = true;
+      startListening();
+    }
   };
 
   const cost     = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
+
+  // Reversed messages: newest first at top
+  const reversed = [...messages].reverse();
 
   return (
     <div className="ai-shell">
@@ -373,6 +410,7 @@ export default function RushmoreAI() {
         </div>
       </div>
 
+      {/* Status bar */}
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
@@ -394,32 +432,24 @@ export default function RushmoreAI() {
         </div>
       </div>
 
-      <div className="ai-feed">
-        {messages.map((msg, i) => <Message key={i} msg={msg} />)}
-        {loading && (
-          <div className="ai-msg ai-msg-rushmore">
-            <div className="ai-msg-label">RUSHMORE</div>
-            <div className="ai-msg-bubble"><TypingDots /></div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
+      {/* Input bar — now at TOP of chat area, above the feed */}
       <div className="ai-input-bar">
         <div className="ai-voice-btns">
+          {/* Mic: ● when listening, ◎ when latched-idle, ◉ when idle */}
           <button
-            className={`ai-mic-btn${continuousRef.current || listening ? " listening" : ""}`}
+            className={`ai-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`}
             onClick={toggleMic}
-            title={continuousRef.current ? "Continuous on — tap to stop" : "Tap to talk (continuous)"}
+            title={continuousRef.current ? "Continuous on — tap to stop" : "Tap to talk"}
           >
-            {listening ? "\u25cf" : "MIC"}
+            {listening ? "\u25cf" : continuousRef.current ? "\u25ce" : "\u25cb"}
           </button>
+          {/* Voice out: ◉ on, ◎ off */}
           <button
             className={`ai-voice-out-btn${voiceOut ? " active" : ""}`}
             onClick={toggleVoice}
-            title={voiceOut ? "Voice output on — click to mute" : "Voice output off — click to enable"}
+            title={voiceOut ? "Voice output on" : "Voice output off"}
           >
-            {voiceOut ? "VOX ON" : "VOX OFF"}
+            {voiceOut ? "\u25c9" : "\u25cb"}
           </button>
         </div>
         <textarea
@@ -432,6 +462,18 @@ export default function RushmoreAI() {
           spellCheck={false}
         />
         <button className="ai-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>SEND</button>
+      </div>
+
+      {/* Feed — reversed, newest at top, scroll target at top */}
+      <div className="ai-feed ai-feed-reversed">
+        <div ref={topRef} />
+        {loading && (
+          <div className="ai-msg ai-msg-rushmore">
+            <div className="ai-msg-label">RUSHMORE</div>
+            <div className="ai-msg-bubble"><TypingDots /></div>
+          </div>
+        )}
+        {reversed.map((msg, i) => <Message key={i} msg={msg} />)}
       </div>
     </div>
   );
