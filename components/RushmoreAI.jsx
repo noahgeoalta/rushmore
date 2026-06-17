@@ -14,15 +14,20 @@ function calcCost(inTok, outTok) {
 
 // ── Audio FX ────────────────────────────────────────────────────────────
 
-// Shorter, tighter hall impulse
-function makeImpulse(ctx, duration = 1.0, decay = 4.0) {
+// Semitones to playback rate
+const st = (n) => Math.pow(2, n / 12);
+
+// Impulse response generator
+function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
   const length = Math.floor(rate * duration);
   const buf    = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
     const ch = buf.getChannelData(c);
     for (let i = 0; i < length; i++) {
-      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.95);
+      ch[i] = (Math.random() * 2 - 1)
+        * Math.pow(1 - i / length, decay)
+        * (c === 0 ? 1 : 0.94);
     }
   }
   return buf;
@@ -37,19 +42,21 @@ function getCtx() {
   return audioCtx;
 }
 
-let currentSource  = null;
-let currentSource2 = null;
-let currentSource3 = null;
+// Track all active sources so stopSpeech kills everything
+let activeSources = [];
 
-// -1.5 semitones = 2^(-1.5/12)
-const PITCH_BASE = Math.pow(2, -1.5 / 12); // ~0.9159
+function makeSource(ctx, decoded, semitones) {
+  const src = ctx.createBufferSource();
+  src.buffer = decoded;
+  src.playbackRate.value = st(semitones);
+  activeSources.push(src);
+  return src;
+}
 
 async function speakWithFX(text, onDone) {
   if (typeof window === "undefined") return;
-  try { currentSource?.stop();  } catch (_) {}
-  try { currentSource2?.stop(); } catch (_) {}
-  try { currentSource3?.stop(); } catch (_) {}
-  currentSource = currentSource2 = currentSource3 = null;
+  activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
+  activeSources = [];
   window.speechSynthesis?.cancel();
 
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
@@ -66,149 +73,126 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── EQ ──
-      // High-pass: kill boom below 200Hz
+      // ── Sources ──
+      // Main voice: -1.5 semitones
+      const srcMain = makeSource(ctx, decoded, -1.5);
+
+      // Chorus A: -1.5 + 14 cents up → pan left
+      const srcChoA = makeSource(ctx, decoded, -1.5 + 14/100);
+
+      // Chorus B: -1.5 + 12 cents down → pan right
+      const srcChoB = makeSource(ctx, decoded, -1.5 - 12/100);
+
+      // Undertone: -1.75 semitones (-1.5 - 0.25), blended quietly beneath
+      const srcUnder = makeSource(ctx, decoded, -1.75);
+
+      // ── Shared EQ chain (main + undertone go through this) ──
       const hiPass = ctx.createBiquadFilter();
-      hiPass.type = "highpass";
-      hiPass.frequency.value = 200;
-      hiPass.Q.value = 0.8;
+      hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
 
-      // Low-mid notch: scoop out ~400Hz muddiness
       const midNotch = ctx.createBiquadFilter();
-      midNotch.type = "peaking";
-      midNotch.frequency.value = 420;
-      midNotch.Q.value = 1.5;
-      midNotch.gain.value = -5;
+      midNotch.type = "peaking"; midNotch.frequency.value = 420;
+      midNotch.Q.value = 1.5; midNotch.gain.value = -5;
 
-      // Presence: forward clarity
       const presence = ctx.createBiquadFilter();
-      presence.type = "peaking";
-      presence.frequency.value = 3200;
-      presence.Q.value = 1.0;
-      presence.gain.value = 4;
+      presence.type = "peaking"; presence.frequency.value = 3200;
+      presence.Q.value = 1.0; presence.gain.value = 4;
 
-      // Air: crystalline high end
       const airShelf = ctx.createBiquadFilter();
-      airShelf.type = "highshelf";
-      airShelf.frequency.value = 8000;
-      airShelf.gain.value = 5;
+      airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
 
-      // Brilliance sparkle at 12kHz
       const brilliance = ctx.createBiquadFilter();
-      brilliance.type = "peaking";
-      brilliance.frequency.value = 12000;
-      brilliance.Q.value = 0.8;
-      brilliance.gain.value = 3;
+      brilliance.type = "peaking"; brilliance.frequency.value = 12000;
+      brilliance.Q.value = 0.8; brilliance.gain.value = 3;
 
-      // ── Reverb ── short + tight (1.0s, fast decay)
-      const convolver = ctx.createConvolver();
-      convolver.buffer = makeImpulse(ctx, 1.0, 4.0);
+      // EQ chain: hiPass → midNotch → presence → airShelf → brilliance
+      hiPass.connect(midNotch); midNotch.connect(presence);
+      presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Echoes ──
-      // Near echo: 40ms — the tight ghost
-      const echo1 = ctx.createDelay(0.5);
-      echo1.delayTime.value = 0.04;
-      const echo1Gain = ctx.createGain();
-      echo1Gain.gain.value = 0.32;
+      // ── Echo cascade ── (4 taps, each feeding the next for natural decay)
+      const makeEcho = (dt, gain) => {
+        const d = ctx.createDelay(1.0); d.delayTime.value = dt;
+        const g = ctx.createGain();    g.gain.value = gain;
+        return { d, g };
+      };
+      const e1 = makeEcho(0.040, 0.34); // 40ms
+      const e2 = makeEcho(0.090, 0.22); // 90ms
+      const e3 = makeEcho(0.170, 0.13); // 170ms
+      const e4 = makeEcho(0.280, 0.07); // 280ms — distant tail
 
-      // Mid echo: 95ms — second ghost, replaced the too-long 130ms
-      const echo2 = ctx.createDelay(0.5);
-      echo2.delayTime.value = 0.095;
-      const echo2Gain = ctx.createGain();
-      echo2Gain.gain.value = 0.16;
+      // Each echo feeds the next for cascading decay
+      brilliance.connect(e1.d); e1.d.connect(e1.g);
+      e1.g.connect(e2.d);       e2.d.connect(e2.g);
+      e2.g.connect(e3.d);       e3.d.connect(e3.g);
+      e3.g.connect(e4.d);       e4.d.connect(e4.g);
 
-      // ── Stereo width — pan chorus copies L/R ──
-      const panL = ctx.createStereoPanner();
-      panL.pan.value = -0.4;
-      const panR = ctx.createStereoPanner();
-      panR.pan.value = 0.4;
+      // ── Reverb: two rooms — short plate + longer hall ──
+      const plate = ctx.createConvolver();
+      plate.buffer = makeImpulse(ctx, 0.6, 5.0); // tight plate
 
-      // ── Gains ──
-      const dryGain   = ctx.createGain(); dryGain.gain.value   = 1.0;
-      const reverbGain = ctx.createGain(); reverbGain.gain.value = 0.18; // tighter reverb mix
-      const chorusAGain = ctx.createGain(); chorusAGain.gain.value = 0.18;
-      const chorusBGain = ctx.createGain(); chorusBGain.gain.value = 0.14;
-      const master = ctx.createGain(); master.gain.value = 0.82;
+      const hall = ctx.createConvolver();
+      hall.buffer = makeImpulse(ctx, 1.4, 3.5);  // medium hall
 
-      // ── 3 sources: base + chorus detuned copies ──
-      // Base: -1.5 semitones
-      const src1 = ctx.createBufferSource();
-      src1.buffer = decoded;
-      src1.playbackRate.value = PITCH_BASE;
-      currentSource = src1;
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.14;
+      const hallGain  = ctx.createGain(); hallGain.gain.value  = 0.18;
 
-      // Chorus A: -1.5 semitones + 14 cents up
-      const src2 = ctx.createBufferSource();
-      src2.buffer = decoded;
-      src2.playbackRate.value = PITCH_BASE * 1.008;
-      currentSource2 = src2;
+      brilliance.connect(plate); plate.connect(plateGain);
+      brilliance.connect(hall);  hall.connect(hallGain);
 
-      // Chorus B: -1.5 semitones + 12 cents down
-      const src3 = ctx.createBufferSource();
-      src3.buffer = decoded;
-      src3.playbackRate.value = PITCH_BASE * 0.993;
-      currentSource3 = src3;
+      // ── Stereo panning for chorus ──
+      const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
+      const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
+
+      const choHiPass = ctx.createBiquadFilter();
+      choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
+
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
+
+      // Undertone through a low-pass so it's felt not heard
+      const underLow = ctx.createBiquadFilter();
+      underLow.type = "lowpass"; underLow.frequency.value = 4000;
+      const underGain = ctx.createGain(); underGain.gain.value = 0.22;
+
+      // ── Master ──
+      const master = ctx.createGain(); master.gain.value = 0.80;
 
       // ── Routing ──
-      // Main EQ chain
-      const eqChain = (src) => {
-        src.connect(hiPass);
-      };
-      hiPass.connect(midNotch);
-      midNotch.connect(presence);
-      presence.connect(airShelf);
-      airShelf.connect(brilliance);
-
-      // Main voice through full EQ
-      src1.connect(hiPass);
+      // Main voice → EQ chain
+      srcMain.connect(hiPass);
 
       // Dry
-      brilliance.connect(dryGain);
-      dryGain.connect(master);
+      const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
+      brilliance.connect(dryGain); dryGain.connect(master);
 
       // Echoes
-      brilliance.connect(echo1);
-      echo1.connect(echo1Gain);
-      echo1Gain.connect(master);
+      e1.g.connect(master); e2.g.connect(master);
+      e3.g.connect(master); e4.g.connect(master);
 
-      brilliance.connect(echo2);
-      echo2.connect(echo2Gain);
-      echo2Gain.connect(master);
+      // Reverbs
+      plateGain.connect(master); hallGain.connect(master);
 
-      // Reverb
-      brilliance.connect(convolver);
-      convolver.connect(reverbGain);
-      reverbGain.connect(master);
+      // Chorus A → L
+      srcChoA.connect(choHiPass); choHiPass.connect(choAGain);
+      choAGain.connect(panL); panL.connect(master);
 
-      // Chorus A → pan left
-      const chorusHiPass = ctx.createBiquadFilter();
-      chorusHiPass.type = "highpass";
-      chorusHiPass.frequency.value = 300;
-      src2.connect(chorusHiPass);
-      chorusHiPass.connect(chorusAGain);
-      chorusAGain.connect(panL);
-      panL.connect(master);
+      // Chorus B → R
+      srcChoB.connect(choHiPass); choHiPass.connect(choBGain);
+      choBGain.connect(panR); panR.connect(master);
 
-      // Chorus B → pan right
-      const chorusHiPass2 = ctx.createBiquadFilter();
-      chorusHiPass2.type = "highpass";
-      chorusHiPass2.frequency.value = 300;
-      src3.connect(chorusHiPass2);
-      chorusHiPass2.connect(chorusBGain);
-      chorusBGain.connect(panR);
-      panR.connect(master);
+      // Undertone → low-passed, quiet, centered
+      srcUnder.connect(underLow); underLow.connect(underGain);
+      underGain.connect(master);
 
       master.connect(ctx.destination);
 
       let ended = false;
-      src1.onended = () => {
-        if (!ended) { ended = true; currentSource = currentSource2 = currentSource3 = null; onDone?.(); }
+      srcMain.onended = () => {
+        if (!ended) { ended = true; activeSources = []; onDone?.(); }
       };
 
       const t = ctx.currentTime + 0.01;
-      src1.start(t);
-      src2.start(t);
-      src3.start(t);
+      srcMain.start(t); srcChoA.start(t); srcChoB.start(t); srcUnder.start(t);
       return;
     }
   } catch (_) {}
@@ -224,16 +208,13 @@ async function speakWithFX(text, onDone) {
     voices.find(v => v.lang.startsWith("en"));
   if (preferred) utt.voice = preferred;
   utt.rate = 0.92; utt.pitch = 1.0; utt.volume = 1;
-  utt.onend  = () => onDone?.();
-  utt.onerror = () => onDone?.();
+  utt.onend = () => onDone?.(); utt.onerror = () => onDone?.();
   window.speechSynthesis.speak(utt);
 }
 
 function stopSpeech() {
-  try { currentSource?.stop();  } catch (_) {}
-  try { currentSource2?.stop(); } catch (_) {}
-  try { currentSource3?.stop(); } catch (_) {}
-  currentSource = currentSource2 = currentSource3 = null;
+  activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
+  activeSources = [];
   window.speechSynthesis?.cancel();
 }
 
@@ -348,7 +329,7 @@ export default function RushmoreAI() {
   const toggleOneShotMic = () => { if (listening) { stopListening(); return; } startListening(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
-  const cost     = calcCost(usage.inTok, usage.outTok);
+  const cost = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
 
   return (
