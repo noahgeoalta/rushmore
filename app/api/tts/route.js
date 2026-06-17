@@ -27,11 +27,11 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         text: clean,
-        model_id: "eleven_turbo_v2_5",
+        model_id: "eleven_flash_v2_5", // lowest latency model
         voice_settings: {
-          stability: 0.25,        // low = more natural, faster, less robotic
-          similarity_boost: 0.95, // stay very close to the actual voice
-          style: 0.0,             // 0 = no style processing overhead, pure voice
+          stability: 0.25,
+          similarity_boost: 0.95,
+          style: 0.0,
           use_speaker_boost: true,
         },
       }),
