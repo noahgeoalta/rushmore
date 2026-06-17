@@ -12,7 +12,6 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-// +10% pitch = +1.66 semitones on top of -2.39 = -0.73
 const BASE  = -0.73;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
@@ -81,63 +80,72 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      const hiPass    = ctx.createBiquadFilter(); hiPass.type = "highpass";  hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
+      // ── EQ ──────────────────────────────────────────────────────────
+      const hiPass    = ctx.createBiquadFilter(); hiPass.type = "highpass";   hiPass.frequency.value = 200;   hiPass.Q.value = 0.7;
       const lowShelf  = ctx.createBiquadFilter(); lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
-      const midLo     = ctx.createBiquadFilter(); midLo.type = "peaking";    midLo.frequency.value = 600;  midLo.Q.value = 1.2; midLo.gain.value = -7;
-      const midHi     = ctx.createBiquadFilter(); midHi.type = "peaking";    midHi.frequency.value = 1800; midHi.Q.value = 1.0; midHi.gain.value = -4;
-      const presence  = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
+      const midLo     = ctx.createBiquadFilter(); midLo.type = "peaking";     midLo.frequency.value = 600;   midLo.Q.value = 1.2; midLo.gain.value = -7;
+      const midHi     = ctx.createBiquadFilter(); midHi.type = "peaking";     midHi.frequency.value = 1800;  midHi.Q.value = 1.0; midHi.gain.value = -4;
+      const presence  = ctx.createBiquadFilter(); presence.type = "peaking";  presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
       const airShelf  = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
       const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi); midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
       const sat = ctx.createWaveShaper(); sat.curve = makeSatCurve(12); sat.oversample = "2x"; brilliance.connect(sat);
 
-      const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
-      const compGain = ctx.createGain(); compGain.gain.value = 1.0; sat.connect(comp); comp.connect(compGain);
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5;
+      comp.attack.value = 0.005; comp.release.value = 0.120;
+      const compGain = ctx.createGain(); compGain.gain.value = 1.0;
+      sat.connect(comp); comp.connect(compGain);
 
       const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.55; analyserNode = analyser;
 
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.4, 5.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.35;
+      // ── Reverb: short and quiet — just enough air, not wet ──────────
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.3, 6.0);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.12; // was 0.35
       compGain.connect(plate); plate.connect(plateGain);
 
-      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.020;
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.8, 3.5);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.30;
+      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.015;
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.5, 4.0);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.10; // was 0.30
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.040;
-      const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.2, 3.0);
-      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.18;
-      compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
+      // Chamber removed — it was the main source of wetness
 
-      const makeEcho = (dt, gain, maxDt) => {
-        const d = ctx.createDelay(maxDt || dt + 0.01); d.delayTime.value = dt;
+      // ── Echo: just 3 short taps for presence, no long tail ──────────
+      const makeEcho = (dt, gain) => {
+        const d = ctx.createDelay(dt + 0.01); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
-      const r1 = makeEcho(0.020, 0.45); const r2 = makeEcho(0.040, 0.35);
-      const r3 = makeEcho(0.065, 0.25); const r4 = makeEcho(0.095, 0.16);
-      const t1 = makeEcho(0.080, 0.30, 0.5); const t2 = makeEcho(0.160, 0.18, 0.5);
-      const t3 = makeEcho(0.280, 0.09, 0.5); const t4 = makeEcho(0.420, 0.04, 0.5);
-      const t5 = makeEcho(0.560, 0.02, 0.5); const t6 = makeEcho(0.700, 0.01, 0.5);
+      const e1 = makeEcho(0.018, 0.18);
+      const e2 = makeEcho(0.038, 0.10);
+      const e3 = makeEcho(0.065, 0.05);
 
-      const panL = ctx.createStereoPanner(); panL.pan.value = -0.50;
-      const panR = ctx.createStereoPanner(); panR.pan.value =  0.50;
+      // ── Chorus: tighter, quieter ─────────────────────────────────────
+      const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
+      const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-      const choAGain = ctx.createGain(); choAGain.gain.value = 0.28;
-      const choBGain = ctx.createGain(); choBGain.gain.value = 0.22;
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.10; // was 0.28
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.08; // was 0.22
+
+      // ── Undertone ────────────────────────────────────────────────────
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
-      const underGain = ctx.createGain(); underGain.gain.value = 0.08;
+      const underGain = ctx.createGain(); underGain.gain.value = 0.06; // was 0.08
 
-      const master = ctx.createGain(); master.gain.value = 0.35;
+      // ── Master ───────────────────────────────────────────────────────
+      const master = ctx.createGain(); master.gain.value = 0.40;
 
+      // ── Routing: dry is now the dominant signal ───────────────────────
       srcMain.connect(hiPass);
       compGain.connect(analyser); analyser.connect(master);
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.20; compGain.connect(dryGain); dryGain.connect(master);
-      [r1,r2,r3,r4].forEach(e => e.connect(master));
-      [t1,t2,t3,t4,t5,t6].forEach(e => e.connect(master));
-      plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
+
+      // Dry: 0.65 — voice sits upfront, clear and present
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.65; // was 0.20
+      compGain.connect(dryGain); dryGain.connect(master);
+
+      [e1, e2, e3].forEach(e => e.connect(master));
+      plateGain.connect(master); hallGain.connect(master);
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
@@ -168,7 +176,6 @@ function stopSpeech() {
 function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
-  // Idle darkness = 0.30 → video at 70% visibility
   const darknessRef = useRef(0.30);
 
   useEffect(() => {
@@ -206,10 +213,8 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       if (!bloom || !dark) return;
 
       if (!analyserNode) {
-        // Idle: settle to 0.30 darkness (70% visible), faint steady glow
         darknessRef.current += (0.30 - darknessRef.current) * 0.05;
         dark.style.opacity = darknessRef.current.toFixed(3);
-        // Idle bloom: dim constant green, no pulse distraction
         bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,0.07) 0%, transparent 65%)`;
         return;
       }
@@ -218,27 +223,21 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(dataArr.current);
 
-      // Raw RMS — no curve, stays near 0 in silence between syllables
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Sharp flash: no lerp on darkness, snap directly — computer-like instant response
-      // Idle floor 0.30 → peaks pull to 0.0 (full reveal)
       const targetDark = 0.30 * (1 - rms);
-      // Fast snap: high lerp factor = sharp attack like a strobe
       darknessRef.current += (targetDark - darknessRef.current) * 0.55;
       dark.style.opacity = Math.max(0, darknessRef.current).toFixed(3);
 
-      // Bloom: floor of 0.12 so there's always a faint green at rest while speaking,
-      // peaks shoot up to full — the 0→100 swing happens on each syllable
       const floor = 0.12;
       const r  = Math.round(20  + rms * 220);
       const g  = Math.round(200 + rms * 55);
       const b  = Math.round(20  + rms * 10);
-      const a1 = (floor + rms * (0.88 - floor)).toFixed(2); // 0.12 → 0.88
-      const a2 = (floor * 0.6 + rms * 0.55).toFixed(2);    // subtle mid layer
-      const a3 = (rms * 0.22).toFixed(2);                   // outer edge, only on peaks
+      const a1 = (floor + rms * (0.88 - floor)).toFixed(2);
+      const a2 = (floor * 0.6 + rms * 0.55).toFixed(2);
+      const a3 = (rms * 0.22).toFixed(2);
 
       bloom.style.background =
         `radial-gradient(ellipse 90% 85% at 50% 50%, ` +
