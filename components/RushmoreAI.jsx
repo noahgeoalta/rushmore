@@ -12,7 +12,7 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.0;
+const BASE  = -3.8;  // was -2.0 — 10% lower pitch (2^(-1.8/12) ≈ 0.90)
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -80,7 +80,6 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ ──
       const hiPass = ctx.createBiquadFilter(); hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter(); lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
       const midLo = ctx.createBiquadFilter(); midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
@@ -90,35 +89,26 @@ async function speakWithFX(text, onDone) {
       const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi); midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Saturation ──
       const sat = ctx.createWaveShaper(); sat.curve = makeSatCurve(12); sat.oversample = "2x"; brilliance.connect(sat);
 
-      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0; sat.connect(comp); comp.connect(compGain);
 
-      // ── NO bandpass/static — removed ──
-
-      // ── Analyser ──
       const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6; analyserNode = analyser;
 
-      // ── Reverb ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.6, 4.0); const plateGain = ctx.createGain(); plateGain.gain.value = 0.75; compGain.connect(plate); plate.connect(plateGain);
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025; const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.0, 2.8); const hallGain = ctx.createGain(); hallGain.gain.value = 0.70; compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055; const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.4, 2.0); const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45; compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Echo: 4 tight robot taps (NEW) + 6 trailing taps (existing) ──
-      // Tight robot taps — very short, high gain, makes it sound like multiple voices stacked
       const makeEcho = (dt, gain, maxDt) => {
         const d = ctx.createDelay(maxDt || dt + 0.01); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
-      const r1 = makeEcho(0.020, 0.45); // 20ms  — very tight first ghost
-      const r2 = makeEcho(0.040, 0.35); // 40ms  — second ghost
-      const r3 = makeEcho(0.065, 0.25); // 65ms  — third ghost
-      const r4 = makeEcho(0.095, 0.16); // 95ms  — fourth ghost
-      // Trailing taps (unchanged)
+      const r1 = makeEcho(0.020, 0.45);
+      const r2 = makeEcho(0.040, 0.35);
+      const r3 = makeEcho(0.065, 0.25);
+      const r4 = makeEcho(0.095, 0.16);
       const t1 = makeEcho(0.080, 0.30, 0.5);
       const t2 = makeEcho(0.160, 0.18, 0.5);
       const t3 = makeEcho(0.280, 0.09, 0.5);
@@ -126,27 +116,21 @@ async function speakWithFX(text, onDone) {
       const t5 = makeEcho(0.560, 0.02, 0.5);
       const t6 = makeEcho(0.700, 0.01, 0.5);
 
-      // ── Stereo chorus — boosted for more multi-voice ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.50;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.50;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-      const choAGain = ctx.createGain(); choAGain.gain.value = 0.28; // was 0.16
-      const choBGain = ctx.createGain(); choBGain.gain.value = 0.22; // was 0.12
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.28;
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.22;
 
-      // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.08;
 
-      // ── Master ──
       const master = ctx.createGain(); master.gain.value = 0.35;
 
-      // ── Routing ──
       srcMain.connect(hiPass);
       compGain.connect(analyser); analyser.connect(master);
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.20; compGain.connect(dryGain); dryGain.connect(master);
-      // Tight robot taps → master
       [r1,r2,r3,r4].forEach(e => e.connect(master));
-      // Trailing taps → master
       [t1,t2,t3,t4,t5,t6].forEach(e => e.connect(master));
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
@@ -176,7 +160,6 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video FX ─────────────────────────────────────────────────
 function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
@@ -219,7 +202,7 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       if (!analyserNode) {
         darknessRef.current = Math.min(0.26, darknessRef.current + 0.012);
         const dark = darkRef.current; if (dark) dark.style.opacity = darknessRef.current.toFixed(3);
-        const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
+        const a = (0.04 + 0.025 * Math.sin(t)).toFixed(3);
         bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
         return;
       }
@@ -241,9 +224,10 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       const r  = Math.round(20  + powered * 80);
       const g  = Math.round(180 + powered * 75);
       const b  = Math.round(20  + powered * 10);
-      const a1 = Math.min(0.85, powered * 0.85).toFixed(2);
-      const a2 = Math.min(0.45, powered * 0.45).toFixed(2);
-      const a3 = Math.min(0.15, powered * 0.15).toFixed(2);
+      // Halved alphas — subtler glow, less dominating
+      const a1 = Math.min(0.40, powered * 0.40).toFixed(2);
+      const a2 = Math.min(0.20, powered * 0.20).toFixed(2);
+      const a3 = Math.min(0.07, powered * 0.07).toFixed(2);
       bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 45%, rgba(${r},${g},${b},${a3}) 65%, transparent 80%)`;
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -288,7 +272,6 @@ function Message({ msg, index, onEdit, onReplay, speaking }) {
   );
 }
 
-// ── Past chats panel with delete ────────────────────────────────────────────────
 function loadArchivedChats() {
   if (typeof window === "undefined") return [];
   const chats = [];
@@ -311,13 +294,11 @@ function loadArchivedChats() {
 
 function PastChatsPanel({ onLoad, onClose }) {
   const [chats, setChats] = useState(() => loadArchivedChats());
-
   const deleteChat = (key, e) => {
     e.stopPropagation();
     try { localStorage.removeItem(key); } catch (_) {}
     setChats(prev => prev.filter(c => c.key !== key));
   };
-
   return (
     <div className="ai-past-panel">
       <div className="ai-past-header">
@@ -380,9 +361,7 @@ export default function RushmoreAI() {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch (_) {} }, [messages]);
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
-  // NO scroll effect — feed is reversed so newest is always at top, no scrolling needed
 
-  // Mobile video autoplay
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -392,25 +371,16 @@ export default function RushmoreAI() {
     return () => v.removeEventListener("canplay", tryPlay);
   }, []);
 
-  // ── Mobile mic ─────────────────────────────────────────────────────
-  // Fully synchronous — no await anywhere in the call chain.
-  // On iOS Safari, any await breaks the user-gesture chain and SR fails silently.
-  // webkitSpeechRecognition.start() triggers the mic permission prompt itself.
   const startListening = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     try { recognitionRef.current?.abort(); } catch (_) {}
     const rec = new SR();
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.lang = "en-US";
+    rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
     rec.onstart  = () => setListening(true);
     rec.onend    = () => setListening(false);
     rec.onerror  = (e) => { console.warn("SR", e.error); setListening(false); };
-    rec.onresult = (e) => {
-      const transcript = e.results[0]?.[0]?.transcript;
-      if (transcript) sendMessageWith(messagesRef.current, transcript);
-    };
+    rec.onresult = (e) => { const transcript = e.results[0]?.[0]?.transcript; if (transcript) sendMessageWith(messagesRef.current, transcript); };
     recognitionRef.current = rec;
     try { rec.start(); } catch (e) { console.warn("SR start", e); }
   }, []); // eslint-disable-line
@@ -463,16 +433,7 @@ export default function RushmoreAI() {
   const loadPastChat = (msgs) => { setMessages(msgs); setShowPastChats(false); };
   const toggleVoice  = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey    = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-
-  // toggleMic — fully sync, no await anywhere
-  const toggleMic = () => {
-    if (continuousRef.current) {
-      stopListening();
-    } else {
-      continuousRef.current = true;
-      startListening();
-    }
-  };
+  const toggleMic    = () => { if (continuousRef.current) { stopListening(); } else { continuousRef.current = true; startListening(); } };
 
   const cost = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
@@ -532,7 +493,6 @@ export default function RushmoreAI() {
       </div>
 
       <div className="ai-feed">
-        {/* No scroll ref — feed is reversed, newest already at top */}
         {loading && (<div className="ai-msg ai-msg-rushmore"><div className="ai-msg-label">RUSHMORE</div><div className="ai-msg-bubble"><TypingDots /></div></div>)}
         {reversed.map((msg, i) => (<Message key={i} msg={msg} index={i} onEdit={handleEdit} onReplay={handleReplay} speaking={speaking} />))}
       </div>
