@@ -7,19 +7,15 @@ const PANEL     = img("images/Rushmore/Rushmore Panel.png");
 const LOGO      = img("images/Rushmore/Rushmore Logo.png");
 const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
 
-// New panel: 1784 x 951
-// TV screen octagon bounding box + clip-path
+// Panel: 1784 x 951
+// TV octagon — scaled down ~15% from measured coords to fit inside bezel
 const FACE = {
-  left:   516  / 1784 * 100,  // 28.9%
-  top:    60   / 951  * 100,  // 6.3%
-  width:  703  / 1784 * 100,  // 39.4%
-  height: 482  / 951  * 100,  // 50.7%
-  // Octagon clip-path — % relative to the bounding box
+  left:   580  / 1784 * 100,
+  top:    80   / 951  * 100,
+  width:  620  / 1784 * 100,
+  height: 390  / 951  * 100,
   clipPath: "polygon(47.5% 0%, 91.7% 3.7%, 100% 47.5%, 94.3% 91.1%, 47.5% 100%, 7.1% 92.5%, 0% 47.5%, 7.3% 4.8%)",
 };
-
-// Panel aspect ratio: 951/1784 = 53.3%
-const PANEL_RATIO = (951 / 1784 * 100).toFixed(2); // "53.31"
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -29,7 +25,6 @@ function calcCost(inTok, outTok) {
 
 // ── Audio FX ────────────────────────────────────────────────────────────
 const st = (n) => Math.pow(2, n / 12);
-
 const BASE  = -2.0;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
@@ -53,9 +48,7 @@ let analyserNode  = null;
 let activeSources = [];
 
 function getCtx() {
-  if (!audioCtx || audioCtx.state === "closed") {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
+  if (!audioCtx || audioCtx.state === "closed") audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
@@ -88,13 +81,11 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // Sources
       const srcMain  = makeSource(ctx, decoded, BASE);
       const srcChoA  = makeSource(ctx, decoded, CHO_A);
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // EQ
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
       const midNotch = ctx.createBiquadFilter();
@@ -108,82 +99,62 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(midNotch); midNotch.connect(presence);
       presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // Analyser for glow
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
+      analyser.smoothingTimeConstant = 0.6; // snappier response for glow
       analyserNode = analyser;
 
-      // ── 6-tap echo cascade — all branch from brilliance independently ──
-      // No pre-echo: starts at 60ms, escalating spacing, natural decay
+      // 6-tap echo
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(1.0); d.delayTime.value = dt;
-        const g = ctx.createGain();     g.gain.value = gain;
-        brilliance.connect(d); d.connect(g);
-        return g;
+        const g = ctx.createGain(); g.gain.value = gain;
+        brilliance.connect(d); d.connect(g); return g;
       };
-      const e1 = makeEcho(0.060, 0.40);  // 60ms
-      const e2 = makeEcho(0.110, 0.28);  // 110ms
-      const e3 = makeEcho(0.175, 0.18);  // 175ms
-      const e4 = makeEcho(0.260, 0.11);  // 260ms
-      const e5 = makeEcho(0.370, 0.06);  // 370ms — distant ghost
-      const e6 = makeEcho(0.500, 0.03);  // 500ms — barely there tail
+      const e1 = makeEcho(0.060, 0.40);
+      const e2 = makeEcho(0.110, 0.28);
+      const e3 = makeEcho(0.175, 0.18);
+      const e4 = makeEcho(0.260, 0.11);
+      const e5 = makeEcho(0.370, 0.06);
+      const e6 = makeEcho(0.500, 0.03);
 
-      // ── Reverb: tight plate + medium hall ──
-      const plate = ctx.createConvolver();
-      plate.buffer = makeImpulse(ctx, 1.0, 4.0);
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.0, 4.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.28;
       brilliance.connect(plate); plate.connect(plateGain);
-
-      const hall = ctx.createConvolver();
-      hall.buffer = makeImpulse(ctx, 1.8, 3.0);
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 1.8, 3.0);
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.20;
       brilliance.connect(hall); hall.connect(hallGain);
 
-      // Stereo chorus
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter();
       choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
-
-      // Undertone
-      const underLow  = ctx.createBiquadFilter();
+      const underLow = ctx.createBiquadFilter();
       underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
 
-      // Master
       const master = ctx.createGain(); master.gain.value = 0.75;
 
-      // Routing
       srcMain.connect(hiPass);
-      brilliance.connect(analyser);
-      analyser.connect(master);
-
+      brilliance.connect(analyser); analyser.connect(master);
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
       brilliance.connect(dryGain); dryGain.connect(master);
-
       [e1,e2,e3,e4,e5,e6].forEach(e => e.connect(master));
       plateGain.connect(master); hallGain.connect(master);
-
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
       master.connect(ctx.destination);
 
       let ended = false;
-      srcMain.onended = () => {
-        if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); }
-      };
-
+      srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
       const t = ctx.currentTime + 0.01;
       srcMain.start(t); srcChoA.start(t); srcChoB.start(t); srcUnder.start(t);
       return;
     }
   } catch (_) {}
 
-  // Browser TTS fallback
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
   const preferred =
@@ -200,8 +171,7 @@ async function speakWithFX(text, onDone) {
 
 function stopSpeech() {
   activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
-  activeSources = [];
-  analyserNode = null;
+  activeSources = []; analyserNode = null;
   window.speechSynthesis?.cancel();
 }
 
@@ -213,38 +183,43 @@ function useVoiceGlow(videoRef, glowRef) {
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
-      const hasSrc = analyserNode && (videoRef.current || glowRef.current);
-      if (!hasSrc) {
-        // Fade out glow when not speaking
-        if (glowRef.current) glowRef.current.style.opacity = "0";
+
+      if (!analyserNode) {
+        // Not speaking — reset both elements
+        if (videoRef.current)  videoRef.current.style.filter  = "brightness(0.45) saturate(0.7)";
+        if (glowRef.current)   glowRef.current.style.opacity  = "0";
         return;
       }
+
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount) {
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       }
       analyserNode.getByteFrequencyData(dataArr.current);
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms    = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1
-      const glow   = Math.round(rms * 80);          // px spread
-      const bright = 1 + rms * 1.0;                 // brightness
-      const r = Math.round(60  + rms * 195);
-      const g = Math.round(180 + rms * 75);          // green-tinted to match the panel's green CRT look
-      const b = Math.round(60  + rms * 100);
-      const col = `rgba(${r},${g},${b},0.85)`;
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1
 
-      // Glow on the video element itself
+      // Video: darker base, flashes bright on peaks
+      const bright = 0.45 + rms * 1.4;  // 0.45 (dark) → 1.85 (bright flash)
+      const glow   = Math.round(rms * 90);
+      const r = Math.round(40  + rms * 180);
+      const g = Math.round(160 + rms * 95);
+      const b = Math.round(20  + rms * 60);
+      const col = `rgba(${r},${g},${b},0.9)`;
+
       if (videoRef.current) {
         videoRef.current.style.filter =
-          `brightness(${bright.toFixed(2)}) drop-shadow(0 0 ${glow}px ${col})`;
-        videoRef.current.style.boxShadow =
-          `0 0 ${glow * 2}px ${glow}px ${col}`;
+          `brightness(${bright.toFixed(2)}) saturate(1.3) drop-shadow(0 0 ${glow}px ${col})`;
       }
 
-      // Outer glow overlay div — flashes the whole TV bezel area
+      // Glow overlay: very visible inset flash
       if (glowRef.current) {
-        glowRef.current.style.opacity = (rms * 1.4).toFixed(2);
-        glowRef.current.style.boxShadow = `inset 0 0 ${glow * 3}px ${glow}px ${col}`;
+        const intensity = Math.min(rms * 2.0, 1.0); // amplified so even quiet speech glows
+        glowRef.current.style.opacity = intensity.toFixed(2);
+        glowRef.current.style.background =
+          `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.45) 0%, transparent 70%)`;
+        glowRef.current.style.boxShadow =
+          `inset 0 0 ${glow * 2}px ${glow}px rgba(${r},${g},${b},0.5)`;
       }
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -372,12 +347,10 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      {/* Banner: padding-top locks aspect ratio of 1784x951 = 53.31% */}
       <div className="ai-panel-banner">
-        {/* Base panel image */}
         <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
 
-        {/* Video sits inside the TV octagon */}
+        {/* Video — darker by default, flashes on speech */}
         <video
           ref={videoRef}
           src={VIDEO_SRC}
@@ -389,23 +362,24 @@ export default function RushmoreAI() {
             width:    `${FACE.width}%`,
             height:   `${FACE.height}%`,
             clipPath: FACE.clipPath,
+            filter:   "brightness(0.45) saturate(0.7)",
           }}
         />
 
-        {/* Glow overlay — same position as video, flashes with voice */}
+        {/* Glow overlay — flashes green/yellow with voice amplitude */}
         <div
           ref={glowRef}
           style={{
-            position: "absolute",
-            left:     `${FACE.left}%`,
-            top:      `${FACE.top}%`,
-            width:    `${FACE.width}%`,
-            height:   `${FACE.height}%`,
-            clipPath: FACE.clipPath,
-            opacity:  0,
+            position:      "absolute",
+            left:          `${FACE.left}%`,
+            top:           `${FACE.top}%`,
+            width:         `${FACE.width}%`,
+            height:        `${FACE.height}%`,
+            clipPath:      FACE.clipPath,
+            opacity:       0,
             pointerEvents: "none",
-            borderRadius: 4,
-            transition: "opacity 0.04s linear",
+            borderRadius:  4,
+            zIndex:        2,
           }}
         />
 
