@@ -12,7 +12,8 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.39;
+// +10% pitch = +1.66 semitones on top of -2.39 = -0.73
+const BASE  = -0.73;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -96,47 +97,36 @@ async function speakWithFX(text, onDone) {
 
       const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.55; analyserNode = analyser;
 
-      // ── Reverb: shorter tails, less wet ──────────────────────────────
-      // Plate: 0.4s, no pre-delay — immediate but quick
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.4, 5.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.35;
       compGain.connect(plate); plate.connect(plateGain);
 
-      // Hall: 0.8s tail, 20ms pre-delay — medium room feel
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.020;
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.8, 3.5);
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.30;
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      // Chamber: 1.2s tail, 40ms pre-delay — distant but not shhhhh
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.040;
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 1.2, 3.0);
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.18;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Echo taps ────────────────────────────────────────────────────
       const makeEcho = (dt, gain, maxDt) => {
         const d = ctx.createDelay(maxDt || dt + 0.01); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
-      const r1 = makeEcho(0.020, 0.45);
-      const r2 = makeEcho(0.040, 0.35);
-      const r3 = makeEcho(0.065, 0.25);
-      const r4 = makeEcho(0.095, 0.16);
-      const t1 = makeEcho(0.080, 0.30, 0.5);
-      const t2 = makeEcho(0.160, 0.18, 0.5);
-      const t3 = makeEcho(0.280, 0.09, 0.5);
-      const t4 = makeEcho(0.420, 0.04, 0.5);
-      const t5 = makeEcho(0.560, 0.02, 0.5);
-      const t6 = makeEcho(0.700, 0.01, 0.5);
+      const r1 = makeEcho(0.020, 0.45); const r2 = makeEcho(0.040, 0.35);
+      const r3 = makeEcho(0.065, 0.25); const r4 = makeEcho(0.095, 0.16);
+      const t1 = makeEcho(0.080, 0.30, 0.5); const t2 = makeEcho(0.160, 0.18, 0.5);
+      const t3 = makeEcho(0.280, 0.09, 0.5); const t4 = makeEcho(0.420, 0.04, 0.5);
+      const t5 = makeEcho(0.560, 0.02, 0.5); const t6 = makeEcho(0.700, 0.01, 0.5);
 
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.50;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.50;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.28;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.22;
-
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.08;
 
@@ -178,7 +168,8 @@ function stopSpeech() {
 function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
-  const darknessRef = useRef(0.80); // start fully dark
+  // Idle darkness = 0.30 → video at 70% visibility
+  const darknessRef = useRef(0.30);
 
   useEffect(() => {
     function positionBloom() {
@@ -215,12 +206,11 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       if (!bloom || !dark) return;
 
       if (!analyserNode) {
-        // Idle: fade to very dark (0.80 darkness = 20% video visible, faint idle pulse)
-        darknessRef.current = Math.min(0.80, darknessRef.current + 0.008);
+        // Idle: settle to 0.30 darkness (70% visible), faint steady glow
+        darknessRef.current += (0.30 - darknessRef.current) * 0.05;
         dark.style.opacity = darknessRef.current.toFixed(3);
-        const t   = Date.now() / 1800;
-        const idleA = (0.03 + 0.02 * Math.sin(t)).toFixed(3);
-        bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,${idleA}) 0%, transparent 65%)`;
+        // Idle bloom: dim constant green, no pulse distraction
+        bloom.style.background = `radial-gradient(ellipse 90% 85% at 50% 50%, rgba(30,200,30,0.07) 0%, transparent 65%)`;
         return;
       }
 
@@ -228,25 +218,27 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(dataArr.current);
 
-      // RMS — no smoothing curve, raw linear so quiet gaps drop to near 0
+      // Raw RMS — no curve, stays near 0 in silence between syllables
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1 true linear
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Darkness: 0.80 at silence → 0.0 at full volume — full reveal on loud
-      const targetDark = 0.80 * (1 - rms);
-      darknessRef.current += (targetDark - darknessRef.current) * 0.22;
+      // Sharp flash: no lerp on darkness, snap directly — computer-like instant response
+      // Idle floor 0.30 → peaks pull to 0.0 (full reveal)
+      const targetDark = 0.30 * (1 - rms);
+      // Fast snap: high lerp factor = sharp attack like a strobe
+      darknessRef.current += (targetDark - darknessRef.current) * 0.55;
       dark.style.opacity = Math.max(0, darknessRef.current).toFixed(3);
 
-      // Bloom colours green→yellow with amplitude
+      // Bloom: floor of 0.12 so there's always a faint green at rest while speaking,
+      // peaks shoot up to full — the 0→100 swing happens on each syllable
+      const floor = 0.12;
       const r  = Math.round(20  + rms * 220);
       const g  = Math.round(200 + rms * 55);
       const b  = Math.round(20  + rms * 10);
-
-      // Alpha scales 0→full directly with rms — no floor so quiet gaps = no glow
-      const a1 = (rms * 0.85).toFixed(2);  // centre
-      const a2 = (rms * 0.55).toFixed(2);  // mid
-      const a3 = (rms * 0.20).toFixed(2);  // edge fade
+      const a1 = (floor + rms * (0.88 - floor)).toFixed(2); // 0.12 → 0.88
+      const a2 = (floor * 0.6 + rms * 0.55).toFixed(2);    // subtle mid layer
+      const a3 = (rms * 0.22).toFixed(2);                   // outer edge, only on peaks
 
       bloom.style.background =
         `radial-gradient(ellipse 90% 85% at 50% 50%, ` +
