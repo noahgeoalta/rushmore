@@ -111,7 +111,6 @@ a { color: inherit; text-decoration: none; }
 
 .ai-video-strip { flex-shrink: 0; background: #000; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: center; }
 
-/* overflow:hidden clips the bloom radial-gradient — no bleed possible without mix-blend-mode */
 .ai-video-sticky {
   position: relative;
   width: 100%;
@@ -129,10 +128,8 @@ a { color: inherit; text-decoration: none; }
   background: #000;
 }
 
-/* Dark overlay — JS sets opacity */
-.ai-video-dark { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #000; opacity: 0.26; }
-
-/* Bloom — radial-gradient, NO mix-blend-mode. overflow:hidden on parent clips it. JS sets background each frame. */
+/* dark + bloom positioned by JS to exact video pixel rect */
+.ai-video-dark  { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #000; opacity: 0.26; }
 .ai-video-bloom { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 
 /* Status bar */
@@ -160,17 +157,20 @@ a { color: inherit; text-decoration: none; }
 .ai-past-close:hover { color: var(--text); }
 .ai-past-empty { padding: 12px 20px; font-size: 12px; color: var(--faint); }
 .ai-past-list { display: flex; flex-direction: column; }
-.ai-past-item { display: flex; flex-direction: column; gap: 2px; padding: 9px 20px; background: none; border: none; border-bottom: 1px solid #1a1a1a; text-align: left; cursor: pointer; transition: background 0.1s; }
+.ai-past-row { display: flex; align-items: center; border-bottom: 1px solid #1a1a1a; }
+.ai-past-item { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 9px 20px; background: none; border: none; text-align: left; cursor: pointer; transition: background 0.1s; }
 .ai-past-item:hover { background: rgba(255,255,255,0.03); }
 .ai-past-date { font-size: 10px; color: var(--faint); letter-spacing: 0.05em; }
 .ai-past-preview { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-past-delete { background: none; border: none; color: #3a3a3a; font-size: 16px; padding: 0 14px; cursor: pointer; flex-shrink: 0; line-height: 1; transition: color 0.1s; }
+.ai-past-delete:hover { color: #ff4444; }
 
 /* Input bar — above the feed */
 .ai-input-bar { display: flex; align-items: flex-end; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #1e1e1e; background: #0d0d0d; flex-shrink: 0; }
 
 .ai-voice-btns { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; align-items: center; }
 
-.ai-mic-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 18px; cursor: pointer; flex-shrink: 0; transition: all 0.15s; display: grid; place-items: center; touch-action: manipulation; }
+.ai-mic-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 18px; cursor: pointer; flex-shrink: 0; transition: all 0.15s; display: grid; place-items: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; }
 .ai-mic-btn:hover { border-color: var(--orange-edge); color: var(--orange); }
 .ai-mic-btn.listening { border-color: #ff4444; color: #ff4444; background: #1a0000; animation: pulse 0.8s ease-in-out infinite; }
 .ai-mic-btn.continuous { border-color: var(--orange-edge); color: var(--orange); background: var(--orange-bg); }
@@ -187,7 +187,7 @@ a { color: inherit; text-decoration: none; }
 .ai-send-btn:hover:not(:disabled) { background: #3a1800; border-color: var(--orange); }
 .ai-send-btn:disabled { opacity: 0.3; cursor: default; }
 
-/* Feed */
+/* Feed — no scroll-to-bottom, newest already at top */
 .ai-feed { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
 .ai-feed::-webkit-scrollbar { width: 4px; }
 .ai-feed::-webkit-scrollbar-track { background: transparent; }
@@ -250,7 +250,7 @@ a { color: inherit; text-decoration: none; }
   .ai-feed { padding: 12px 14px; }
   .ai-input-bar { padding: 10px 14px; gap: 6px; }
   .ai-header { padding: 6px 14px; }
-  .ai-mic-btn { width: 44px; height: 44px; font-size: 20px; }
+  .ai-mic-btn { width: 48px; height: 48px; font-size: 22px; }
   .ai-voice-out-btn { width: 36px; height: 24px; }
   .ai-send-btn { padding: 8px 12px; font-size: 11px; }
 }
