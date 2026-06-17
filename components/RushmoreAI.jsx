@@ -12,16 +12,17 @@ function calcCost(inTok, outTok) {
 }
 
 // ── Audio FX ──────────────────────────────────────────────────────────────
-// Original multi-layer voice chain restored:
-//   pitch-shifted main + chorus A/B + undertone layer
-//   EQ → compressor → reverb (plate + hall + chamber) → echo → stereo chorus
-// Plus: gentle waveshaper saturation added (amount=25, very subtle grit)
+// Changes from previous:
+//   - Pitch down 1 whole step (BASE -2 → -4 semitones)
+//   - Volume -30% (master 0.50 → 0.35)
+//   - Echo reworked: 4 trailing post-voice echoes (150/300/550/850ms), no pre-echo
+//   - Reverb boosted: plate 0.55→0.75, hall 0.50→0.70, chamber 0.30→0.45
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.0;
+const BASE  = -4.0;   // was -2.0 — now 1 whole step (2 semitones) lower
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
-const UNDER = -2.25;
+const UNDER = BASE - 0.25;
 
 function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
@@ -36,7 +37,6 @@ function makeImpulse(ctx, duration, decay) {
   return buf;
 }
 
-// Gentle waveshaper — amount 25 = very light grit, barely noticeable texture
 function makeSatCurve(amount = 25) {
   const n = 256;
   const curve = new Float32Array(n);
@@ -105,9 +105,9 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Light saturation (subtle grit, not harsh) ──
+      // ── Light saturation ──
       const sat = ctx.createWaveShaper();
-      sat.curve = makeSatCurve(25); // 25 = very light; was 50-60 before
+      sat.curve = makeSatCurve(25);
       sat.oversample = "2x";
       brilliance.connect(sat);
 
@@ -129,30 +129,33 @@ async function speakWithFX(text, onDone) {
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // ── 9-tap echo ──
-      const makeEcho = (dt, gain) => {
-        const d = ctx.createDelay(1.5); d.delayTime.value = dt;
-        const g = ctx.createGain(); g.gain.value = gain;
-        compGain.connect(d); d.connect(g); return g;
-      };
-      const e1=makeEcho(0.060,0.38); const e2=makeEcho(0.110,0.28); const e3=makeEcho(0.175,0.20);
-      const e4=makeEcho(0.260,0.13); const e5=makeEcho(0.370,0.08); const e6=makeEcho(0.500,0.05);
-      const e7=makeEcho(0.660,0.03); const e8=makeEcho(0.850,0.02); const e9=makeEcho(1.100,0.01);
-
-      // ── Reverb ──
+      // ── Reverb — boosted gains for more room ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.2, 4.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.55;
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;  // was 0.55
       compGain.connect(plate); plate.connect(plateGain);
 
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025;
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 2.2, 2.8);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.50;
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.70;    // was 0.50
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055;
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 3.5, 2.0);
-      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.30;
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;  // was 0.30
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
+
+      // ── Trailing echo — post-voice, not pre-echo ──
+      // 4 repeats after the voice: short → medium → long → longest
+      // All fed from compGain (after processing), max delay 850ms (under 1 second)
+      const makeTrailEcho = (dt, gain) => {
+        const d = ctx.createDelay(1.0); d.delayTime.value = dt;
+        const g = ctx.createGain(); g.gain.value = gain;
+        compGain.connect(d); d.connect(g); return g;
+      };
+      const t1 = makeTrailEcho(0.150, 0.32);  // 150ms  — first quick repeat
+      const t2 = makeTrailEcho(0.300, 0.20);  // 300ms  — second repeat
+      const t3 = makeTrailEcho(0.550, 0.11);  // 550ms  — medium tail
+      const t4 = makeTrailEcho(0.850, 0.05);  // 850ms  — long fade (under 1s)
 
       // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
@@ -165,8 +168,8 @@ async function speakWithFX(text, onDone) {
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
-      // ── Master ──
-      const master = ctx.createGain(); master.gain.value = 0.50;
+      // ── Master — volume -30% (0.50 → 0.35) ──
+      const master = ctx.createGain(); master.gain.value = 0.35;
 
       // ── Routing ──
       srcMain.connect(hiPass);
@@ -174,10 +177,14 @@ async function speakWithFX(text, onDone) {
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.20;
       compGain.connect(dryGain); dryGain.connect(master);
       bpGain.connect(master);
-      [e1,e2,e3,e4,e5,e6,e7,e8,e9].forEach(e => e.connect(master));
+      // Trailing echoes → master
+      [t1, t2, t3, t4].forEach(e => e.connect(master));
+      // Reverb → master
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
+      // Stereo chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
       master.connect(ctx.destination);
 
