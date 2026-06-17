@@ -11,15 +11,8 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
-// ── Audio FX ──────────────────────────────────────────────────────────────
-// Changes from previous:
-//   - Pitch down 1 whole step (BASE -2 → -4 semitones)
-//   - Volume -30% (master 0.50 → 0.35)
-//   - Echo reworked: 4 trailing post-voice echoes (150/300/550/850ms), no pre-echo
-//   - Reverb boosted: plate 0.55→0.75, hall 0.50→0.70, chamber 0.30→0.45
-
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -4.0;   // was -2.0 — now 1 whole step (2 semitones) lower
+const BASE  = -4.0;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -87,7 +80,6 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ ──
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 120; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
@@ -105,86 +97,70 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Light saturation ──
       const sat = ctx.createWaveShaper();
       sat.curve = makeSatCurve(25);
       sat.oversample = "2x";
       brilliance.connect(sat);
 
-      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -18; comp.knee.value = 8;
       comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       sat.connect(comp); comp.connect(compGain);
 
-      // ── Computer transmission bandpass ──
       const bandpass = ctx.createBiquadFilter();
       bandpass.type = "bandpass"; bandpass.frequency.value = 2200; bandpass.Q.value = 0.4;
       const bpGain = ctx.createGain(); bpGain.gain.value = 0.25;
       compGain.connect(bandpass); bandpass.connect(bpGain);
 
-      // ── Analyser ──
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
       analyserNode = analyser;
 
-      // ── Reverb — boosted gains for more room ──
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 1.2, 4.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;  // was 0.55
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.75;
       compGain.connect(plate); plate.connect(plateGain);
 
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.025;
       const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 2.2, 2.8);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.70;    // was 0.50
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.70;
       compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
       const chamberPre = ctx.createDelay(0.5); chamberPre.delayTime.value = 0.055;
       const chamber = ctx.createConvolver(); chamber.buffer = makeImpulse(ctx, 3.5, 2.0);
-      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;  // was 0.30
+      const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Trailing echo — post-voice, not pre-echo ──
-      // 4 repeats after the voice: short → medium → long → longest
-      // All fed from compGain (after processing), max delay 850ms (under 1 second)
       const makeTrailEcho = (dt, gain) => {
         const d = ctx.createDelay(1.0); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
-      const t1 = makeTrailEcho(0.150, 0.32);  // 150ms  — first quick repeat
-      const t2 = makeTrailEcho(0.300, 0.20);  // 300ms  — second repeat
-      const t3 = makeTrailEcho(0.550, 0.11);  // 550ms  — medium tail
-      const t4 = makeTrailEcho(0.850, 0.05);  // 850ms  — long fade (under 1s)
+      const t1 = makeTrailEcho(0.150, 0.32);
+      const t2 = makeTrailEcho(0.300, 0.20);
+      const t3 = makeTrailEcho(0.550, 0.11);
+      const t4 = makeTrailEcho(0.850, 0.05);
 
-      // ── Stereo chorus ──
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
 
-      // ── Undertone ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.18;
 
-      // ── Master — volume -30% (0.50 → 0.35) ──
       const master = ctx.createGain(); master.gain.value = 0.35;
 
-      // ── Routing ──
       srcMain.connect(hiPass);
       compGain.connect(analyser); analyser.connect(master);
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.20;
       compGain.connect(dryGain); dryGain.connect(master);
       bpGain.connect(master);
-      // Trailing echoes → master
       [t1, t2, t3, t4].forEach(e => e.connect(master));
-      // Reverb → master
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
-      // Stereo chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
-      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
       master.connect(ctx.destination);
 
@@ -214,11 +190,11 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video darkening + bloom glow ──────────────────────────────────────────
+// ── Video FX: darkness 50% lighter (idle cap 0.43, speaking 0.20) ──────────
 function useVideoFX(darkRef, bloomRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
-  const darknessRef = useRef(0.65);
+  const darknessRef = useRef(0.43); // start at idle target
 
   useEffect(() => {
     const loop = () => {
@@ -229,7 +205,8 @@ function useVideoFX(darkRef, bloomRef) {
       const t = Date.now() / 1400;
 
       if (!analyserNode) {
-        darknessRef.current = Math.min(0.65, darknessRef.current + 0.015);
+        // Idle: ease up to 0.43 (was 0.65 — 50% less dark)
+        darknessRef.current = Math.min(0.43, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
         const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
         bloom.style.background =
@@ -244,7 +221,8 @@ function useVideoFX(darkRef, bloomRef) {
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      const targetDark = Math.max(0.0, 0.30 - rms * 0.30);
+      // Speaking: ease down to 0.20 (was 0.30 — lighter when active too)
+      const targetDark = Math.max(0.0, 0.20 - rms * 0.20);
       darknessRef.current += (targetDark - darknessRef.current) * 0.12;
       dark.style.opacity = darknessRef.current.toFixed(3);
 
@@ -287,13 +265,13 @@ export default function RushmoreAI() {
   const [messages,  setMessages]  = useState([BOOT_MSG]);
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
-  const [voiceOut,  setVoiceOut]  = useState(false);
+  const [voiceOut,  setVoiceOut]  = useState(true);   // ON by default
   const [listening, setListening] = useState(false);
   const [speaking,  setSpeaking]  = useState(false);
   const [usage,     setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
-  const voiceOutRef    = useRef(false);
+  const voiceOutRef    = useRef(true);  // ON by default
   const darkRef        = useRef(null);
   const bloomRef       = useRef(null);
 
@@ -357,7 +335,7 @@ export default function RushmoreAI() {
     } finally { setLoading(false); }
   };
 
-  const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(false); voiceOutRef.current = false; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
+  const resetAll    = () => { stopSpeech(); stopListening(); setVoiceOut(true); voiceOutRef.current = true; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
   const toggleMic   = () => { if (listening) { stopListening(); } else { startListening(); } };
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
@@ -408,17 +386,32 @@ export default function RushmoreAI() {
 
       <div className="ai-input-bar">
         <div className="ai-voice-btns">
-          <button className={`ai-mic-btn${listening ? " listening" : ""}`} onClick={toggleMic} title={listening ? "Stop" : "Speak"}>
-            {listening ? "\u25cf" : "\uD83C\uDFA4"}
+          {/* Mic button — no emoji, plain text label */}
+          <button
+            className={`ai-mic-btn${listening ? " listening" : ""}`}
+            onClick={toggleMic}
+            title={listening ? "Stop listening" : "Tap to speak"}
+          >
+            {listening ? "\u25cf" : "MIC"}
           </button>
-          <button className={`ai-voice-out-btn${voiceOut ? " active" : ""}`} onClick={toggleVoice} title="Toggle voice output">
-            {voiceOut ? "\uD83D\uDD0A" : "\uD83D\uDD07"}
+          {/* Voice out toggle — no emoji, plain text */}
+          <button
+            className={`ai-voice-out-btn${voiceOut ? " active" : ""}`}
+            onClick={toggleVoice}
+            title={voiceOut ? "Voice output on — click to mute" : "Voice output off — click to enable"}
+          >
+            {voiceOut ? "VOX ON" : "VOX OFF"}
           </button>
         </div>
-        <textarea className="ai-textarea" value={input} onChange={e => setInput(e.target.value)}
+        <textarea
+          className="ai-textarea"
+          value={input}
+          onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
           placeholder={listening ? "Listening..." : speaking ? "RUSHMORE speaking..." : "Command RUSHMORE..."}
-          rows={1} spellCheck={false} />
+          rows={1}
+          spellCheck={false}
+        />
         <button className="ai-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>SEND</button>
       </div>
     </div>
