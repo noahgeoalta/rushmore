@@ -2,16 +2,14 @@ export const runtime = "edge";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  // path arrives already decoded by Next.js routing
   const path = searchParams.get("path");
   if (!path) return new Response("Missing path", { status: 400 });
 
   const token = process.env.GITHUB_TOKEN;
   const owner = "noahgeoalta";
-  const repo = "rushmore";
+  const repo  = "rushmore";
   const branch = "main";
 
-  // Use the raw content API — path segments must be individually encoded
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${branch}`;
 
@@ -28,7 +26,17 @@ export async function GET(request) {
 
   const buf = await res.arrayBuffer();
   const ext = path.split(".").pop()?.toLowerCase();
-  const types = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", svg: "image/svg+xml", webp: "image/webp" };
+  const types = {
+    png:  "image/png",
+    jpg:  "image/jpeg",
+    jpeg: "image/jpeg",
+    gif:  "image/gif",
+    svg:  "image/svg+xml",
+    webp: "image/webp",
+    mp4:  "video/mp4",
+    webm: "video/webm",
+    mov:  "video/quicktime",
+  };
   const contentType = types[ext] || "application/octet-stream";
 
   return new Response(buf, {

@@ -5,6 +5,25 @@ import { useState, useRef, useEffect, useCallback } from "react";
 const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
 const PANEL = img("images/Rushmore/Rushmore Panel.png");
 const LOGO  = img("images/Rushmore/Rushmore Logo.png");
+const VIDEO_SRC = img("images/Rushmore/Rushmorevideo.mp4");
+
+// Face bounding box as % of 1784x1481 panel image
+// TL(530,66) TR(1192,69) BL(573,507) BR(1170,513)
+const FACE = {
+  left:   530  / 1784 * 100,  // 29.71%
+  top:    66   / 1481 * 100,  // 4.46%
+  width:  662  / 1784 * 100,  // 37.11%
+  height: 447  / 1481 * 100,  // 30.18%
+  // trapezoid: bottom is ~40px wider and shifted right ~43px vs top
+  // we encode this as a clip-path polygon (% of the element)
+  // top-left, top-right, bottom-right, bottom-left
+  // relative offsets from the bounding box:
+  // TL offset from box-left: 0px -> 0%
+  // TR offset: 662px -> 100%
+  // BR: (1170-530)=640px from left -> 640/662=96.7%, bottom
+  // BL: (573-530)=43px from left -> 43/662=6.5%, bottom
+  clipPath: "polygon(0% 0%, 100% 0%, 96.7% 100%, 6.5% 100%)",
+};
 
 const PRICE_IN  = 3.00;
 const PRICE_OUT = 15.00;
@@ -13,7 +32,6 @@ function calcCost(inTok, outTok) {
 }
 
 // ── Audio FX ────────────────────────────────────────────────────────────
-
 const st = (n) => Math.pow(2, n / 12);
 
 function makeImpulse(ctx, duration, decay) {
@@ -23,15 +41,16 @@ function makeImpulse(ctx, duration, decay) {
   for (let c = 0; c < 2; c++) {
     const ch = buf.getChannelData(c);
     for (let i = 0; i < length; i++) {
-      ch[i] = (Math.random() * 2 - 1)
-        * Math.pow(1 - i / length, decay)
-        * (c === 0 ? 1 : 0.94);
+      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.94);
     }
   }
   return buf;
 }
 
-let audioCtx = null;
+let audioCtx    = null;
+let analyserNode = null; // shared analyser so the RAF loop can read it
+let activeSources = [];
+
 function getCtx() {
   if (!audioCtx || audioCtx.state === "closed") {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -39,8 +58,6 @@ function getCtx() {
   if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
-
-let activeSources = [];
 
 function makeSource(ctx, decoded, semitones) {
   const src = ctx.createBufferSource();
@@ -70,56 +87,49 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── 4 sources ──
-      const srcMain  = makeSource(ctx, decoded, -1.5);          // main
-      const srcChoA  = makeSource(ctx, decoded, -1.5 + 14/100); // chorus L
-      const srcChoB  = makeSource(ctx, decoded, -1.5 - 12/100); // chorus R
-      const srcUnder = makeSource(ctx, decoded, -1.75);         // undertone
+      const srcMain  = makeSource(ctx, decoded, -1.5);
+      const srcChoA  = makeSource(ctx, decoded, -1.5 + 14/100);
+      const srcChoB  = makeSource(ctx, decoded, -1.5 - 12/100);
+      const srcUnder = makeSource(ctx, decoded, -1.75);
 
-      // ── EQ ──
+      // EQ
       const hiPass = ctx.createBiquadFilter();
       hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.8;
-
       const midNotch = ctx.createBiquadFilter();
-      midNotch.type = "peaking"; midNotch.frequency.value = 420;
-      midNotch.Q.value = 1.5; midNotch.gain.value = -5;
-
+      midNotch.type = "peaking"; midNotch.frequency.value = 420; midNotch.Q.value = 1.5; midNotch.gain.value = -5;
       const presence = ctx.createBiquadFilter();
-      presence.type = "peaking"; presence.frequency.value = 3200;
-      presence.Q.value = 1.0; presence.gain.value = 4;
-
+      presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 1.0; presence.gain.value = 4;
       const airShelf = ctx.createBiquadFilter();
       airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 5;
-
       const brilliance = ctx.createBiquadFilter();
-      brilliance.type = "peaking"; brilliance.frequency.value = 12000;
-      brilliance.Q.value = 0.8; brilliance.gain.value = 3;
+      brilliance.type = "peaking"; brilliance.frequency.value = 12000; brilliance.Q.value = 0.8; brilliance.gain.value = 3;
+      hiPass.connect(midNotch); midNotch.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      hiPass.connect(midNotch); midNotch.connect(presence);
-      presence.connect(airShelf); airShelf.connect(brilliance);
+      // Analyser for glow
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
+      analyserNode = analyser;
 
-      // ── Tight robotic echoes — all branch directly from brilliance, equal footing ──
-      // No cascading. Each echo is an independent branch at near-equal volume.
-      // They cluster RIGHT behind the voice, not after it.
+      // Tight echoes
       const makeEcho = (dt, gain) => {
         const d = ctx.createDelay(0.5); d.delayTime.value = dt;
         const g = ctx.createGain();    g.gain.value = gain;
         brilliance.connect(d); d.connect(g);
         return g;
       };
+      const e1out = makeEcho(0.018, 0.55);
+      const e2out = makeEcho(0.036, 0.40);
+      const e3out = makeEcho(0.060, 0.25);
+      const e4out = makeEcho(0.095, 0.14);
 
-      const e1out = makeEcho(0.018, 0.55); // 18ms  — almost on top of voice
-      const e2out = makeEcho(0.036, 0.40); // 36ms  — tight double
-      const e3out = makeEcho(0.060, 0.25); // 60ms  — robotic tail start
-      const e4out = makeEcho(0.095, 0.14); // 95ms  — just a whisper of space
-
-      // ── Reverb: short plate only — space without long tail ──
+      // Plate reverb
       const plate = ctx.createConvolver();
       plate.buffer = makeImpulse(ctx, 0.8, 4.5);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.15;
       brilliance.connect(plate); plate.connect(plateGain);
 
-      // ── Stereo chorus ──
+      // Chorus
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
       const choHiPass = ctx.createBiquadFilter();
@@ -127,34 +137,31 @@ async function speakWithFX(text, onDone) {
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.18;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.14;
 
-      // ── Undertone: low-passed, quiet ──
+      // Undertone
       const underLow  = ctx.createBiquadFilter();
       underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.22;
 
-      // ── Master ──
+      // Master
       const master = ctx.createGain(); master.gain.value = 0.80;
 
-      // Main → EQ → dry + echoes + reverb → master
+      // Routing: main → EQ → analyser → dry+echoes+reverb → master
       srcMain.connect(hiPass);
+      brilliance.connect(analyser); // tap for glow
       const dryGain = ctx.createGain(); dryGain.gain.value = 1.0;
       brilliance.connect(dryGain); dryGain.connect(master);
-      e1out.connect(master); e2out.connect(master);
-      e3out.connect(master); e4out.connect(master);
+      e1out.connect(master); e2out.connect(master); e3out.connect(master); e4out.connect(master);
       plateGain.connect(master);
+      analyser.connect(master); // analyser is pass-through
 
-      // Chorus L/R
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
-
-      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
-
       master.connect(ctx.destination);
 
       let ended = false;
       srcMain.onended = () => {
-        if (!ended) { ended = true; activeSources = []; onDone?.(); }
+        if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); }
       };
 
       const t = ctx.currentTime + 0.01;
@@ -163,7 +170,7 @@ async function speakWithFX(text, onDone) {
     }
   } catch (_) {}
 
-  // ── Browser TTS fallback ──
+  // Browser TTS fallback
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
   const preferred =
@@ -181,9 +188,48 @@ async function speakWithFX(text, onDone) {
 function stopSpeech() {
   activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
   activeSources = [];
+  analyserNode = null;
   window.speechSynthesis?.cancel();
 }
 
+// ── Voice-reactive glow hook ──
+function useVoiceGlow(videoRef) {
+  const rafRef = useRef(null);
+  const dataArr = useRef(null);
+
+  useEffect(() => {
+    const loop = () => {
+      rafRef.current = requestAnimationFrame(loop);
+      if (!analyserNode || !videoRef.current) return;
+
+      if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount) {
+        dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
+      }
+      analyserNode.getByteFrequencyData(dataArr.current);
+
+      // RMS amplitude
+      let sum = 0;
+      for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // 0..1
+
+      // Map to glow intensity
+      const glow   = Math.round(rms * 60);        // px spread 0-60
+      const bright = 1 + rms * 0.8;               // brightness 1.0-1.8
+      const r = Math.round(80  + rms * 175);      // red channel
+      const g = Math.round(20  + rms * 60);       // green channel
+      const b = Math.round(200 + rms * 55);       // blue/purple channel
+
+      videoRef.current.style.filter =
+        `brightness(${bright.toFixed(2)}) drop-shadow(0 0 ${glow}px rgba(${r},${g},${b},0.9))`;
+      videoRef.current.style.boxShadow =
+        `0 0 ${glow * 2}px ${glow}px rgba(${r},${g},${b},0.4)`;
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [videoRef]);
+}
+
+// ── Components ────────────────────────────────────────────────────────────────
 function TypingDots() {
   return <div className="ai-typing"><span /><span /><span /></div>;
 }
@@ -207,6 +253,7 @@ const BOOT_MSG = {
   content: "RUSHMORE online. All systems nominal.\n\nI have full context on GeoAlta, GeoComforter, ChronoSlate, NMGCO, The Order, and TheGame. GitHub actions and Microsoft Graph are not yet wired \u2014 everything else, ask away."
 };
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function RushmoreAI() {
   const [messages,   setMessages]   = useState([BOOT_MSG]);
   const [input,      setInput]      = useState("");
@@ -219,6 +266,9 @@ export default function RushmoreAI() {
   const bottomRef      = useRef(null);
   const recognitionRef = useRef(null);
   const continuousRef  = useRef(false);
+  const videoRef       = useRef(null);
+
+  useVoiceGlow(videoRef);
 
   useEffect(() => { continuousRef.current = continuous; }, [continuous]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -300,10 +350,33 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
+      {/* Panel + overlaid video */}
       <div className="ai-panel-banner">
-        <img src={PANEL} alt="RUSHMORE" />
-        <div className="ai-panel-overlay"><img src={LOGO} alt="" className="ai-panel-logo" /></div>
+        <img src={PANEL} alt="RUSHMORE" className="ai-panel-img" />
+
+        {/* Video overlay — positioned over the face area using % coords */}
+        <video
+          ref={videoRef}
+          src={VIDEO_SRC}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="ai-face-video"
+          style={{
+            left:      `${FACE.left}%`,
+            top:       `${FACE.top}%`,
+            width:     `${FACE.width}%`,
+            height:    `${FACE.height}%`,
+            clipPath:  FACE.clipPath,
+          }}
+        />
+
+        <div className="ai-panel-overlay">
+          <img src={LOGO} alt="" className="ai-panel-logo" />
+        </div>
       </div>
+
       <div className="ai-header">
         <div className="ai-header-left">
           <span className="ai-status-dot" />
@@ -331,6 +404,7 @@ export default function RushmoreAI() {
           <button className="ai-ctrl-btn" onClick={resetAll}>CLEAR</button>
         </div>
       </div>
+
       <div className="ai-feed">
         {messages.map((msg, i) => <Message key={i} msg={msg} />)}
         {loading && (
@@ -341,6 +415,7 @@ export default function RushmoreAI() {
         )}
         <div ref={bottomRef} />
       </div>
+
       <div className="ai-input-bar">
         <button className={`ai-mic-btn${listening ? " listening" : ""}${continuous ? " continuous" : ""}`}
           onClick={continuous ? toggleContinuous : toggleOneShotMic}>
