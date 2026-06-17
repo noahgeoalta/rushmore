@@ -12,7 +12,8 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -0.73;
+// -10% pitch from -0.73 = -0.73 - 1.66 = -2.39 (back to original base)
+const BASE  = -2.39;
 const CHO_A = BASE + 14 / 100;
 const CHO_B = BASE - 12 / 100;
 const UNDER = BASE - 0.25;
@@ -38,6 +39,27 @@ function makeSatCurve(amount = 12) {
     curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
   }
   return curve;
+}
+
+// Noise gate — hard gain-reduction below threshold
+// Works as a ScriptProcessor that zeroes out frames below threshold RMS
+function makeNoiseGate(ctx, thresholdDb = -45) {
+  const bufSize = 256;
+  const gate = ctx.createScriptProcessor(bufSize, 2, 2);
+  const threshold = Math.pow(10, thresholdDb / 20);
+  gate.onaudioprocess = (e) => {
+    for (let ch = 0; ch < e.inputBuffer.numberOfChannels; ch++) {
+      const inp = e.inputBuffer.getChannelData(ch);
+      const out = e.outputBuffer.getChannelData(ch);
+      // RMS of this frame
+      let sum = 0;
+      for (let i = 0; i < inp.length; i++) sum += inp[i] * inp[i];
+      const rms = Math.sqrt(sum / inp.length);
+      const open = rms > threshold;
+      for (let i = 0; i < inp.length; i++) out[i] = open ? inp[i] : 0;
+    }
+  };
+  return gate;
 }
 
 let audioCtx      = null;
@@ -90,65 +112,89 @@ async function speakWithFX(text, onDone) {
       const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi); midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      const sat = ctx.createWaveShaper(); sat.curve = makeSatCurve(12); sat.oversample = "2x"; brilliance.connect(sat);
+      // ── Soft saturation ─────────────────────────────────────────────
+      const sat = ctx.createWaveShaper(); sat.curve = makeSatCurve(12); sat.oversample = "2x";
+      brilliance.connect(sat);
 
+      // ── Compressor ──────────────────────────────────────────────────
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5;
       comp.attack.value = 0.005; comp.release.value = 0.120;
       const compGain = ctx.createGain(); compGain.gain.value = 1.0;
       sat.connect(comp); comp.connect(compGain);
 
+      // ── Noise gate — kills hiss/silence between words ────────────────
+      const gate = makeNoiseGate(ctx, -45);
+      const gateOut = ctx.createGain(); gateOut.gain.value = 1.0;
+      compGain.connect(gate); gate.connect(gateOut);
+      // gateOut is the clean, gated signal from here on
+
+      // ── Analyser ────────────────────────────────────────────────────
       const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.55; analyserNode = analyser;
 
-      // ── Reverb: short and quiet — just enough air, not wet ──────────
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.3, 6.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.12; // was 0.35
-      compGain.connect(plate); plate.connect(plateGain);
+      // ── Reverb: light plate + small hall only — just air, not wash ───
+      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.35, 6.0);
+      const plateGain = ctx.createGain(); plateGain.gain.value = 0.14;
+      gateOut.connect(plate); plate.connect(plateGain);
 
       const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.015;
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.5, 4.0);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.10; // was 0.30
-      compGain.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
+      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.6, 4.0);
+      const hallGain = ctx.createGain(); hallGain.gain.value = 0.10;
+      gateOut.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      // Chamber removed — it was the main source of wetness
-
-      // ── Echo: just 3 short taps for presence, no long tail ──────────
-      const makeEcho = (dt, gain) => {
-        const d = ctx.createDelay(dt + 0.01); d.delayTime.value = dt;
+      // ── Layered echo — 4 short room taps + 5 longer decay taps ──────
+      const makeEcho = (dt, gain, maxDt) => {
+        const d = ctx.createDelay(maxDt || dt + 0.01); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
-        compGain.connect(d); d.connect(g); return g;
+        gateOut.connect(d); d.connect(g); return g;
       };
-      const e1 = makeEcho(0.018, 0.18);
-      const e2 = makeEcho(0.038, 0.10);
-      const e3 = makeEcho(0.065, 0.05);
+      // Short room reflections (tight, add presence)
+      const r1 = makeEcho(0.018, 0.28);
+      const r2 = makeEcho(0.038, 0.18);
+      const r3 = makeEcho(0.065, 0.11);
+      const r4 = makeEcho(0.095, 0.07);
+      // Longer decay taps (space without being wet)
+      const t1 = makeEcho(0.130, 0.12, 0.5);
+      const t2 = makeEcho(0.210, 0.08, 0.5);
+      const t3 = makeEcho(0.320, 0.05, 0.5);
+      const t4 = makeEcho(0.460, 0.03, 0.5);
+      const t5 = makeEcho(0.620, 0.01, 0.5);
 
-      // ── Chorus: tighter, quieter ─────────────────────────────────────
+      // ── Chorus: tight stereo width ───────────────────────────────────
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-      const choAGain = ctx.createGain(); choAGain.gain.value = 0.10; // was 0.28
-      const choBGain = ctx.createGain(); choBGain.gain.value = 0.08; // was 0.22
+      const choAGain = ctx.createGain(); choAGain.gain.value = 0.10;
+      const choBGain = ctx.createGain(); choBGain.gain.value = 0.08;
 
-      // ── Undertone ────────────────────────────────────────────────────
+      // ── Undertone ───────────────────────────────────────────────────
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
-      const underGain = ctx.createGain(); underGain.gain.value = 0.06; // was 0.08
+      const underGain = ctx.createGain(); underGain.gain.value = 0.06;
 
       // ── Master ───────────────────────────────────────────────────────
       const master = ctx.createGain(); master.gain.value = 0.40;
 
-      // ── Routing: dry is now the dominant signal ───────────────────────
+      // ── Routing ─────────────────────────────────────────────────────
       srcMain.connect(hiPass);
-      compGain.connect(analyser); analyser.connect(master);
+      gateOut.connect(analyser); analyser.connect(master);
 
-      // Dry: 0.65 — voice sits upfront, clear and present
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.65; // was 0.20
-      compGain.connect(dryGain); dryGain.connect(master);
+      // Dry: dominant — voice is clear and upfront
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.65;
+      gateOut.connect(dryGain); dryGain.connect(master);
 
-      [e1, e2, e3].forEach(e => e.connect(master));
+      // Echo taps
+      [r1, r2, r3, r4, t1, t2, t3, t4, t5].forEach(e => e.connect(master));
+
+      // Reverbs
       plateGain.connect(master); hallGain.connect(master);
+
+      // Chorus
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+
+      // Undertone
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
+
       master.connect(ctx.destination);
 
       let ended = false;
