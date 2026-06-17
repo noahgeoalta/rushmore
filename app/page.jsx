@@ -77,46 +77,53 @@ function IconBoardChip({ label, url, icon }) {
 function GitHubSection({ ctx, issues }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
-  const assigned = issues?.[ctx.id] || [];
+  const data     = issues?.[ctx.id];
+  const loading  = data === undefined;
+  const rocks    = data?.rocks    || [];
+  const bugCount = data?.bugCount ?? 0;
+  const hasAny   = rocks.length > 0 || bugCount > 0;
 
   return (
     <div className="gh-section">
-      <div className="gh-section-label">
-        <span>GITHUB</span>
-        {assigned.length > 0 && (
-          <span className="gh-assigned-count">{assigned.length} assigned to you</span>
-        )}
-      </div>
+      <div className="gh-section-label"><span>GITHUB</span></div>
 
       {/* Repo + Board chips */}
-      <div className="cmd-board-row" style={{ marginBottom: assigned.length ? 6 : 0 }}>
+      <div className="cmd-board-row">
         {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
         {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
       </div>
 
-      {/* Assigned issues list */}
-      {assigned.length > 0 && (
+      {/* Issues */}
+      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>}
+
+      {!loading && !hasAny && (
+        <div className="gh-no-issues">No open issues assigned to you ✔</div>
+      )}
+
+      {!loading && hasAny && (
         <div className="gh-issues">
-          {assigned.map(i => (
+          {/* Rocks — listed individually */}
+          {rocks.map(i => (
             <a key={i.number} href={i.url} target="_blank" rel="noreferrer" className="gh-issue">
               <span className="gh-issue-num">#{i.number}</span>
               <span className="gh-issue-title">{i.title}</span>
             </a>
           ))}
+          {/* Bugs — single count line */}
+          {bugCount > 0 && (
+            <div className="gh-bug-line">
+              <span className="gh-bug-icon">🐛</span>
+              <span className="gh-bug-text">{bugCount} bug{bugCount !== 1 ? "s" : ""} assigned</span>
+            </div>
+          )}
         </div>
-      )}
-      {assigned.length === 0 && issues?.[ctx.id] !== undefined && (
-        <div className="gh-no-issues">No open issues assigned to you</div>
-      )}
-      {issues?.[ctx.id] === undefined && (
-        <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>
       )}
     </div>
   );
 }
 
 function ContextCard({ ctx, issues }) {
-  const sp    = ctx.sharepoint || [];
+  const sp     = ctx.sharepoint || [];
   const claude = (ctx.launchpad || []).filter(l => l.group === "Claude");
   const logo   = CTX_LOGO[ctx.id];
   return (
