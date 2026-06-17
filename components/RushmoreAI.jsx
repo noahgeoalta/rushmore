@@ -31,7 +31,6 @@ function makeImpulse(ctx, duration, decay) {
 }
 
 function makeSatCurve(amount = 12) {
-  // was 25 — reduced to 12, barely-there texture, no distortion
   const n = 256;
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -81,11 +80,11 @@ async function speakWithFX(text, onDone) {
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
 
-      // ── EQ ── (bass cut to fix muffled/bassy sound)
+      // ── EQ ──
       const hiPass = ctx.createBiquadFilter();
-      hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7; // was 120 — cut more low end
+      hiPass.type = "highpass"; hiPass.frequency.value = 200; hiPass.Q.value = 0.7;
       const lowShelf = ctx.createBiquadFilter();
-      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3; // was +5 — now cuts bass
+      lowShelf.type = "lowshelf"; lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
       const midLo = ctx.createBiquadFilter();
       midLo.type = "peaking"; midLo.frequency.value = 600; midLo.Q.value = 1.2; midLo.gain.value = -7;
       const midHi = ctx.createBiquadFilter();
@@ -99,13 +98,13 @@ async function speakWithFX(text, onDone) {
       hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi);
       midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
 
-      // ── Saturation — very light (was 25, now 12) ──
+      // ── Saturation ──
       const sat = ctx.createWaveShaper();
       sat.curve = makeSatCurve(12);
       sat.oversample = "2x";
       brilliance.connect(sat);
 
-      // ── Compressor — gentler to stop clipping (ratio 4→2.5, threshold -18→-14) ──
+      // ── Compressor ──
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -14; comp.knee.value = 8;
       comp.ratio.value = 2.5; comp.attack.value = 0.005; comp.release.value = 0.120;
@@ -136,10 +135,9 @@ async function speakWithFX(text, onDone) {
       const chamberGain = ctx.createGain(); chamberGain.gain.value = 0.45;
       compGain.connect(chamberPre); chamberPre.connect(chamber); chamber.connect(chamberGain);
 
-      // ── Tighter robot echo — shorter delays, crisper repeats ──
-      // was 150/300/550/850ms — now 80/160/280/420ms
-      const makeTrailEcho = (dt, gain) => {
-        const d = ctx.createDelay(0.5); d.delayTime.value = dt;
+      // ── Echo taps (original 4 unchanged, + 2 new taps added) ──
+      const makeTrailEcho = (dt, gain, maxDt = 0.8) => {
+        const d = ctx.createDelay(maxDt); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         compGain.connect(d); d.connect(g); return g;
       };
@@ -147,6 +145,9 @@ async function speakWithFX(text, onDone) {
       const t2 = makeTrailEcho(0.160, 0.18);
       const t3 = makeTrailEcho(0.280, 0.09);
       const t4 = makeTrailEcho(0.420, 0.04);
+      // NEW: two extra taps for a slightly longer robot tail
+      const t5 = makeTrailEcho(0.560, 0.02);
+      const t6 = makeTrailEcho(0.700, 0.01);
 
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.45;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.45;
@@ -154,7 +155,6 @@ async function speakWithFX(text, onDone) {
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.16;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.12;
 
-      // ── Undertone — pulled way back (was 0.18, now 0.08) to reduce muddiness ──
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.08;
 
@@ -165,7 +165,7 @@ async function speakWithFX(text, onDone) {
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.20;
       compGain.connect(dryGain); dryGain.connect(master);
       bpGain.connect(master);
-      [t1, t2, t3, t4].forEach(e => e.connect(master));
+      [t1, t2, t3, t4, t5, t6].forEach(e => e.connect(master));
       plateGain.connect(master); hallGain.connect(master); chamberGain.connect(master);
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
@@ -214,7 +214,8 @@ function useVideoFX(darkRef, bloomRef) {
       if (!analyserNode) {
         darknessRef.current = Math.min(0.43, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
-        const a = (0.06 + 0.04 * Math.sin(t)).toFixed(3);
+        // CHANGED: idle bloom much dimmer (was 0.06/0.04) so speaking glow pops
+        const a = (0.02 + 0.015 * Math.sin(t)).toFixed(3);
         bloom.style.background =
           `radial-gradient(ellipse 70% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
         return;
