@@ -193,10 +193,9 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Video FX ──────────────────────────────────────────────────────────────
-// Idle: dark overlay at 0.43, very faint green breath
-// Speaking: dark clears toward 0, bloom pulses — but peak values halved
-//   so the flash on voice activation is more dramatic
+// ── Video FX ─────────────────────────────────────────────────────────────
+// Idle: faint breath. Speaking: VERY dynamic — near-zero at low rms,
+// spikes hard at peaks using power curve so the flash is dramatic.
 function useVideoFX(darkRef, bloomRef) {
   const rafRef      = useRef(null);
   const dataArr     = useRef(null);
@@ -213,7 +212,7 @@ function useVideoFX(darkRef, bloomRef) {
       if (!analyserNode) {
         darknessRef.current = Math.min(0.43, darknessRef.current + 0.015);
         dark.style.opacity = darknessRef.current.toFixed(3);
-        const a = (0.02 + 0.015 * Math.sin(t)).toFixed(3);
+        const a = (0.018 + 0.012 * Math.sin(t)).toFixed(3);
         bloom.style.background =
           `radial-gradient(ellipse 70% 70% at 50% 50%, rgba(30,200,30,${a}) 0%, transparent 70%)`;
         return;
@@ -226,20 +225,22 @@ function useVideoFX(darkRef, bloomRef) {
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      const targetDark = Math.max(0.0, 0.20 - rms * 0.20);
-      darknessRef.current += (targetDark - darknessRef.current) * 0.12;
+      // Power curve: rms^0.5 makes it respond dramatically to spikes
+      // Dark clears aggressively when loud
+      const powered = Math.pow(rms, 0.5);
+      const targetDark = Math.max(0.0, 0.35 - powered * 0.35);
+      darknessRef.current += (targetDark - darknessRef.current) * 0.18;
       dark.style.opacity = darknessRef.current.toFixed(3);
 
-      const r  = Math.round(30  + rms * 200);
-      const g  = Math.round(200 + rms * 55);
-      const b  = Math.round(10  + rms * 20);
-      // Halved peak alphas so the bloom is subtler during speech —
-      // the flash at voice-start pops much more by contrast
-      const a1 = Math.min(0.45, 0.10 + rms * 0.35).toFixed(2);
-      const a2 = Math.min(0.22, 0.03 + rms * 0.19).toFixed(2);
-      const a3 = Math.min(0.08, 0.01 + rms * 0.07).toFixed(2);
+      const r  = Math.round(30  + powered * 220);
+      const g  = Math.round(200 + powered * 55);
+      const b  = Math.round(10  + powered * 20);
+      // Very dynamic: near-zero when quiet, full brightness on loud peaks
+      const a1 = Math.min(0.92, powered * 0.92).toFixed(2);
+      const a2 = Math.min(0.55, powered * 0.55).toFixed(2);
+      const a3 = Math.min(0.25, powered * 0.25).toFixed(2);
       bloom.style.background =
-        `radial-gradient(ellipse 85% 85% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 45%, rgba(${r},${g},${b},${a3}) 65%, transparent 82%)`;
+        `radial-gradient(ellipse 90% 90% at 50% 50%, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 40%, rgba(${r},${g},${b},${a3}) 65%, transparent 85%)`;
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
@@ -248,16 +249,55 @@ function useVideoFX(darkRef, bloomRef) {
 
 function TypingDots() { return <div className="ai-typing"><span /><span /><span /></div>; }
 
-function Message({ msg }) {
+// Message component with edit + replay buttons
+function Message({ msg, index, onEdit, onReplay, speaking }) {
   const isUser = msg.role === "user";
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(msg.content);
+
+  const submitEdit = () => {
+    if (draft.trim() && draft.trim() !== msg.content) onEdit(index, draft.trim());
+    setEditing(false);
+  };
+
   return (
     <div className={`ai-msg ${isUser ? "ai-msg-user" : "ai-msg-rushmore"}`}>
       {!isUser && <div className="ai-msg-label">RUSHMORE</div>}
-      <div className="ai-msg-bubble">
-        {msg.content.split("\n").map((line, i) => (
-          <p key={i} style={{ margin: line === "" ? "6px 0 0" : "0" }}>{line}</p>
-        ))}
-      </div>
+      {editing ? (
+        <div className="ai-msg-edit">
+          <textarea
+            className="ai-msg-edit-area"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            autoFocus
+            rows={3}
+          />
+          <div className="ai-msg-edit-btns">
+            <button className="ai-edit-save" onClick={submitEdit}>Resend</button>
+            <button className="ai-edit-cancel" onClick={() => { setDraft(msg.content); setEditing(false); }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="ai-msg-bubble-wrap">
+          <div className="ai-msg-bubble">
+            {msg.content.split("\n").map((line, i) => (
+              <p key={i} style={{ margin: line === "" ? "6px 0 0" : "0" }}>{line}</p>
+            ))}
+          </div>
+          <div className="ai-msg-actions">
+            {isUser && (
+              <button className="ai-msg-action-btn" onClick={() => setEditing(true)} title="Edit & resend">✎</button>
+            )}
+            {!isUser && (
+              <button
+                className={`ai-msg-action-btn${speaking ? " disabled" : ""}`}
+                onClick={() => !speaking && onReplay(msg.content)}
+                title="Replay"
+              >&#9654;</button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,56 +327,72 @@ export default function RushmoreAI() {
   const [listening, setListening] = useState(false);
   const [speaking,  setSpeaking]  = useState(false);
   const [usage,     setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
-  const topRef         = useRef(null);   // scroll target — top of feed (newest msg)
+  const topRef         = useRef(null);
   const recognitionRef = useRef(null);
   const voiceOutRef    = useRef(true);
   const continuousRef  = useRef(false);
+  const messagesRef    = useRef(messages); // always-current ref for voice callback
   const darkRef        = useRef(null);
   const bloomRef       = useRef(null);
 
   useVideoFX(darkRef, bloomRef);
 
-  // Persist chat to localStorage whenever messages change
+  // Keep messagesRef in sync — fixes voice context losing history
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch (_) {}
   }, [messages]);
 
   useEffect(() => { voiceOutRef.current = voiceOut; }, [voiceOut]);
 
-  // Scroll to TOP of feed (newest message) whenever messages update
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // ── Mobile-safe mic ─────────────────────────────────────────────────────
+  // On iOS Safari, getUserMedia MUST be called synchronously inside a
+  // direct user-gesture handler. We call it here inside the click handler
+  // chain, then start SR only after permission is confirmed.
   const startListening = useCallback(async () => {
-    if (navigator.mediaDevices?.getUserMedia) {
-      try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) { return; }
+    // Attempt mic permission — on mobile this must be in the gesture stack
+    try {
+      if (navigator.mediaDevices?.getUserMedia)
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (_) {
+      // Permission denied or not available — still try SR (desktop fallback)
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("Speech recognition not supported in this browser."); return; }
-    try { recognitionRef.current?.stop(); } catch (_) {}
+    if (!SR) return;
+    try { recognitionRef.current?.abort(); } catch (_) {}
     const rec = new SR();
-    rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
+    rec.continuous     = false;
+    rec.interimResults = false;
+    rec.lang           = "en-US";
     rec.onstart  = () => setListening(true);
     rec.onend    = () => setListening(false);
-    rec.onerror  = (e) => { console.warn("SR error", e.error); setListening(false); };
-    rec.onresult = (e) => { const t = e.results[0]?.[0]?.transcript; if (t) sendMessage(t); };
+    rec.onerror  = (e) => { console.warn("SR", e.error); setListening(false); };
+    // Use messagesRef so voice callback always has current history
+    rec.onresult = (e) => {
+      const transcript = e.results[0]?.[0]?.transcript;
+      if (transcript) sendMessageWith(messagesRef.current, transcript);
+    };
     recognitionRef.current = rec;
-    try { rec.start(); } catch (e) { console.warn("SR start failed", e); }
+    try { rec.start(); } catch (e) { console.warn("SR start", e); }
   }, []); // eslint-disable-line
 
   const stopListening = useCallback(() => {
     continuousRef.current = false;
-    try { recognitionRef.current?.stop(); } catch (_) {}
+    try { recognitionRef.current?.abort(); } catch (_) {}
     setListening(false);
   }, []);
 
-  const sendMessage = async (text) => {
-    const content = (text || input).trim();
+  // Core send — takes explicit history so voice calls never use stale closure
+  const sendMessageWith = async (currentMessages, text) => {
+    const content = text.trim();
     if (!content || loading) return;
-    setInput("");
     const userMsg = { role: "user", content };
-    const history = [...messages, userMsg];
+    const history = [...currentMessages, userMsg];
     setMessages(history);
     setLoading(true);
     try {
@@ -360,19 +416,38 @@ export default function RushmoreAI() {
         setSpeaking(true);
         speakWithFX(reply, () => {
           setSpeaking(false);
-          // Re-latch mic after speech ends if continuous mode is still on
-          if (continuousRef.current) {
+          if (continuousRef.current)
             setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
-          }
         });
       } else {
-        if (continuousRef.current) {
+        if (continuousRef.current)
           setTimeout(() => { if (continuousRef.current) startListening(); }, 400);
-        }
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
     } finally { setLoading(false); }
+  };
+
+  const sendMessage = () => {
+    const content = input.trim();
+    if (!content || loading) return;
+    setInput("");
+    sendMessageWith(messagesRef.current, content);
+  };
+
+  // Edit a past message — truncate history to that point, resend
+  const handleEdit = (index, newContent) => {
+    // index is into the reversed array; convert to forward index
+    const forwardIndex = messages.length - 1 - index;
+    const truncated = messages.slice(0, forwardIndex);
+    sendMessageWith(truncated, newContent);
+  };
+
+  // Replay a RUSHMORE message without API call
+  const handleReplay = (content) => {
+    if (speaking) return;
+    setSpeaking(true);
+    speakWithFX(content, () => setSpeaking(false));
   };
 
   const resetAll = () => {
@@ -383,25 +458,32 @@ export default function RushmoreAI() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
   };
 
+  const newChat = () => {
+    stopSpeech(); stopListening();
+    // Archive current chat with timestamp key
+    try {
+      const archived = localStorage.getItem(STORAGE_KEY);
+      if (archived) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, archived);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_) {}
+    setMessages([BOOT_MSG]);
+    setUsage({ inTok: 0, outTok: 0, calls: 0 });
+  };
+
   const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else { setVoiceOut(true); } };
   const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const toggleMic   = () => {
-    if (continuousRef.current) {
-      stopListening(); // unlatch
-    } else {
-      continuousRef.current = true;
-      startListening();
-    }
+    if (continuousRef.current) { stopListening(); }
+    else { continuousRef.current = true; startListening(); }
   };
 
   const cost     = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
-
-  // Reversed messages: newest first at top
   const reversed = [...messages].reverse();
 
   return (
     <div className="ai-shell">
+      {/* Video — explicit height to fix mobile collapse */}
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
           <video src={VIDEO_SRC} autoPlay loop muted playsInline className="ai-video-main" />
@@ -428,26 +510,23 @@ export default function RushmoreAI() {
           {listening && <span className="ai-listening-label">&#9679; LISTENING</span>}
         </div>
         <div className="ai-header-right">
+          <button className="ai-ctrl-btn" onClick={newChat} title="New chat">+ NEW</button>
           <button className="ai-ctrl-btn" onClick={resetAll}>CLEAR</button>
         </div>
       </div>
 
-      {/* Input bar — now at TOP of chat area, above the feed */}
+      {/* Input bar — above the feed */}
       <div className="ai-input-bar">
         <div className="ai-voice-btns">
-          {/* Mic: ● when listening, ◎ when latched-idle, ◉ when idle */}
           <button
             className={`ai-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`}
             onClick={toggleMic}
-            title={continuousRef.current ? "Continuous on — tap to stop" : "Tap to talk"}
           >
             {listening ? "\u25cf" : continuousRef.current ? "\u25ce" : "\u25cb"}
           </button>
-          {/* Voice out: ◉ on, ◎ off */}
           <button
             className={`ai-voice-out-btn${voiceOut ? " active" : ""}`}
             onClick={toggleVoice}
-            title={voiceOut ? "Voice output on" : "Voice output off"}
           >
             {voiceOut ? "\u25c9" : "\u25cb"}
           </button>
@@ -461,11 +540,11 @@ export default function RushmoreAI() {
           rows={1}
           spellCheck={false}
         />
-        <button className="ai-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>SEND</button>
+        <button className="ai-send-btn" onClick={sendMessage} disabled={loading || !input.trim()}>SEND</button>
       </div>
 
-      {/* Feed — reversed, newest at top, scroll target at top */}
-      <div className="ai-feed ai-feed-reversed">
+      {/* Feed — reversed, newest at top */}
+      <div className="ai-feed">
         <div ref={topRef} />
         {loading && (
           <div className="ai-msg ai-msg-rushmore">
@@ -473,7 +552,16 @@ export default function RushmoreAI() {
             <div className="ai-msg-bubble"><TypingDots /></div>
           </div>
         )}
-        {reversed.map((msg, i) => <Message key={i} msg={msg} />)}
+        {reversed.map((msg, i) => (
+          <Message
+            key={i}
+            msg={msg}
+            index={i}
+            onEdit={handleEdit}
+            onReplay={handleReplay}
+            speaking={speaking}
+          />
+        ))}
       </div>
     </div>
   );
