@@ -12,10 +12,13 @@ function calcCost(inTok, outTok) {
 }
 
 const st = (n) => Math.pow(2, n / 12);
-const BASE  = -2.39;
-const CHO_A = BASE + 14 / 100;
-const CHO_B = BASE - 12 / 100;
-const UNDER = BASE - 0.25;
+const BASE   = -2.39;          // main voice
+const CHO_A  = BASE + 14/100;  // chorus layer A
+const CHO_B  = BASE - 12/100;  // chorus layer B
+const UNDER  = BASE - 0.25;    // undertone
+// New pitch layers for depth / "protoss" quality
+const PIT_DN1 = BASE - 0.5;    // half-semitone down
+const PIT_DN2 = BASE - 1.0;    // full semitone down
 
 function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
@@ -91,10 +94,14 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
+      // ── Sources ─────────────────────────────────────────────────────
       const srcMain  = makeSource(ctx, decoded, BASE);
       const srcChoA  = makeSource(ctx, decoded, CHO_A);
       const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
+      // Pitch depth layers — ghostly doubles slightly below main
+      const srcDn1   = makeSource(ctx, decoded, PIT_DN1);
+      const srcDn2   = makeSource(ctx, decoded, PIT_DN2);
 
       // ── EQ ──────────────────────────────────────────────────────────
       const hiPass    = ctx.createBiquadFilter(); hiPass.type = "highpass";    hiPass.frequency.value = 200;   hiPass.Q.value = 0.7;
@@ -121,7 +128,7 @@ async function speakWithFX(text, onDone) {
 
       const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.45; analyserNode = analyser;
 
-      // ── Reverb: light touch only ─────────────────────────────────────
+      // ── Reverb: light plate + small hall ────────────────────────────
       const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.35, 6.0);
       const plateGain = ctx.createGain(); plateGain.gain.value = 0.14;
       gateOut.connect(plate); plate.connect(plateGain);
@@ -131,48 +138,74 @@ async function speakWithFX(text, onDone) {
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.10;
       gateOut.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      // ── Echo: shorter, snappier taps — all under 250ms ───────────────
-      const makeEcho = (dt, gain) => {
-        const d = ctx.createDelay(dt + 0.005); d.delayTime.value = dt;
+      // ── Echo: 12 layered taps — short snappy front + long decay tail ─
+      const makeEcho = (dt, gain, maxDt) => {
+        const d = ctx.createDelay(maxDt || dt + 0.005); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
         gateOut.connect(d); d.connect(g); return g;
       };
-      const e1 = makeEcho(0.012, 0.30); // tight slap
-      const e2 = makeEcho(0.025, 0.20);
-      const e3 = makeEcho(0.042, 0.13);
-      const e4 = makeEcho(0.065, 0.08);
-      const e5 = makeEcho(0.095, 0.05);
-      const e6 = makeEcho(0.140, 0.03);
-      const e7 = makeEcho(0.200, 0.015);
-      const e8 = makeEcho(0.260, 0.007); // barely there tail
+      // Tight slap reflections
+      const e1  = makeEcho(0.012, 0.28);
+      const e2  = makeEcho(0.025, 0.20);
+      const e3  = makeEcho(0.042, 0.14);
+      const e4  = makeEcho(0.065, 0.09);
+      const e5  = makeEcho(0.095, 0.06);
+      // Mid decay
+      const e6  = makeEcho(0.140, 0.045, 0.5);
+      const e7  = makeEcho(0.200, 0.032, 0.5);
+      const e8  = makeEcho(0.280, 0.022, 0.5);
+      // Long ghostly tail
+      const e9  = makeEcho(0.380, 0.014, 0.5);
+      const e10 = makeEcho(0.500, 0.009, 0.5);
+      const e11 = makeEcho(0.650, 0.005, 0.5);
+      const e12 = makeEcho(0.820, 0.002, 0.5);
 
-      // ── Chorus ───────────────────────────────────────────────────────
+      // ── Chorus: stereo width ─────────────────────────────────────────
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
       const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
       const choAGain = ctx.createGain(); choAGain.gain.value = 0.10;
       const choBGain = ctx.createGain(); choBGain.gain.value = 0.08;
 
+      // ── Undertone ───────────────────────────────────────────────────
       const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
       const underGain = ctx.createGain(); underGain.gain.value = 0.06;
 
+      // ── Pitch depth layers — lowpass so they sit under main voice ───
+      const dn1Low  = ctx.createBiquadFilter(); dn1Low.type = "lowpass";  dn1Low.frequency.value = 5000;
+      const dn1Gain = ctx.createGain(); dn1Gain.gain.value = 0.18; // audible but under
+      const dn2Low  = ctx.createBiquadFilter(); dn2Low.type = "lowpass";  dn2Low.frequency.value = 3500;
+      const dn2Gain = ctx.createGain(); dn2Gain.gain.value = 0.10; // deeper, quieter
+
+      // ── Master ───────────────────────────────────────────────────────
       const master = ctx.createGain(); master.gain.value = 0.40;
 
+      // ── Routing ─────────────────────────────────────────────────────
       srcMain.connect(hiPass);
       gateOut.connect(analyser); analyser.connect(master);
+
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.65;
       gateOut.connect(dryGain); dryGain.connect(master);
-      [e1,e2,e3,e4,e5,e6,e7,e8].forEach(e => e.connect(master));
+
+      [e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12].forEach(e => e.connect(master));
       plateGain.connect(master); hallGain.connect(master);
+
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
+
       srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
+
+      // Pitch layers
+      srcDn1.connect(dn1Low); dn1Low.connect(dn1Gain); dn1Gain.connect(master);
+      srcDn2.connect(dn2Low); dn2Low.connect(dn2Gain); dn2Gain.connect(master);
+
       master.connect(ctx.destination);
 
       let ended = false;
       srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
       const t = ctx.currentTime + 0.01;
       srcMain.start(t); srcChoA.start(t); srcChoB.start(t); srcUnder.start(t);
+      srcDn1.start(t); srcDn2.start(t);
       return;
     }
   } catch (_) {}
@@ -207,7 +240,7 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       const ch = container.clientHeight;
       const vw = video.videoWidth  || 16;
       const vh = video.videoHeight || 9;
-      const videoAR = vw / vh;
+      const videoAR     = vw / vh;
       const containerAR = cw / ch;
       let left, top, width, height;
       if (videoAR > containerAR) {
@@ -231,7 +264,7 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
       if (!bloom || !dark) return;
 
       if (!analyserNode) {
-        // Idle: 70% visible, zero bloom
+        // Idle: hold at 0.30 darkness (70% visible), zero bloom
         darknessRef.current += (0.30 - darknessRef.current) * 0.05;
         dark.style.opacity = darknessRef.current.toFixed(3);
         bloom.style.background = "none";
@@ -244,27 +277,35 @@ function useVideoFX(darkRef, bloomRef, videoRef, containerRef) {
 
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
-      const rms = Math.sqrt(sum / dataArr.current.length) / 255; // true linear 0..1
+      const rms = Math.sqrt(sum / dataArr.current.length) / 255;
 
-      // Darkness: 0.30 idle → 0.0 at peak — fast snap
-      const targetDark = 0.30 * (1 - rms);
+      /*
+        Darkness reveal: previously targetDark = 0.30 * (1 - rms) meant that even
+        moderate rms (~0.3) would push darkness to ~0.21, making the image noticeably
+        brighter. Now we use a steeper curve — only loud peaks (rms > 0.5) push below
+        0.20, and typical speech (rms ~0.15-0.25) barely moves it.
+        Formula: darkness stays at 0.30 except on real loud peaks.
+        targetDark = 0.30 - (rms^2 * 0.30)  — quadratic so quiet speech barely moves it
+      */
+      const targetDark = 0.30 - Math.pow(rms, 2) * 0.30;
       darknessRef.current += (targetDark - darknessRef.current) * 0.55;
       dark.style.opacity = Math.max(0, darknessRef.current).toFixed(3);
 
-      // Bloom: NO floor — zero alpha when rms is zero, full when loud
-      // rms must exceed a tiny dead zone before any glow appears
-      const active = Math.max(0, rms - 0.04); // dead zone: no glow below 4% rms
+      // Bloom: dead zone below 8% rms — only real peaks trigger it
+      const active = Math.max(0, rms - 0.08);
       if (active <= 0) {
         bloom.style.background = "none";
         return;
       }
 
-      const r  = Math.round(20  + active * 280);
-      const g  = Math.round(200 + active * 55);
-      const b  = Math.round(20  + active * 10);
-      const a1 = Math.min(0.90, active * 1.1).toFixed(2);  // centre: sharp
-      const a2 = Math.min(0.60, active * 0.75).toFixed(2); // mid
-      const a3 = Math.min(0.25, active * 0.30).toFixed(2); // edge
+      // Scale bloom tightly — only peaks near max produce full glow
+      const scaled = Math.min(1, active * 2.0); // reaches 1.0 at rms=0.58
+      const r  = Math.round(20  + scaled * 220);
+      const g  = Math.round(180 + scaled * 75);
+      const b  = Math.round(20  + scaled * 10);
+      const a1 = (scaled * 0.65).toFixed(2); // max 0.65 at centre
+      const a2 = (scaled * 0.40).toFixed(2);
+      const a3 = (scaled * 0.15).toFixed(2);
 
       bloom.style.background =
         `radial-gradient(ellipse 90% 85% at 50% 50%, ` +
