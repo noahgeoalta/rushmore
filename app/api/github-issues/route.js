@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+const GITHUB_USER = "noahgeoalta";
+
 const REPOS = [
   { id: "geoalta",      owner: "GeoAltaSolutions", repo: "GeoAlta-QuestLog" },
   { id: "geocomforter", owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog" },
@@ -20,21 +22,25 @@ export async function GET() {
   const results = await Promise.allSettled(
     REPOS.map(async ({ id, owner, repo }) => {
       const res = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}`,
-        { headers, next: { revalidate: 120 } } // cache 2 min
+        `https://api.github.com/repos/${owner}/${repo}/issues?assignee=${GITHUB_USER}&state=open&per_page=5`,
+        { headers, next: { revalidate: 120 } }
       );
-      if (!res.ok) return { id, open: null };
+      if (!res.ok) return { id, issues: [] };
       const data = await res.json();
-      return { id, open: data.open_issues_count ?? null };
+      // Filter out pull requests (GitHub issues API includes PRs)
+      const issues = data
+        .filter(i => !i.pull_request)
+        .map(i => ({ number: i.number, title: i.title, url: i.html_url, labels: i.labels?.map(l => l.name) || [] }));
+      return { id, issues };
     })
   );
 
-  const counts = {};
+  const out = {};
   for (const r of results) {
-    if (r.status === "fulfilled") counts[r.value.id] = r.value.open;
+    if (r.status === "fulfilled") out[r.value.id] = r.value.issues;
   }
 
-  return NextResponse.json(counts, {
+  return NextResponse.json(out, {
     headers: { "Cache-Control": "s-maxage=120, stale-while-revalidate=300" },
   });
 }

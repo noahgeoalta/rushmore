@@ -74,37 +74,60 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-function IssueBadge({ count }) {
-  if (count === null || count === undefined) return null;
+function GitHubSection({ ctx, issues }) {
+  const ghBoards = ctx.github?.boards || [];
+  const ghRepos  = ctx.github?.repos  || [];
+  const assigned = issues?.[ctx.id] || [];
+
   return (
-    <span className={`issue-badge${count === 0 ? " zero" : ""}`}>
-      {count} open
-    </span>
+    <div className="gh-section">
+      <div className="gh-section-label">
+        <span>GITHUB</span>
+        {assigned.length > 0 && (
+          <span className="gh-assigned-count">{assigned.length} assigned to you</span>
+        )}
+      </div>
+
+      {/* Repo + Board chips */}
+      <div className="cmd-board-row" style={{ marginBottom: assigned.length ? 6 : 0 }}>
+        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
+        {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
+      </div>
+
+      {/* Assigned issues list */}
+      {assigned.length > 0 && (
+        <div className="gh-issues">
+          {assigned.map(i => (
+            <a key={i.number} href={i.url} target="_blank" rel="noreferrer" className="gh-issue">
+              <span className="gh-issue-num">#{i.number}</span>
+              <span className="gh-issue-title">{i.title}</span>
+            </a>
+          ))}
+        </div>
+      )}
+      {assigned.length === 0 && issues?.[ctx.id] !== undefined && (
+        <div className="gh-no-issues">No open issues assigned to you</div>
+      )}
+      {issues?.[ctx.id] === undefined && (
+        <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>
+      )}
+    </div>
   );
 }
 
 function ContextCard({ ctx, issues }) {
-  const ghBoards = ctx.github?.boards || [];
-  const ghRepos  = ctx.github?.repos  || [];
-  const sp       = ctx.sharepoint     || [];
-  const claude   = (ctx.launchpad || []).filter(l => l.group === "Claude");
-  const logo     = CTX_LOGO[ctx.id];
-  const issueCount = issues?.[ctx.id];
+  const sp    = ctx.sharepoint || [];
+  const claude = (ctx.launchpad || []).filter(l => l.group === "Claude");
+  const logo   = CTX_LOGO[ctx.id];
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        <div className="cmd-card-header-row">
-          {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-                : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
-          <IssueBadge count={issueCount} />
-        </div>
+        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+              : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
       {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} />)}
-      {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
-      <div className="cmd-board-row">
-        {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
-      </div>
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      <GitHubSection ctx={ctx} issues={issues} />
     </div>
   );
 }
@@ -168,7 +191,6 @@ export default function Home() {
 
   useEffect(() => {
     fetch("/api/auth/status").then(r => r.json()).then(d => setMsAuthed(d.authed)).catch(() => {});
-    // Fetch GitHub issue counts
     fetch("/api/github-issues").then(r => r.json()).then(d => setIssues(d)).catch(() => {});
   }, []);
 
