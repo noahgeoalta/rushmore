@@ -91,14 +91,9 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-function GitHubSection({ ctx, issues }) {
+function GitHubSection({ ctx }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
-  const data     = issues?.[ctx.id];
-  const loading  = data === undefined;
-  const rocks    = data?.rocks    || [];
-  const bugCount = data?.bugCount ?? 0;
-  const hasAny   = rocks.length > 0 || bugCount > 0;
 
   return (
     <div className="gh-section">
@@ -107,29 +102,11 @@ function GitHubSection({ ctx, issues }) {
         {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
         {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
       </div>
-      {loading && <div className="gh-no-issues" style={{ opacity: 0.4 }}>Loading…</div>}
-      {!loading && !hasAny && <div className="gh-no-issues">No open issues assigned to you ✔</div>}
-      {!loading && hasAny && (
-        <div className="gh-issues">
-          {rocks.map(i => (
-            <a key={i.number} href={i.url} target="_blank" rel="noreferrer" className="gh-issue">
-              <span className="gh-issue-num">#{i.number}</span>
-              <span className="gh-issue-title">{i.title}</span>
-            </a>
-          ))}
-          {bugCount > 0 && (
-            <div className="gh-bug-line">
-              <span className="gh-bug-icon">🐛</span>
-              <span className="gh-bug-text">{bugCount} bug{bugCount !== 1 ? "s" : ""} assigned</span>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-function ContextCard({ ctx, issues }) {
+function ContextCard({ ctx }) {
   const sp     = ctx.sharepoint || [];
   const claude = (ctx.launchpad || []).filter(l => l.group === "Claude");
   const logo   = CTX_LOGO[ctx.id];
@@ -141,7 +118,7 @@ function ContextCard({ ctx, issues }) {
       </div>
       {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-      <GitHubSection ctx={ctx} issues={issues} />
+      <GitHubSection ctx={ctx} />
     </div>
   );
 }
@@ -180,7 +157,6 @@ const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 export default function Home() {
   const [view, setView] = useState("command");
   const [msAuthed, setMsAuthed] = useState(false);
-  const [issues, setIssues] = useState({});
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -206,7 +182,6 @@ export default function Home() {
 
   useEffect(() => {
     fetch("/api/auth/status").then(r => r.json()).then(d => setMsAuthed(d.authed)).catch(() => {});
-    fetch("/api/github-issues").then(r => r.json()).then(d => setIssues(d)).catch(() => {});
   }, []);
 
   return (
@@ -260,7 +235,7 @@ export default function Home() {
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
             <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} issues={issues} />)}
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
             </div>
           </section>
 

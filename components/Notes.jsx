@@ -103,6 +103,7 @@ export default function Notes() {
   const [future, setFuture] = useState([]);
   const [focusId, setFocusId] = useState(null);
   const [focusCaret, setFocusCaret] = useState(null);
+  const [selectAll, setSelectAll] = useState(false);
   const [dropTarget, setDropTarget] = useState(null);
   const [dragPageId, setDragPageId] = useState(null);
   const [overPageId, setOverPageId] = useState(null);
@@ -128,13 +129,19 @@ export default function Notes() {
       const el = inputs.current[focusId];
       if (!el) return;
       el.focus();
-      if (focusCaret !== null) { el.setSelectionRange(focusCaret, focusCaret); setFocusCaret(null); }
+      if (selectAll) {
+        el.select();
+        setSelectAll(false);
+      } else if (focusCaret !== null) {
+        el.setSelectionRange(focusCaret, focusCaret);
+        setFocusCaret(null);
+      }
       setFocusId(null);
     };
     tryFocus();
     const raf = requestAnimationFrame(tryFocus);
     return () => cancelAnimationFrame(raf);
-  }, [focusId, focusCaret, state]);
+  }, [focusId, focusCaret, selectAll, state]);
 
   if (!state) return null;
   const page = state.pages.find((p) => p.id === state.activeId) || state.pages[0];
@@ -299,14 +306,39 @@ export default function Notes() {
     const h = locate(page.tree, id); if (!h) return;
     navigator.clipboard.writeText(serializeNode(h.node, 0).join("\n")).catch(() => {});
   };
+
+  // Paste inline at the cursor position within the current line
   const pasteAtNode = async (id) => {
     try {
       const text = await navigator.clipboard.readText();
-      if (!text.trim()) return;
-      const newNodes = parseLines(text.split("\n").filter((l) => l.trim()));
-      if (!newNodes.length) return;
-      mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.list.splice(h.index + 1, 0, ...newNodes); });
-      setFocusId(newNodes[0].id);
+      if (!text) return;
+
+      // Single-line paste: insert text at caret position
+      const el = inputs.current[id];
+      const lines = text.split("\n").filter((l) => l.trim());
+
+      if (lines.length <= 1) {
+        // Inline insert at cursor
+        const pasteText = text.replace(/\n/g, " ").trimEnd();
+        if (!pasteText) return;
+        const caretPos = el ? el.selectionStart : 0;
+        mutate((pg) => {
+          const h = locate(pg.tree, id);
+          if (!h) return;
+          const before = h.node.text.slice(0, caretPos);
+          const after = h.node.text.slice(el ? el.selectionEnd : caretPos);
+          h.node.text = before + pasteText + after;
+        }, false);
+        const newCaret = caretPos + pasteText.length;
+        setFocusId(id);
+        setFocusCaret(newCaret);
+      } else {
+        // Multi-line paste: insert new nodes after current
+        const newNodes = parseLines(lines);
+        if (!newNodes.length) return;
+        mutate((pg) => { const h = locate(pg.tree, id); if (!h) return; h.list.splice(h.index + 1, 0, ...newNodes); });
+        setFocusId(newNodes[0].id);
+      }
     } catch {}
   };
 
@@ -363,6 +395,13 @@ export default function Notes() {
     }
   };
 
+  // Click on the bullet/number/spacer marker to focus the input and select all text
+  const onMarkerClick = (e, id) => {
+    e.stopPropagation();
+    setFocusId(id);
+    setSelectAll(true);
+  };
+
   const renderNodes = (nodes) =>
     nodes.map((n, idx) => {
       const dt = dropTarget?.id === n.id ? dropTarget.zone : null;
@@ -384,13 +423,34 @@ export default function Notes() {
               {n.children.length ? (n.collapsed ? COLLAPSE_CLOSED : COLLAPSE_OPEN) : ""}
             </button>
             {n.type === "bullet" && (
-              <span className={"ol-marker ol-bullet drag-handle" + (hasHidden ? " has-hidden" : "")} draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move">{BULLET_CHAR}</span>
+              <span
+                className={"ol-marker ol-bullet drag-handle" + (hasHidden ? " has-hidden" : "")}
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }}
+                onDragEnd={onDragEnd}
+                onClick={(e) => onMarkerClick(e, n.id)}
+                title="Click to select · Drag to move"
+              >{BULLET_CHAR}</span>
             )}
             {n.type === "number" && (
-              <span className={"ol-marker ol-number drag-handle" + (hasHidden ? " has-hidden" : "")} draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move">{num}.</span>
+              <span
+                className={"ol-marker ol-number drag-handle" + (hasHidden ? " has-hidden" : "")}
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }}
+                onDragEnd={onDragEnd}
+                onClick={(e) => onMarkerClick(e, n.id)}
+                title="Click to select · Drag to move"
+              >{num}.</span>
             )}
             {n.type === "none" && (
-              <span className="ol-marker ol-spacer drag-handle" draggable onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }} onDragEnd={onDragEnd} title="Drag to move" />
+              <span
+                className="ol-marker ol-spacer drag-handle"
+                draggable
+                onDragStart={(e) => { e.stopPropagation(); onDragStart(n.id); }}
+                onDragEnd={onDragEnd}
+                onClick={(e) => onMarkerClick(e, n.id)}
+                title="Click to select · Drag to move"
+              />
             )}
             <input
               className="ol-input"
