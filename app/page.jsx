@@ -48,7 +48,6 @@ function spIcon(ctxId, label) {
   return null;
 }
 
-// Convert https://claude.ai/... to claude://claude.ai/... for desktop app links
 function resolveUrl(url, desktop) {
   if (desktop && url?.startsWith("https://claude.ai/")) {
     return url.replace("https://", "claude://");
@@ -94,7 +93,6 @@ function IconBoardChip({ label, url, icon }) {
 function GitHubSection({ ctx }) {
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
-
   return (
     <div className="gh-section">
       <div className="gh-section-label"><span>GITHUB</span></div>
@@ -248,6 +246,22 @@ export default function Home() {
       {view === "notes" && (
         <main className="notes-main"><Canvas /></main>
       )}
+
+      {/* Mobile-only bottom navigation bar */}
+      <nav className="mobile-nav">
+        <button className={"mobile-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>
+          <span className="mobile-nav-icon">📋</span>
+          Command
+        </button>
+        <button className={"mobile-nav-btn" + (view === "ai" ? " active" : "")} onClick={() => setView("ai")}>
+          <span className="mobile-nav-icon">⚡</span>
+          Rushmore
+        </button>
+        <button className={"mobile-nav-btn" + (view === "notes" ? " active" : "")} onClick={() => setView("notes")}>
+          <span className="mobile-nav-icon">📝</span>
+          Notes
+        </button>
+      </nav>
     </div>
   );
 }
