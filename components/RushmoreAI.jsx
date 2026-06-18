@@ -133,7 +133,6 @@ async function speakWithFX(text, onDone) {
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.10;
       gateOut.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
-      // ── Echo: 14 taps including 0.2s and 0.3s as requested ──────────
       const makeEcho = (dt, gain, maxDt) => {
         const d = ctx.createDelay(maxDt || dt + 0.005); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -145,9 +144,9 @@ async function speakWithFX(text, onDone) {
       const e4  = makeEcho(0.065, 0.09);
       const e5  = makeEcho(0.095, 0.06);
       const e6  = makeEcho(0.140, 0.045, 0.5);
-      const e7  = makeEcho(0.200, 0.032, 0.5); // requested 0.2s tap
+      const e7  = makeEcho(0.200, 0.032, 0.5);
       const e8  = makeEcho(0.260, 0.025, 0.5);
-      const e9  = makeEcho(0.300, 0.020, 0.5); // requested 0.3s tap
+      const e9  = makeEcho(0.300, 0.020, 0.5);
       const e10 = makeEcho(0.380, 0.014, 0.5);
       const e11 = makeEcho(0.500, 0.009, 0.5);
       const e12 = makeEcho(0.650, 0.005, 0.5);
@@ -205,37 +204,23 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── TV flash glow: outer ring that pulses white with voice ──────────────
+// ── Green TV flash — pulses over the video only, matching voice ──────────
 function useTVFlash(flashRef, dataArr) {
   const rafRef = useRef(null);
   useEffect(() => {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
       if (!flashRef.current) return;
-
-      if (!analyserNode) {
-        flashRef.current.style.opacity = "0";
-        return;
-      }
-
+      if (!analyserNode) { flashRef.current.style.opacity = "0"; return; }
       if (!dataArr.current || dataArr.current.length !== analyserNode.frequencyBinCount)
         dataArr.current = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(dataArr.current);
-
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-
-      // Dead zone — no glow below 6% rms
       const active = Math.max(0, rms - 0.06);
-      if (active <= 0) {
-        flashRef.current.style.opacity = "0";
-        return;
-      }
-
-      // Sharp flash: opacity scales directly with amplitude, no smoothing
-      const intensity = Math.min(1, active * 3.5);
-      flashRef.current.style.opacity = intensity.toFixed(3);
+      if (active <= 0) { flashRef.current.style.opacity = "0"; return; }
+      flashRef.current.style.opacity = Math.min(1, active * 3.5).toFixed(3);
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
@@ -443,27 +428,21 @@ export default function RushmoreAI() {
 
   return (
     <div className="ai-shell">
-      {/* Video strip — green→white filter, TV flash overlay */}
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
-          {/*
-            CSS filter chain to turn green tones white:
-            grayscale(1) removes colour → sepia(1) warms it → saturate(0) strips
-            residual colour → brightness(1.4) lifts to near-white on the bright areas.
-            The face/highlights (originally bright green) become bright white.
-            Dark areas stay dark.
-          */}
+          {/* Video: no filter, original green colours */}
           <video
             ref={videoRef}
             src={VIDEO_SRC}
             autoPlay loop muted playsInline
             className="ai-video-main"
-            style={{ filter: "grayscale(1) brightness(1.3) contrast(1.1)" }}
           />
           {/*
-            TV flash overlay — white, covers the full video area,
-            opacity driven by voice amplitude via useTVFlash.
-            box-shadow spreads the glow outside the video edges.
+            Green TV flash overlay — covers the video square only.
+            Opacity 0 at rest, pulses green with voice amplitude.
+            box-shadow bleeds a halo outside the video edges.
+            mix-blend-mode: screen so green adds on top of the video
+            rather than washing it out.
           */}
           <div
             ref={flashRef}
@@ -472,8 +451,9 @@ export default function RushmoreAI() {
               inset:         0,
               pointerEvents: "none",
               opacity:       0,
-              background:    "radial-gradient(ellipse at center, rgba(255,255,255,0.55) 0%, rgba(200,230,255,0.25) 50%, transparent 80%)",
-              boxShadow:     "0 0 60px 20px rgba(180,220,255,0.4), 0 0 120px 40px rgba(180,220,255,0.15)",
+              mixBlendMode:  "screen",
+              background:    "radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%)",
+              boxShadow:     "0 0 50px 16px rgba(60,220,60,0.45), 0 0 100px 32px rgba(60,220,60,0.18)",
               zIndex:        3,
             }}
           />
