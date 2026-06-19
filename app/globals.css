@@ -57,10 +57,10 @@ a { color: inherit; text-decoration: none; }
 .cmd-riipen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmd-riipen-team { font-size: 15px; font-weight: 600; color: var(--dim); min-width: 180px; flex-shrink: 0; }
 
-/* ── RUSHMORE inline panel ────────────────────────────────────────────── */
+/* ── RUSHMORE inline panel ───────────────────────────────────────── */
 .rp-shell {
   display: flex;
-  gap: 16px;
+  gap: 0;
   background: #0a0a0a;
   border: 1px solid var(--edge);
   border-radius: 10px;
@@ -68,20 +68,23 @@ a { color: inherit; text-decoration: none; }
   height: 420px;
 }
 
-/* Left column: square video */
+/* Left column: video + status + mode pills
+   Width trimmed ~17% from the right: 166px instead of 200px */
 .rp-video-col {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
   flex-shrink: 0;
-  width: 200px;
+  width: 166px;
   background: #080808;
   border-right: 1px solid var(--edge);
+  overflow: hidden;
 }
 .rp-video-box {
   position: relative;
   width: 100%;
+  /* Not a perfect square — just fill the column width, height set by content */
   aspect-ratio: 1 / 1;
   background: #000;
   border-radius: 6px;
@@ -93,6 +96,7 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
 }
 .rp-flash {
   position: absolute;
@@ -107,22 +111,58 @@ a { color: inherit; text-decoration: none; }
 .rp-status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 .rp-mode-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   color: var(--dim);
   text-transform: uppercase;
 }
 .rp-usage {
   display: flex;
-  gap: 8px;
-  font-size: 10px;
+  gap: 6px;
+  font-size: 9px;
   color: var(--faint);
-  flex-wrap: wrap;
+}
+
+/* Mode pills — stacked in left column, color-coded */
+.rp-mode-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+.rp-mode-pill {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--pill-bg, transparent);
+  border: 1px solid var(--pill-border, #2a2a2a);
+  border-radius: 5px;
+  color: var(--pill-color, var(--faint));
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.1s, background 0.1s;
+  opacity: 0.55;
+}
+.rp-mode-pill:hover {
+  opacity: 1;
+}
+.rp-mode-pill.active {
+  opacity: 1;
+  border-style: solid;
 }
 
 /* Right column: chat */
@@ -161,37 +201,6 @@ a { color: inherit; text-decoration: none; }
 }
 .rp-feed::-webkit-scrollbar { width: 3px; }
 .rp-feed::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
-
-/* Mode button — sits at bottom of each card/section */
-.rp-mode-btn {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 6px 10px;
-  margin-top: 4px;
-  background: none;
-  border: 1px dashed #333;
-  border-radius: 6px;
-  color: var(--faint);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: all 0.1s;
-  text-align: left;
-}
-.rp-mode-btn:hover {
-  border-color: var(--orange-edge);
-  color: var(--orange);
-  background: var(--orange-bg);
-}
-.rp-mode-btn.active {
-  border-style: solid;
-  border-color: var(--orange-edge);
-  background: var(--orange-bg);
-  color: var(--orange);
-}
 
 .notes-main { padding: 16px 24px 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 .notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; overflow-x: auto; }
@@ -248,7 +257,7 @@ a { color: inherit; text-decoration: none; }
 .cv-del-btn { color: #ff6666 !important; border-color: #3a0000 !important; }
 .cv-del-btn:hover { background: #1a0000 !important; color: #ff4444 !important; }
 
-/* Shared AI widget styles (used by RushmorePanel) */
+/* Shared AI widget styles */
 .ai-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff8c3a; box-shadow: 0 0 6px #ff8c3a; animation: pulse 2.5s ease-in-out infinite; flex-shrink: 0; display: inline-block; }
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 6px #ff8c3a; } 50% { opacity: 0.5; box-shadow: 0 0 12px #ff8c3a; } }
 .ai-speaking-label { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; color: #5b9bd5; animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
@@ -341,11 +350,12 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 120px; }
   .notes-main { padding: 10px 10px 0; }
   .notes-hint { display: none; }
-  /* Rushmore panel stacks on mobile */
   .rp-shell { flex-direction: column; height: auto; }
-  .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 10px; gap: 10px; }
-  .rp-video-box { width: 80px; height: 80px; flex-shrink: 0; }
-  .rp-chat-col { height: 320px; }
+  .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: flex-start; padding: 10px; gap: 10px; }
+  .rp-video-box { width: 72px; height: 72px; flex-shrink: 0; }
+  .rp-mode-btns { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
+  .rp-mode-pill { width: auto; font-size: 10px; padding: 4px 7px; }
+  .rp-chat-col { height: 300px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
