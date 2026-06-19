@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Canvas from "@/components/Canvas";
-import RushmoreAI from "@/components/RushmoreAI";
+import RushmorePanel, { MODES } from "@/components/RushmorePanel";
 import MicrosoftPanel from "@/components/MicrosoftPanel";
 import contextsData from "@/data/contexts.json";
 
@@ -76,19 +76,14 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
 function RepoChip({ label, url }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip">
-      <span className="cmd-repo-icon">⊞</span>
-      {label}
+      <span className="cmd-repo-icon">⊞</span>{label}
     </a>
   );
 }
 
 function BoardChip({ url, tag }) {
-  const cls = tag === "dev" ? "cmd-board-chip dev"
-            : tag === "biz" ? "cmd-board-chip biz"
-            : "cmd-board-chip board";
-  const text = tag === "dev" ? "Development"
-             : tag === "biz" ? "Business"
-             : "Board";
+  const cls  = tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board";
+  const text = tag === "dev" ? "Development" : tag === "biz" ? "Business" : "Board";
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
 
@@ -100,16 +95,29 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-function ContextCard({ ctx }) {
+// Mode button placed at the bottom of each card / section
+function ModeBtn({ modeId, label, activeMode, onModeChange }) {
+  const active = activeMode === modeId;
+  return (
+    <button
+      className={"rp-mode-btn" + (active ? " active" : "")}
+      onClick={() => onModeChange(active ? null : modeId)}
+      title={active ? "Deactivate mode" : `Switch RUSHMORE to ${label} mode`}
+    >
+      {active ? "\u25cf " : "\u25cb "}{label} mode
+    </button>
+  );
+}
+
+function ContextCard({ ctx, activeMode, onModeChange }) {
   const sp       = ctx.sharepoint || [];
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
   const logo     = CTX_LOGO[ctx.id];
-
-  // Riipen Overlord lives in the Riipen section, not the work card
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
+  const modeExists  = MODES.find(m => m.id === ctx.id);
 
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
@@ -127,19 +135,22 @@ function ContextCard({ ctx }) {
       )}
       {otherClaude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      {modeExists && (
+        <ModeBtn modeId={ctx.id} label={ctx.name} activeMode={activeMode} onModeChange={onModeChange} />
+      )}
     </div>
   );
 }
 
-function RiipenSection({ ctx }) {
+function RiipenSection({ ctx, activeMode, onModeChange }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
     if (!groups[l.group]) groups[l.group] = [];
     groups[l.group].push(l);
   }
-  const topLevel   = groups["Riipen"] || [];
-  const overlord   = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
-  const teamKeys   = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
+  const topLevel = groups["Riipen"] || [];
+  const overlord = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
+  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
 
   return (
     <section className="cmd-section">
@@ -156,6 +167,7 @@ function RiipenSection({ ctx }) {
             {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
           </div>
         ))}
+        <ModeBtn modeId="riipen" label="Riipen" activeMode={activeMode} onModeChange={onModeChange} />
       </div>
     </section>
   );
@@ -164,8 +176,9 @@ function RiipenSection({ ctx }) {
 const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 
 export default function Home() {
-  const [view, setView] = useState("command");
-  const [msAuthed, setMsAuthed] = useState(false);
+  const [view,        setView]       = useState("command");
+  const [msAuthed,    setMsAuthed]   = useState(false);
+  const [activeMode,  setActiveMode] = useState(null);
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -199,7 +212,6 @@ export default function Home() {
         <span className="wordmark">OPERATIONS</span>
         <nav className="app-nav">
           <button className={"app-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>Command</button>
-          <button className={"app-nav-btn" + (view === "ai"      ? " active" : "")} onClick={() => setView("ai")}>RUSHMORE</button>
           <button className={"app-nav-btn" + (view === "notes"   ? " active" : "")} onClick={() => setView("notes")}>Notes</button>
         </nav>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
@@ -241,18 +253,25 @@ export default function Home() {
             </div>
           </section>
 
+          {/* RUSHMORE panel — inline in Command */}
+          <section className="cmd-section">
+            <div className="cmd-section-header">
+              <span>RUSHMORE</span>
+              {activeMode && <span style={{ fontSize: 10, color: "var(--orange)", letterSpacing: "0.15em", fontWeight: 700 }}>{activeMode.toUpperCase()} MODE</span>}
+            </div>
+            <RushmorePanel activeMode={activeMode} onModeChange={setActiveMode} />
+          </section>
+
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK</span></div>
             <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} activeMode={activeMode} onModeChange={setActiveMode} />)}
             </div>
           </section>
 
-          {geocomforter && <RiipenSection ctx={geocomforter} />}
+          {geocomforter && <RiipenSection ctx={geocomforter} activeMode={activeMode} onModeChange={setActiveMode} />}
         </main>
       )}
-
-      {view === "ai" && <RushmoreAI />}
 
       {view === "notes" && (
         <main className="notes-main"><Canvas /></main>
@@ -262,10 +281,6 @@ export default function Home() {
         <button className={"mobile-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>
           <span className="mobile-nav-icon">📋</span>
           Command
-        </button>
-        <button className={"mobile-nav-btn" + (view === "ai" ? " active" : "")} onClick={() => setView("ai")}>
-          <span className="mobile-nav-icon">⚡</span>
-          Rushmore
         </button>
         <button className={"mobile-nav-btn" + (view === "notes" ? " active" : "")} onClick={() => setView("notes")}>
           <span className="mobile-nav-icon">📝</span>
