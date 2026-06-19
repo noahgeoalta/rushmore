@@ -11,13 +11,23 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
+// Semitones → playback rate multiplier
 const st = (n) => Math.pow(2, n / 12);
-const BASE    = -2.39;
-const CHO_A   = BASE + 14/100;
-const CHO_B   = BASE - 12/100;
-const UNDER   = BASE - 0.25;
-const PIT_DN1 = BASE - 0.5;
-const PIT_DN2 = BASE - 1.0;
+
+// ── Speed + pitch compensation ──────────────────────────────────────────────
+// All sources play at 0.8× speed (20% slower).
+// Slowing to 0.8× drops pitch by log2(0.8)×12 ≈ −3.864 semitones.
+// We add +3.864 to every semitone offset so the perceived pitch is unchanged.
+const SLOW       = 0.8;
+const PITCH_COMP = 3.864;  // semitones to add back
+
+// Original semitone offsets (relative to 0), now shifted up by PITCH_COMP
+const BASE    = -2.39  + PITCH_COMP;
+const CHO_A   = BASE   + 14/100;
+const CHO_B   = BASE   - 12/100;
+const UNDER   = BASE   - 0.25;
+const PIT_DN1 = BASE   - 0.5;
+const PIT_DN2 = BASE   - 1.0;
 
 function makeImpulse(ctx, duration, decay) {
   const rate   = ctx.sampleRate;
@@ -71,7 +81,8 @@ function getCtx() {
 function makeSource(ctx, decoded, semitones) {
   const src = ctx.createBufferSource();
   src.buffer = decoded;
-  src.playbackRate.value = st(semitones);
+  // Apply both the pitch-compensating semitone shift AND the slow-down rate
+  src.playbackRate.value = st(semitones) * SLOW;
   activeSources.push(src);
   return src;
 }
@@ -133,6 +144,7 @@ async function speakWithFX(text, onDone) {
       const hallGain = ctx.createGain(); hallGain.gain.value = 0.10;
       gateOut.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
 
+      // ── Original parallel echo layers (from gateOut) ─────────────────────
       const makeEcho = (dt, gain, maxDt) => {
         const d = ctx.createDelay(maxDt || dt + 0.005); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = gain;
@@ -151,6 +163,34 @@ async function speakWithFX(text, onDone) {
       const e11 = makeEcho(0.500, 0.009, 0.5);
       const e12 = makeEcho(0.650, 0.005, 0.5);
       const e13 = makeEcho(0.820, 0.002, 0.5);
+
+      // ── 6 cascading echo layers (echo-on-echo-on-echo) ───────────────────
+      // Each stage takes the previous stage's output as its input,
+      // creating a smeared, multiplying echo cloud.
+      // Delays are short-ish so they pile up densely rather than slapping.
+      const cDelay1 = ctx.createDelay(1.0); cDelay1.delayTime.value = 0.055;
+      const cGain1  = ctx.createGain();  cGain1.gain.value  = 0.38;
+      gateOut.connect(cDelay1);    cDelay1.connect(cGain1);
+
+      const cDelay2 = ctx.createDelay(1.0); cDelay2.delayTime.value = 0.080;
+      const cGain2  = ctx.createGain();  cGain2.gain.value  = 0.30;
+      cGain1.connect(cDelay2);     cDelay2.connect(cGain2);
+
+      const cDelay3 = ctx.createDelay(1.0); cDelay3.delayTime.value = 0.110;
+      const cGain3  = ctx.createGain();  cGain3.gain.value  = 0.23;
+      cGain2.connect(cDelay3);     cDelay3.connect(cGain3);
+
+      const cDelay4 = ctx.createDelay(1.0); cDelay4.delayTime.value = 0.150;
+      const cGain4  = ctx.createGain();  cGain4.gain.value  = 0.17;
+      cGain3.connect(cDelay4);     cDelay4.connect(cGain4);
+
+      const cDelay5 = ctx.createDelay(1.0); cDelay5.delayTime.value = 0.200;
+      const cGain5  = ctx.createGain();  cGain5.gain.value  = 0.12;
+      cGain4.connect(cDelay5);     cDelay5.connect(cGain5);
+
+      const cDelay6 = ctx.createDelay(1.0); cDelay6.delayTime.value = 0.260;
+      const cGain6  = ctx.createGain();  cGain6.gain.value  = 0.07;
+      cGain5.connect(cDelay6);     cDelay6.connect(cGain6);
 
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
@@ -173,6 +213,8 @@ async function speakWithFX(text, onDone) {
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.65;
       gateOut.connect(dryGain); dryGain.connect(master);
       [e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13].forEach(e => e.connect(master));
+      // Cascading echoes all feed into master
+      [cGain1,cGain2,cGain3,cGain4,cGain5,cGain6].forEach(g => g.connect(master));
       plateGain.connect(master); hallGain.connect(master);
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
@@ -204,7 +246,7 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Green TV flash — pulses over the video only, matching voice ──────────
+// ── Green TV flash — pulses over the video only, matching voice ────────────
 function useTVFlash(flashRef, dataArr) {
   const rafRef = useRef(null);
   useEffect(() => {
@@ -430,20 +472,12 @@ export default function RushmoreAI() {
     <div className="ai-shell">
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
-          {/* Video: no filter, original green colours */}
           <video
             ref={videoRef}
             src={VIDEO_SRC}
             autoPlay loop muted playsInline
             className="ai-video-main"
           />
-          {/*
-            Green TV flash overlay — covers the video square only.
-            Opacity 0 at rest, pulses green with voice amplitude.
-            box-shadow bleeds a halo outside the video edges.
-            mix-blend-mode: screen so green adds on top of the video
-            rather than washing it out.
-          */}
           <div
             ref={flashRef}
             style={{
