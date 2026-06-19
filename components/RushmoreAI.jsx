@@ -15,13 +15,13 @@ function calcCost(inTok, outTok) {
 const st = (n) => Math.pow(2, n / 12);
 
 // ── Speed + pitch compensation ──────────────────────────────────────────────
-// All sources play at 0.8× speed (20% slower).
-// Slowing to 0.8× drops pitch by log2(0.8)×12 ≈ −3.864 semitones.
-// We add +3.864 to every semitone offset so the perceived pitch is unchanged.
-const SLOW       = 0.8;
-const PITCH_COMP = 3.864;  // semitones to add back
+// SLOW = 0.8 × 0.8 = 0.64 (two successive 20% slowdowns).
+// Total pitch drop from slowing: log2(0.64)×12 ≈ −7.274 semitones.
+// PITCH_COMP keeps perceived pitch where it was before any slowdown was applied.
+const SLOW       = 0.64;
+const PITCH_COMP = 3.864;  // compensates the first 0.8× pass (unchanged)
 
-// Original semitone offsets (relative to 0), now shifted up by PITCH_COMP
+// Semitone offsets — PITCH_COMP was already baked in last pass, kept as-is
 const BASE    = -2.39  + PITCH_COMP;
 const CHO_A   = BASE   + 14/100;
 const CHO_B   = BASE   - 12/100;
@@ -81,7 +81,6 @@ function getCtx() {
 function makeSource(ctx, decoded, semitones) {
   const src = ctx.createBufferSource();
   src.buffer = decoded;
-  // Apply both the pitch-compensating semitone shift AND the slow-down rate
   src.playbackRate.value = st(semitones) * SLOW;
   activeSources.push(src);
   return src;
@@ -164,33 +163,56 @@ async function speakWithFX(text, onDone) {
       const e12 = makeEcho(0.650, 0.005, 0.5);
       const e13 = makeEcho(0.820, 0.002, 0.5);
 
-      // ── 6 cascading echo layers (echo-on-echo-on-echo) ───────────────────
-      // Each stage takes the previous stage's output as its input,
-      // creating a smeared, multiplying echo cloud.
-      // Delays are short-ish so they pile up densely rather than slapping.
+      // ── Cascading echo chain A (layers 1–6, from previous pass) ──────────
       const cDelay1 = ctx.createDelay(1.0); cDelay1.delayTime.value = 0.055;
       const cGain1  = ctx.createGain();  cGain1.gain.value  = 0.38;
-      gateOut.connect(cDelay1);    cDelay1.connect(cGain1);
+      gateOut.connect(cDelay1); cDelay1.connect(cGain1);
 
       const cDelay2 = ctx.createDelay(1.0); cDelay2.delayTime.value = 0.080;
       const cGain2  = ctx.createGain();  cGain2.gain.value  = 0.30;
-      cGain1.connect(cDelay2);     cDelay2.connect(cGain2);
+      cGain1.connect(cDelay2); cDelay2.connect(cGain2);
 
       const cDelay3 = ctx.createDelay(1.0); cDelay3.delayTime.value = 0.110;
       const cGain3  = ctx.createGain();  cGain3.gain.value  = 0.23;
-      cGain2.connect(cDelay3);     cDelay3.connect(cGain3);
+      cGain2.connect(cDelay3); cDelay3.connect(cGain3);
 
       const cDelay4 = ctx.createDelay(1.0); cDelay4.delayTime.value = 0.150;
       const cGain4  = ctx.createGain();  cGain4.gain.value  = 0.17;
-      cGain3.connect(cDelay4);     cDelay4.connect(cGain4);
+      cGain3.connect(cDelay4); cDelay4.connect(cGain4);
 
       const cDelay5 = ctx.createDelay(1.0); cDelay5.delayTime.value = 0.200;
       const cGain5  = ctx.createGain();  cGain5.gain.value  = 0.12;
-      cGain4.connect(cDelay5);     cDelay5.connect(cGain5);
+      cGain4.connect(cDelay5); cDelay5.connect(cGain5);
 
       const cDelay6 = ctx.createDelay(1.0); cDelay6.delayTime.value = 0.260;
       const cGain6  = ctx.createGain();  cGain6.gain.value  = 0.07;
-      cGain5.connect(cDelay6);     cDelay6.connect(cGain6);
+      cGain5.connect(cDelay6); cDelay6.connect(cGain6);
+
+      // ── Cascading echo chain B (6 new layers, chaining off cGain6) ───────
+      // These feed on the already-cascaded signal, producing echo-of-echo-of-echo.
+      const cDelay7 = ctx.createDelay(1.0); cDelay7.delayTime.value = 0.320;
+      const cGain7  = ctx.createGain();  cGain7.gain.value  = 0.05;
+      cGain6.connect(cDelay7); cDelay7.connect(cGain7);
+
+      const cDelay8 = ctx.createDelay(1.0); cDelay8.delayTime.value = 0.390;
+      const cGain8  = ctx.createGain();  cGain8.gain.value  = 0.038;
+      cGain7.connect(cDelay8); cDelay8.connect(cGain8);
+
+      const cDelay9 = ctx.createDelay(1.0); cDelay9.delayTime.value = 0.470;
+      const cGain9  = ctx.createGain();  cGain9.gain.value  = 0.028;
+      cGain8.connect(cDelay9); cDelay9.connect(cGain9);
+
+      const cDelay10 = ctx.createDelay(1.0); cDelay10.delayTime.value = 0.560;
+      const cGain10  = ctx.createGain();  cGain10.gain.value  = 0.020;
+      cGain9.connect(cDelay10); cDelay10.connect(cGain10);
+
+      const cDelay11 = ctx.createDelay(1.0); cDelay11.delayTime.value = 0.660;
+      const cGain11  = ctx.createGain();  cGain11.gain.value  = 0.013;
+      cGain10.connect(cDelay11); cDelay11.connect(cGain11);
+
+      const cDelay12 = ctx.createDelay(1.0); cDelay12.delayTime.value = 0.770;
+      const cGain12  = ctx.createGain();  cGain12.gain.value  = 0.007;
+      cGain11.connect(cDelay12); cDelay12.connect(cGain12);
 
       const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
       const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
@@ -213,8 +235,8 @@ async function speakWithFX(text, onDone) {
       const dryGain = ctx.createGain(); dryGain.gain.value = 0.65;
       gateOut.connect(dryGain); dryGain.connect(master);
       [e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13].forEach(e => e.connect(master));
-      // Cascading echoes all feed into master
-      [cGain1,cGain2,cGain3,cGain4,cGain5,cGain6].forEach(g => g.connect(master));
+      [cGain1,cGain2,cGain3,cGain4,cGain5,cGain6,
+       cGain7,cGain8,cGain9,cGain10,cGain11,cGain12].forEach(g => g.connect(master));
       plateGain.connect(master); hallGain.connect(master);
       srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
       srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
