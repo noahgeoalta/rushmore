@@ -28,13 +28,6 @@ export async function POST(request) {
       body: JSON.stringify({
         text: clean,
         model_id: "eleven_flash_v2_5",
-        voice_settings: {
-          stability: 0.25,
-          similarity_boost: 0.95,
-          style: 0.45,
-          use_speaker_boost: true,
-          speed: 1.20,
-        },
       }),
     }
   );

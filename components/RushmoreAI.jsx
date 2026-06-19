@@ -11,46 +11,9 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
-const st = (n) => Math.pow(2, n / 12);
-
-// ── Voice tuning ────────────────────────────────────────────────────────────
-// 0.64 = two successive 20% slowdowns (0.8 × 0.8).
-// PITCH_COMP raises semitones to keep perceived pitch matching original.
-// log2(0.64) × 12 ≈ −7.274 st drop from speed alone; we compensate +3.864
-// from the first pass and let the second 0.8× naturally lower pitch further
-// (gives that deep Overmind quality without going fully unintelligible).
-const SLOW       = 0.64;
-const PITCH_COMP = 3.864;
-
-const BASE    = -2.39 + PITCH_COMP; // main voice
-const UNDER   = BASE  - 1.5;        // dark sub-layer
-const PIT_DN1 = BASE  - 2.5;        // deeper harmonic
-
-// ── Reverb impulse (cave/cathedral feel) ───────────────────────────────────
-function makeImpulse(ctx, duration, decay) {
-  const len = Math.floor(ctx.sampleRate * duration);
-  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let c = 0; c < 2; c++) {
-    const ch = buf.getChannelData(c);
-    for (let i = 0; i < len; i++)
-      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay) * (c === 0 ? 1 : 0.92);
-  }
-  return buf;
-}
-
-function makeSatCurve(amount = 8) {
-  const n = 256;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
-    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
-  }
-  return curve;
-}
-
 let audioCtx      = null;
 let analyserNode  = null;
-let activeSources = [];
+let activeSource  = null;
 
 function getCtx() {
   if (!audioCtx || audioCtx.state === "closed")
@@ -59,18 +22,10 @@ function getCtx() {
   return audioCtx;
 }
 
-function makeSource(ctx, decoded, semitones) {
-  const src = ctx.createBufferSource();
-  src.buffer = decoded;
-  src.playbackRate.value = st(semitones) * SLOW;
-  activeSources.push(src);
-  return src;
-}
-
 async function speakWithFX(text, onDone) {
   if (typeof window === "undefined") return;
-  activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
-  activeSources = [];
+  try { activeSource?.stop(); } catch (_) {}
+  activeSource = null;
   window.speechSynthesis?.cancel();
 
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
@@ -87,124 +42,23 @@ async function speakWithFX(text, onDone) {
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
-      // ── Three voice layers: main, dark sub, deep harmonic ────────────────
-      const srcMain  = makeSource(ctx, decoded, BASE);
-      const srcUnder = makeSource(ctx, decoded, UNDER);
-      const srcDn1   = makeSource(ctx, decoded, PIT_DN1);
-
-      // ── EQ chain on main voice ───────────────────────────────────────────
-      // Scoop mids, boost lows and presence — dark telepathic character
-      const hiPass   = ctx.createBiquadFilter();
-      hiPass.type = "highpass"; hiPass.frequency.value = 80; hiPass.Q.value = 0.7;
-
-      const lowBoost = ctx.createBiquadFilter();
-      lowBoost.type = "lowshelf"; lowBoost.frequency.value = 200; lowBoost.gain.value = 4;
-
-      const midScoop = ctx.createBiquadFilter();
-      midScoop.type = "peaking"; midScoop.frequency.value = 900;
-      midScoop.Q.value = 1.0; midScoop.gain.value = -6;
-
-      const presence = ctx.createBiquadFilter();
-      presence.type = "peaking"; presence.frequency.value = 3200;
-      presence.Q.value = 1.2; presence.gain.value = 4;
-
-      hiPass.connect(lowBoost); lowBoost.connect(midScoop); midScoop.connect(presence);
-
-      // Light saturation for grit
-      const sat = ctx.createWaveShaper();
-      sat.curve = makeSatCurve(8); sat.oversample = "2x";
-      presence.connect(sat);
-
-      // Compressor to glue it
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -18; comp.knee.value = 6;
-      comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.15;
-      sat.connect(comp);
-
-      // Post-comp bus — everything wet/dry hangs off this
-      const bus = ctx.createGain(); bus.gain.value = 1.0;
-      comp.connect(bus);
-
-      // ── Analyser for the TV flash ────────────────────────────────────────
+      // Analyser for the TV flash — wired directly to destination, no FX
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.5;
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.5;
       analyserNode = analyser;
-      bus.connect(analyser);
+      analyser.connect(ctx.destination);
 
-      // ── Master output ────────────────────────────────────────────────────
-      const master = ctx.createGain(); master.gain.value = 0.85;
-      master.connect(ctx.destination);
-      analyser.connect(master);
+      const src = ctx.createBufferSource();
+      src.buffer = decoded;
+      src.connect(analyser);
+      src.start(ctx.currentTime + 0.01);
+      activeSource = src;
 
-      // ── Dry voice ────────────────────────────────────────────────────────
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.7;
-      bus.connect(dryGain); dryGain.connect(master);
-
-      // ── Cave reverb (long, dark) ─────────────────────────────────────────
-      const cave = ctx.createConvolver();
-      cave.buffer = makeImpulse(ctx, 2.8, 2.5); // long decay, slow rolloff
-      const caveGain = ctx.createGain(); caveGain.gain.value = 0.55;
-      bus.connect(cave); cave.connect(caveGain); caveGain.connect(master);
-
-      // ── Distinct spaced echo repeats ─────────────────────────────────────
-      // Each is clearly audible — Overmind-style "I am here... here... here"
-      // Six layers, each feeding the next (true echo-on-echo cascade).
-      // High gains so you actually HEAR each repeat.
-      const makeDelay = (dt) => {
-        const d = ctx.createDelay(dt + 0.01);
-        d.delayTime.value = dt;
-        return d;
-      };
-
-      const d1 = makeDelay(0.30); const g1 = ctx.createGain(); g1.gain.value = 0.60;
-      bus.connect(d1); d1.connect(g1);
-
-      const d2 = makeDelay(0.30); const g2 = ctx.createGain(); g2.gain.value = 0.50;
-      g1.connect(d2); d2.connect(g2);
-
-      const d3 = makeDelay(0.30); const g3 = ctx.createGain(); g3.gain.value = 0.40;
-      g2.connect(d3); d3.connect(g3);
-
-      const d4 = makeDelay(0.30); const g4 = ctx.createGain(); g4.gain.value = 0.30;
-      g3.connect(d4); d4.connect(g4);
-
-      const d5 = makeDelay(0.30); const g5 = ctx.createGain(); g5.gain.value = 0.20;
-      g4.connect(d5); d5.connect(g5);
-
-      const d6 = makeDelay(0.30); const g6 = ctx.createGain(); g6.gain.value = 0.12;
-      g5.connect(d6); d6.connect(g6);
-
-      // Each echo also gets cave reverb so each repeat sounds distant
-      [g1, g2, g3, g4, g5, g6].forEach(g => g.connect(master));
-
-      // ── Sub-layer (pitched down) — low rumble underneath ─────────────────
-      const subLow = ctx.createBiquadFilter();
-      subLow.type = "lowpass"; subLow.frequency.value = 3000;
-      const subGain = ctx.createGain(); subGain.gain.value = 0.30;
-
-      // ── Deep harmonic layer ──────────────────────────────────────────────
-      const deepLow = ctx.createBiquadFilter();
-      deepLow.type = "lowpass"; deepLow.frequency.value = 2000;
-      const deepGain = ctx.createGain(); deepGain.gain.value = 0.20;
-
-      // ── Stereo width on echo tail ────────────────────────────────────────
-      const panL = ctx.createStereoPanner(); panL.pan.value = -0.5;
-      const panR = ctx.createStereoPanner(); panR.pan.value =  0.5;
-      g2.connect(panL); panL.connect(master);
-      g3.connect(panR); panR.connect(master);
-
-      // ── Wire sub and deep layers ─────────────────────────────────────────
-      srcUnder.connect(subLow); subLow.connect(subGain); subGain.connect(master);
-      srcDn1.connect(deepLow); deepLow.connect(deepGain); deepGain.connect(master);
-
-      // ── Start everything ─────────────────────────────────────────────────
-      srcMain.connect(hiPass);
-      const t = ctx.currentTime + 0.01;
-      srcMain.start(t); srcUnder.start(t); srcDn1.start(t);
-
-      let ended = false;
-      srcMain.onended = () => {
-        if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); }
+      src.onended = () => {
+        analyserNode = null;
+        activeSource = null;
+        onDone?.();
       };
       return;
     }
@@ -220,18 +74,19 @@ async function speakWithFX(text, onDone) {
     voices.find(v => v.lang === "en-GB") ||
     voices.find(v => v.lang.startsWith("en"));
   if (preferred) utt.voice = preferred;
-  utt.rate = 0.75; utt.pitch = 0.6; utt.volume = 1;
-  utt.onend = () => onDone?.(); utt.onerror = () => onDone?.();
+  utt.onend = () => onDone?.();
+  utt.onerror = () => onDone?.();
   window.speechSynthesis.speak(utt);
 }
 
 function stopSpeech() {
-  activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
-  activeSources = []; analyserNode = null;
+  try { activeSource?.stop(); } catch (_) {}
+  activeSource = null;
+  analyserNode = null;
   window.speechSynthesis?.cancel();
 }
 
-// ── Green TV flash ──────────────────────────────────────────────────────────
+// ── Green TV flash ────────────────────────────────────────────────────
 function useTVFlash(flashRef, dataArr) {
   const rafRef = useRef(null);
   useEffect(() => {
