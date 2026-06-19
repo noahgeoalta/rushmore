@@ -61,11 +61,11 @@ a { color: inherit; text-decoration: none; }
 .cmd-riipen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmd-riipen-team { font-size: 15px; font-weight: 600; color: var(--dim); min-width: 180px; flex-shrink: 0; }
 
-/* ── RUSHMORE panel ── */
+/* ── RUSHMORE panel — grows with content ── */
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
 .rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); }
 .rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
-.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 42% center; }
+.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 41% center; }
 .rp-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; background: radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%); box-shadow: 0 0 30px 8px rgba(60,220,60,0.3); z-index: 3; }
 .rp-status { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
@@ -82,33 +82,9 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 
-/* ── Notes ──
-   notes-main is itself the scroll container.
-   notes-bar is sticky at the top of that scroll container.
-   cv-canvas sits directly below with no extra wrapper.
-*/
-.notes-main {
-  padding: 0;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  /* needed so sticky children work: the scroll happens HERE */
-}
-.notes-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  overflow-x: auto;
-  position: sticky;
-  top: 0;   /* sticks to top of notes-main scroll container */
-  z-index: 8;
-  background: var(--bg);
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--edge);
-  flex-shrink: 0;
-}
+/* ── Notes ── */
+.notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 53px; z-index: 8; background: var(--bg); padding: 10px 24px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
 .page-tab.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
@@ -124,8 +100,7 @@ a { color: inherit; text-decoration: none; }
 .notes-sep { width: 1px; height: 16px; background: var(--edge); margin: 0 3px; flex-shrink: 0; }
 .notes-hint { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; }
 .cv-fontsize-display { font-size: 12px; font-weight: 700; color: var(--dim); min-width: 36px; text-align: center; letter-spacing: 0.03em; flex-shrink: 0; }
-/* cv-scroll-wrap is now just a padding wrapper, no overflow — notes-main scrolls */
-.cv-scroll-wrap { padding: 16px 24px 40px; }
+.cv-scroll-wrap { flex: 1; overflow: auto; position: relative; padding: 16px 24px; }
 .cv-canvas { position: relative; min-height: 600px; background: var(--bg); }
 .cv-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--faint); font-size: 1rem; pointer-events: none; text-align: center; }
 .cv-box { position: absolute; min-width: 160px; background: transparent; border: 1px solid transparent; border-radius: 8px; transition: border-color 0.1s; }
@@ -251,14 +226,15 @@ a { color: inherit; text-decoration: none; }
   .ai-send-btn { padding: 8px 10px; font-size: 11px; letter-spacing: 0; }
   .ai-textarea { font-size: 13px; padding: 7px 10px; }
   .ai-msg-bubble { font-size: 13px; padding: 8px 10px; line-height: 1.5; }
-  /* Notes mobile — same approach as desktop, just tighter padding */
-  .notes-bar { padding: 6px 10px; gap: 4px; }
+  .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+  .notes-bar { position: fixed; top: 46px; left: 0; right: 0; z-index: 9; background: var(--bg); border-bottom: 1px solid var(--edge); padding: 6px 10px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 0; flex-shrink: 0; }
+  .notes-bar::-webkit-scrollbar { display: none; }
   .notes-toolbar { gap: 3px; }
   .notes-btn { padding: 4px 8px; font-size: 11px; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
-  .cv-scroll-wrap { padding: 8px 10px 24px; }
+  .cv-scroll-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; padding-top: calc(46px + 8px); }
   .cv-canvas { min-height: 1400px; }
 }
 
