@@ -41,16 +41,12 @@ function spIcon(ctxId, label) {
   if (ctxId === "geoalta")      return IMG.geoaltaSP;
   if (ctxId === "nmgco")        return IMG.nmgcoSP;
   if (ctxId === "chronoslate")  return IMG.chronoslateSP;
-  if (ctxId === "geocomforter") {
-    if (label.toLowerCase().includes("business")) return IMG.geocomforterBizSP;
-    return IMG.geocomforterDevSP;
-  }
+  if (ctxId === "geocomforter") return label.toLowerCase().includes("business") ? IMG.geocomforterBizSP : IMG.geocomforterDevSP;
   return null;
 }
 
 function resolveUrl(url, desktop) {
-  if (desktop && url?.startsWith("https://claude.ai/"))
-    return url.replace("https://", "claude://");
+  if (desktop && url?.startsWith("https://claude.ai/")) return url.replace("https://", "claude://");
   return url;
 }
 
@@ -63,8 +59,7 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   const href = resolveUrl(url, desktop);
   const isDesktop = desktop && href?.startsWith("claude://");
   return (
-    <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"}
-      className="cmd-chip" title={isDesktop ? "Opens in Claude desktop app" : undefined}>
+    <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"} className="cmd-chip" title={isDesktop ? "Opens in Claude desktop app" : undefined}>
       {imgSrc  && <ImgIcon src={imgSrc} size={15} />}
       {symbol  && <span className="cmd-chip-icon">{symbol}</span>}
       {label}
@@ -74,11 +69,7 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
 }
 
 function RepoChip({ label, url }) {
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip">
-      <span className="cmd-repo-icon">⊞</span>{label}
-    </a>
-  );
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>{label}</a>;
 }
 
 function BoardChip({ url, tag }) {
@@ -88,12 +79,11 @@ function BoardChip({ url, tag }) {
 }
 
 function IconBoardChip({ label, url, icon }) {
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
-      <ImgIcon src={icon} size={15} />{label}
-    </a>
-  );
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-chip"><ImgIcon src={icon} size={15} />{label}</a>;
 }
+
+// Work card order: GeoAlta, GeoComforter, ChronoSlate, NMGCO
+const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
 
 function ContextCard({ ctx }) {
   const sp       = ctx.sharepoint || [];
@@ -103,13 +93,10 @@ function ContextCard({ ctx }) {
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
-
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        {logo
-          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-          : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} /> : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
       {questLog.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {(ghBoards.length > 0 || ghRepos.length > 0) && (
@@ -124,7 +111,7 @@ function ContextCard({ ctx }) {
   );
 }
 
-function RiipenSection({ ctx }) {
+function RiipenSection({ ctx, activeMode, onModeChange }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
     if (!groups[l.group]) groups[l.group] = [];
@@ -133,7 +120,6 @@ function RiipenSection({ ctx }) {
   const topLevel = groups["Riipen"] || [];
   const overlord = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
   const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
-
   return (
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
@@ -153,8 +139,6 @@ function RiipenSection({ ctx }) {
     </section>
   );
 }
-
-const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 
 export default function Home() {
   const [view,       setView]       = useState("command");
@@ -223,6 +207,8 @@ export default function Home() {
                 {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
                 {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
                 {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
+                {/* Rushmore Chat — browser link, orderIcon2 */}
+                <Chip label="Rushmore Chat" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.orderIcon2} />
               </div>
               <div className="cmd-row">
                 {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
@@ -234,6 +220,15 @@ export default function Home() {
             </div>
           </section>
 
+          {/* WORK section — GeoAlta, GeoComforter, ChronoSlate, NMGCO */}
+          <section className="cmd-section">
+            <div className="cmd-section-header"><span>WORK</span></div>
+            <div className="cmd-cards-row">
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+            </div>
+          </section>
+
+          {/* RUSHMORE — between WORK and RIIPEN */}
           <section className="cmd-section">
             <div className="cmd-section-header">
               <span>RUSHMORE</span>
@@ -242,14 +237,7 @@ export default function Home() {
             <RushmorePanel activeMode={activeMode} onModeChange={setActiveMode} />
           </section>
 
-          <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK</span></div>
-            <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
-            </div>
-          </section>
-
-          {geocomforter && <RiipenSection ctx={geocomforter} />}
+          {geocomforter && <RiipenSection ctx={geocomforter} activeMode={activeMode} onModeChange={setActiveMode} />}
         </main>
       )}
 
@@ -259,12 +247,10 @@ export default function Home() {
 
       <nav className="mobile-nav">
         <button className={"mobile-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>
-          <span className="mobile-nav-icon">📋</span>
-          Command
+          <span className="mobile-nav-icon">📋</span>Command
         </button>
         <button className={"mobile-nav-btn" + (view === "notes" ? " active" : "")} onClick={() => setView("notes")}>
-          <span className="mobile-nav-icon">📝</span>
-          Notes
+          <span className="mobile-nav-icon">📝</span>Notes
         </button>
       </nav>
     </div>
