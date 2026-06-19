@@ -65,7 +65,7 @@ a { color: inherit; text-decoration: none; }
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; height: 420px; }
 .rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); overflow: hidden; }
 .rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
-.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% center; }
+.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 55% center; }
 .rp-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; background: radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%); box-shadow: 0 0 30px 8px rgba(60,220,60,0.3); z-index: 3; }
 .rp-status { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
@@ -74,7 +74,6 @@ a { color: inherit; text-decoration: none; }
 .rp-mode-pill { display: block; width: 100%; padding: 5px 8px; background: var(--pill-bg, transparent); border: 1px solid var(--pill-border, #2a2a2a); border-radius: 5px; color: var(--pill-color, var(--faint)); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.1s, background 0.1s; opacity: 0.55; }
 .rp-mode-pill:hover { opacity: 1; }
 .rp-mode-pill.active { opacity: 1; border-style: solid; }
-/* Chat column */
 .rp-chat-col { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .rp-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
 .rp-input-row { display: flex; align-items: flex-end; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
@@ -210,22 +209,11 @@ a { color: inherit; text-decoration: none; }
   .app-date { display: none; }
   .wordmark { font-size: 12px; letter-spacing: 0.18em; }
   .app-nav { display: none; }
-
-  .mobile-nav {
-    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-    background: #0e0e0e; border-top: 1px solid var(--edge);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .mobile-nav-btn {
-    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 3px; padding: 10px 4px 9px; background: none; border: none; color: var(--dim);
-    font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-  }
+  .mobile-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #0e0e0e; border-top: 1px solid var(--edge); padding-bottom: env(safe-area-inset-bottom); }
+  .mobile-nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 10px 4px 9px; background: none; border: none; color: var(--dim); font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .mobile-nav-btn.active { color: var(--orange); }
   .mobile-nav-btn .mobile-nav-icon { font-size: 22px; line-height: 1; }
   .app-shell { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
-
   .cmd-main { padding: 14px 12px 24px; }
   .cmd-section-header { font-size: 11px; letter-spacing: 0.15em; }
   .cmd-chip { font-size: 13px; padding: 6px 10px; gap: 5px; }
@@ -235,116 +223,30 @@ a { color: inherit; text-decoration: none; }
   .cmd-card { max-width: 100%; min-width: 0; flex: none; width: 100%; }
   .cmd-riipen-team { min-width: 100px; font-size: 13px; }
   .cmd-riipen-row { gap: 6px; }
-
-  /* ── RUSHMORE panel mobile ──
-     Key insight: rp-shell must have an explicit pixel height so the
-     flex children (toolbar, input, feed) have a real container to fill.
-     We use min-height instead of height so it can grow if needed.     */
-  .rp-shell {
-    flex-direction: column;
-    height: auto;
-    min-height: 560px;   /* video col ~130px + chat ~430px */
-    border-radius: 8px;
-    overflow: hidden;    /* clip rounded corners */
-  }
-  .rp-video-col {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--edge);
-    flex-direction: column;
-    flex-shrink: 0;
-    padding: 10px 12px 8px;
-    gap: 6px;
-    height: auto;
-    overflow: visible;
-  }
-  .rp-video-box {
-    width: 60px;
-    height: 60px;
-    aspect-ratio: unset;
-    flex-shrink: 0;
-    align-self: center;
-  }
-  .rp-mode-btns {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 5px;
-    margin-top: 0;
-    padding-bottom: 2px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-shrink: 0;
-  }
+  .rp-shell { flex-direction: column; height: auto; min-height: 560px; border-radius: 8px; overflow: hidden; }
+  .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: column; flex-shrink: 0; padding: 10px 12px 8px; gap: 6px; height: auto; overflow: visible; }
+  .rp-video-box { width: 60px; height: 60px; aspect-ratio: unset; flex-shrink: 0; align-self: center; }
+  .rp-mode-btns { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 5px; margin-top: 0; padding-bottom: 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-shrink: 0; }
   .rp-mode-btns::-webkit-scrollbar { display: none; }
   .rp-mode-pill { width: auto; flex-shrink: 0; font-size: 11px; padding: 5px 10px; opacity: 0.65; }
   .rp-mode-pill.active { opacity: 1; }
-
-  /* Chat column must fill all remaining height in the shell */
-  .rp-chat-col {
-    flex: 1;
-    min-height: 0;
-    height: 430px;       /* explicit fallback for older WebKit */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .rp-toolbar  { flex-shrink: 0; padding: 7px 10px; gap: 5px; background: #0a0a0a; }
+  .rp-chat-col { flex: 1; min-height: 0; height: 430px; display: flex; flex-direction: column; overflow: hidden; }
+  .rp-toolbar { flex-shrink: 0; padding: 7px 10px; gap: 5px; background: #0a0a0a; }
   .rp-input-row { flex-shrink: 0; padding: 7px 10px; gap: 6px; background: #0a0a0a; }
-  /* Feed: takes all leftover height, scrolls independently */
-  .rp-feed {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .rp-feed { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .ai-ctrl-btn { padding: 4px 7px; font-size: 10px; }
   .ai-send-btn { padding: 8px 10px; font-size: 11px; letter-spacing: 0; }
   .ai-textarea { font-size: 13px; padding: 7px 10px; }
   .ai-msg-bubble { font-size: 13px; padding: 8px 10px; line-height: 1.5; }
-
-  /* Notes — toolbar fixed below app bar, scrolls with you */
-  .notes-main {
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .notes-bar {
-    position: fixed;
-    top: 46px;
-    left: 0;
-    right: 0;
-    z-index: 9;
-    background: var(--bg);
-    border-bottom: 1px solid var(--edge);
-    padding: 6px 10px;
-    gap: 4px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin-bottom: 0;
-    flex-shrink: 0;
-  }
+  .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+  .notes-bar { position: fixed; top: 46px; left: 0; right: 0; z-index: 9; background: var(--bg); border-bottom: 1px solid var(--edge); padding: 6px 10px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 0; flex-shrink: 0; }
   .notes-bar::-webkit-scrollbar { display: none; }
   .notes-toolbar { gap: 3px; }
   .notes-btn { padding: 4px 8px; font-size: 11px; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
-  .cv-scroll-wrap {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 8px 10px;
-    padding-top: calc(46px + 8px);  /* clear the fixed notes-bar */
-  }
+  .cv-scroll-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; padding-top: calc(46px + 8px); }
   .cv-canvas { min-height: 1400px; }
 }
 
