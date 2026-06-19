@@ -1,27 +1,16 @@
-/* v3 */
+/* v3 - video 44% */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --bg: #111111;
-  --surface: #191919;
-  --edge: #262626;
-  --edge2: #2e2e2e;
-  --text: #e8e8e8;
-  --dim: #888;
-  --faint: #444;
-  --orange: #ff8c3a;
-  --orange-bg: #2a1200;
-  --orange-edge: #5a2800;
-  --blue: #3a7acc;
-  --blue-bg: #050d1a;
-  --blue-edge: #0a1e3a;
+  --bg: #111111; --surface: #191919; --edge: #262626; --edge2: #2e2e2e;
+  --text: #e8e8e8; --dim: #888; --faint: #444;
+  --orange: #ff8c3a; --orange-bg: #2a1200; --orange-edge: #5a2800;
+  --blue: #3a7acc; --blue-bg: #050d1a; --blue-edge: #0a1e3a;
 }
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 21px; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: Arial, 'Inter', ui-sans-serif, sans-serif; line-height: 1.5; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
-
 .app-shell { display: flex; flex-direction: column; min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
 .app-bar { display: flex; align-items: center; gap: 16px; padding: 10px 24px; border-bottom: 1px solid var(--edge); background: #0e0e0e; position: sticky; top: 0; z-index: 10; overflow: hidden; }
 .wordmark { font-size: 15px; font-weight: 800; letter-spacing: 0.3em; color: var(--text); flex-shrink: 0; }
@@ -31,7 +20,6 @@ a { color: inherit; text-decoration: none; }
 .app-nav-btn:hover { border-color: var(--edge2); color: var(--text); }
 .app-nav-btn.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
 .app-date { margin-left: auto; color: var(--faint); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; white-space: nowrap; }
-
 .cmd-main { padding: 26px 30px 80px; display: flex; flex-direction: column; gap: 0; }
 .cmd-section { margin-bottom: 30px; }
 .cmd-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--faint); text-transform: uppercase; }
@@ -60,12 +48,10 @@ a { color: inherit; text-decoration: none; }
 .cmd-riipen-top { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
 .cmd-riipen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmd-riipen-team { font-size: 15px; font-weight: 600; color: var(--dim); min-width: 180px; flex-shrink: 0; }
-
-/* ── RUSHMORE panel — grows with content ── */
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
 .rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); }
 .rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
-.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 38% center; }
+.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 44% center; }
 .rp-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; background: radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%); box-shadow: 0 0 30px 8px rgba(60,220,60,0.3); z-index: 3; }
 .rp-status { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
@@ -81,8 +67,6 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn { width: 26px; height: 22px; border-radius: 4px; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 13px; cursor: pointer; display: grid; place-items: center; transition: all 0.1s; touch-action: manipulation; flex-shrink: 0; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
-
-/* ── Notes ── */
 .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 53px; z-index: 8; background: var(--bg); padding: 10px 24px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
@@ -135,8 +119,6 @@ a { color: inherit; text-decoration: none; }
 .cv-kids { margin-left: 1.2rem; border-left: 1px solid #1e1e1e; padding-left: 4px; }
 .cv-del-btn { color: #ff6666 !important; border-color: #3a0000 !important; }
 .cv-del-btn:hover { background: #1a0000 !important; color: #ff4444 !important; }
-
-/* Shared AI widget styles */
 .ai-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff8c3a; box-shadow: 0 0 6px #ff8c3a; animation: pulse 2.5s ease-in-out infinite; flex-shrink: 0; display: inline-block; }
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 6px #ff8c3a; } 50% { opacity: 0.5; box-shadow: 0 0 12px #ff8c3a; } }
 .ai-speaking-label { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; color: #5b9bd5; animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
@@ -194,9 +176,7 @@ a { color: inherit; text-decoration: none; }
 .ai-typing span:nth-child(2) { animation-delay: 0.2s; }
 .ai-typing span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
-
 .mobile-nav { display: none; }
-
 @media (max-width: 700px) {
   html { font-size: 15px; }
   .app-bar { padding: 8px 14px; gap: 8px; }
@@ -237,5 +217,4 @@ a { color: inherit; text-decoration: none; }
   .cv-scroll-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; padding-top: calc(46px + 8px); }
   .cv-canvas { min-height: 1400px; }
 }
-
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
