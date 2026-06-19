@@ -127,9 +127,12 @@ function loadArchived() {
         const ts  = parseInt(key.replace(STORAGE_KEY + "-", ""), 10);
         const raw = localStorage.getItem(key);
         if (raw) {
-          const msgs = JSON.parse(raw);
-          const first = msgs.find(m => m.role === "user");
-          chats.push({ key, ts, preview: first?.content?.slice(0, 60) || "(empty)", msgs });
+          const parsed = JSON.parse(raw);
+          // Support both old format (array) and new format (object with msgs + name)
+          const msgs  = Array.isArray(parsed) ? parsed : parsed.msgs;
+          const name  = Array.isArray(parsed) ? null   : parsed.name;
+          const first = msgs?.find(m => m.role === "user");
+          chats.push({ key, ts, name: name || null, preview: first?.content?.slice(0, 60) || "(empty)", msgs: msgs || [] });
         }
       }
     }
@@ -137,39 +140,109 @@ function loadArchived() {
   return chats.sort((a, b) => b.ts - a.ts);
 }
 
+function saveArchived(key, msgs, name) {
+  try { localStorage.setItem(key, JSON.stringify({ msgs, name })); } catch (_) {}
+}
+
+function PastChatsPanel({ onLoad, onClose }) {
+  const [chats, setChats] = useState(() => loadArchived());
+  const [renamingKey, setRenamingKey] = useState(null);
+  const [renameVal,   setRenameVal]   = useState("");
+
+  const refresh = () => setChats(loadArchived());
+
+  const doDelete = (key, e) => {
+    e.stopPropagation();
+    if (!confirm("Delete this chat?")) return;
+    try { localStorage.removeItem(key); } catch (_) {}
+    refresh();
+  };
+
+  const startRename = (c, e) => {
+    e.stopPropagation();
+    setRenamingKey(c.key);
+    setRenameVal(c.name || c.preview.slice(0, 40));
+  };
+
+  const submitRename = (c, e) => {
+    e.stopPropagation();
+    saveArchived(c.key, c.msgs, renameVal.trim() || null);
+    setRenamingKey(null);
+    refresh();
+  };
+
+  return (
+    <div className="ai-past-panel" style={{ maxHeight: 220 }}>
+      <div className="ai-past-header">
+        <span className="ai-past-title">PAST CHATS</span>
+        <button className="ai-past-close" onClick={onClose}>×</button>
+      </div>
+      {chats.length === 0
+        ? <div className="ai-past-empty">No archived chats.</div>
+        : <div className="ai-past-list">
+            {chats.map(c => (
+              <div key={c.key} className="ai-past-row">
+                <button className="ai-past-item" onClick={() => onLoad(c.msgs)}>
+                  <span className="ai-past-date">{new Date(c.ts).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  {renamingKey === c.key ? (
+                    <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                      <input
+                        className="ai-past-rename-input"
+                        value={renameVal}
+                        onChange={e => setRenameVal(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") submitRename(c, e); if (e.key === "Escape") setRenamingKey(null); }}
+                        autoFocus
+                      />
+                      <button className="ai-past-rename-ok" onClick={e => submitRename(c, e)}>OK</button>
+                    </div>
+                  ) : (
+                    <span className="ai-past-preview">{c.name || c.preview}</span>
+                  )}
+                </button>
+                <button className="ai-past-action" onClick={e => startRename(c, e)} title="Rename">✎</button>
+                <button className="ai-past-action ai-past-del" onClick={e => doDelete(c.key, e)} title="Delete">×</button>
+              </div>
+            ))}
+          </div>
+      }
+    </div>
+  );
+}
+
 const BOOT_MSG = {
   role: "assistant",
   content: "RUSHMORE online. General mode \u2014 ask me anything, or activate a project mode.",
 };
 
-// Mode definitions — color matches the project panel accent
+// Mode definitions — correct file paths per project
 export const MODES = [
-  { id: "geocomforter", label: "GeoComforter", owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "README.md",        color: "#3a7acc", bg: "#050d1a", border: "#0a1e3a" },
-  { id: "chronoslate",  label: "ChronoSlate",  owner: "GeoAltaSolutions", repo: "ChronoSlate-QuestLog",  path: "README.md",        color: "#c8a030", bg: "#080a14", border: "#1a1a2e" },
-  { id: "geoalta",      label: "GeoAlta",      owner: "GeoAltaSolutions", repo: "GeoAlta-QuestLog",      path: "README.md",        color: "#aa3333", bg: "#1a0505", border: "#3a0a0a" },
-  { id: "nmgco",        label: "NMGCO",        owner: "GeoAltaSolutions", repo: "NMGCO-QuestLog",        path: "README.md",        color: "#c87020", bg: "#160e00", border: "#3a2200" },
-  { id: "riipen",       label: "Riipen",       owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "Riipen/README.md", color: "#5a9aee", bg: "#061220", border: "#0f2a4a" },
+  { id: "general",      label: "General",      owner: null,               repo: null,                          path: null,                                             color: "#e8e8e8", bg: "transparent", border: "#3a3a3a" },
+  { id: "geocomforter", label: "GeoComforter", owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog",       path: "GeoComforter_Claude_Instructions_V2.md",          color: "#3a7acc", bg: "#050d1a",     border: "#0a1e3a" },
+  { id: "riipen",       label: "Riipen",       owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog",       path: "Riipen/Riipen_QuestLog.md",                      color: "#5a9aee", bg: "#061220",     border: "#0f2a4a" },
+  { id: "chronoslate",  label: "ChronoSlate",  owner: "GeoAltaSolutions", repo: "ChronoSlate-QuestLog",        path: "ChronoSlate_Claude_Instructions_V2.md",          color: "#c8a030", bg: "#080a14",     border: "#1a1a2e" },
+  { id: "geoalta",      label: "GeoAlta",      owner: "GeoAltaSolutions", repo: "GeoAlta-QuestLog",            path: "QuestLog/QUESTLOG_Project_Creator.md",           color: "#aa3333", bg: "#1a0505",     border: "#3a0a0a" },
+  { id: "nmgco",        label: "NMGCO",        owner: "GeoAltaSolutions", repo: "NMGCO-QuestLog",              path: "NMGCO_Claude_Instructions_V2.md",                color: "#c87020", bg: "#160e00",     border: "#3a2200" },
 ];
 
 export default function RushmorePanel({ activeMode, onModeChange }) {
-  const [messages,    setMessages]  = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return [BOOT_MSG]; });
-  const [input,       setInput]     = useState("");
-  const [loading,     setLoading]   = useState(false);
-  const [voiceOut,    setVoiceOut]  = useState(true);
-  const [listening,   setListening] = useState(false);
-  const [speaking,    setSpeaking]  = useState(false);
-  const [usage,       setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
+  const [messages,    setMessages]    = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return [BOOT_MSG]; });
+  const [input,       setInput]       = useState("");
+  const [loading,     setLoading]     = useState(false);
+  const [voiceOut,    setVoiceOut]    = useState(true);
+  const [listening,   setListening]   = useState(false);
+  const [speaking,    setSpeaking]    = useState(false);
+  const [usage,       setUsage]       = useState({ inTok: 0, outTok: 0, calls: 0 });
   const [showHistory, setShowHistory] = useState(false);
   const [modeLoading, setModeLoading] = useState(false);
   const [modeContext, setModeContext] = useState(null);
 
-  const voiceOutRef   = useRef(true);
-  const continuousRef = useRef(false);
+  const voiceOutRef    = useRef(true);
+  const continuousRef  = useRef(false);
   const recognitionRef = useRef(null);
-  const messagesRef   = useRef(messages);
-  const flashRef      = useRef(null);
-  const dataArrRef    = useRef(null);
-  const videoRef      = useRef(null);
+  const messagesRef    = useRef(messages);
+  const flashRef       = useRef(null);
+  const dataArrRef     = useRef(null);
+  const videoRef       = useRef(null);
 
   useTVFlash(flashRef, dataArrRef);
 
@@ -185,16 +258,20 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
   }, []);
 
   useEffect(() => {
-    if (!activeMode) { setModeContext(null); return; }
+    if (!activeMode || activeMode === "general") {
+      setModeContext(null);
+      if (activeMode === "general") {
+        archiveCurrent();
+        setMessages([BOOT_MSG]);
+        setUsage({ inTok: 0, outTok: 0, calls: 0 });
+      }
+      return;
+    }
     const def = MODES.find(m => m.id === activeMode);
-    if (!def) return;
+    if (!def || !def.owner) return;
     setModeLoading(true);
     setModeContext(null);
-    try {
-      const arc = localStorage.getItem(STORAGE_KEY);
-      if (arc) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, arc);
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (_) {}
+    archiveCurrent();
     setMessages([{ role: "assistant", content: `${def.label} \u2014 loading project instructions\u2026` }]);
     setUsage({ inTok: 0, outTok: 0, calls: 0 });
 
@@ -210,6 +287,14 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
       })
       .finally(() => setModeLoading(false));
   }, [activeMode]);
+
+  function archiveCurrent() {
+    try {
+      const arc = localStorage.getItem(STORAGE_KEY);
+      if (arc) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, arc);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_) {}
+  }
 
   const startListening = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -240,7 +325,7 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
     setLoading(true);
     try {
       const body = { messages: history.map(m => ({ role: m.role, content: m.content })) };
-      if (activeMode) { body.mode = activeMode; body.modeContext = modeContext || ""; }
+      if (activeMode && activeMode !== "general") { body.mode = activeMode; body.modeContext = modeContext || ""; }
       const res  = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("\n") || data.error?.message || "[No response]";
@@ -267,7 +352,7 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
 
   const newChat = () => {
     stopSpeech(); stopListening(); onModeChange(null);
-    try { const arc = localStorage.getItem(STORAGE_KEY); if (arc) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, arc); localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+    archiveCurrent();
     setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); setModeContext(null);
   };
   const clearAll = () => {
@@ -284,8 +369,7 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
 
   return (
     <div className="rp-shell">
-
-      {/* ── Left column: video + status + mode buttons ── */}
+      {/* ── Left column ── */}
       <div className="rp-video-col">
         <div className="rp-video-box">
           <video ref={videoRef} src={VIDEO_SRC} autoPlay loop muted playsInline className="rp-video" />
@@ -311,10 +395,9 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
           </div>
         )}
 
-        {/* Mode buttons — color-coded to project */}
         <div className="rp-mode-btns">
           {MODES.map(m => {
-            const active = activeMode === m.id;
+            const active = activeMode === m.id || (!activeMode && m.id === "general");
             return (
               <button
                 key={m.id}
@@ -325,7 +408,6 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
                   "--pill-border": active ? m.color  : "#2a2a2a",
                 }}
                 onClick={() => onModeChange(active ? null : m.id)}
-                title={active ? `Deactivate ${m.label}` : `Switch to ${m.label}`}
               >
                 {m.label}
               </button>
@@ -334,13 +416,23 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
         </div>
       </div>
 
-      {/* ── Right column: chat ── */}
+      {/* ── Right column ── */}
       <div className="rp-chat-col">
         <div className="rp-toolbar">
-          <button className={`ai-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`} onPointerDown={toggleMic} style={{ width: 28, height: 28, fontSize: 13 }}>
+          {/* Mic button — red when listening */}
+          <button
+            className={`rp-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`}
+            onPointerDown={toggleMic}
+            title="Microphone"
+          >
             {listening ? "\u25cf" : continuousRef.current ? "\u25ce" : "\u25cb"}
           </button>
-          <button className={`ai-voice-out-btn${voiceOut ? " active" : ""}`} onClick={toggleVoice}>
+          {/* Voice-out button — blue when active */}
+          <button
+            className={`rp-voice-btn${voiceOut ? " active" : ""}`}
+            onClick={toggleVoice}
+            title={voiceOut ? "Mute RUSHMORE voice" : "Unmute RUSHMORE voice"}
+          >
             {voiceOut ? "\u25c9" : "\u25cb"}
           </button>
           <div style={{ flex: 1 }} />
@@ -350,25 +442,7 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
         </div>
 
         {showHistory && (
-          <div className="ai-past-panel" style={{ maxHeight: 180 }}>
-            <div className="ai-past-header">
-              <span className="ai-past-title">PAST CHATS</span>
-              <button className="ai-past-close" onClick={() => setShowHistory(false)}>×</button>
-            </div>
-            {loadArchived().length === 0
-              ? <div className="ai-past-empty">No archived chats.</div>
-              : <div className="ai-past-list">
-                  {loadArchived().map(c => (
-                    <div key={c.key} className="ai-past-row">
-                      <button className="ai-past-item" onClick={() => loadPast(c.msgs)}>
-                        <span className="ai-past-date">{new Date(c.ts).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="ai-past-preview">{c.preview}</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-            }
-          </div>
+          <PastChatsPanel onLoad={loadPast} onClose={() => setShowHistory(false)} />
         )}
 
         <div className="rp-input-row">
