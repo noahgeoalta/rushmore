@@ -8,7 +8,8 @@ const BULLET = "\u2022";
 const CC = "\u25b6";
 const CO = "\u25bc";
 
-const newLine = (type = "none") => ({ id: uid(), text: "", type, fontSize: 14, collapsed: false, children: [] });
+const DEFAULT_FONT = 18;
+const newLine = (type = "none") => ({ id: uid(), text: "", type, fontSize: DEFAULT_FONT, collapsed: false, children: [] });
 const newBox = (x, y) => ({ id: uid(), x, y, w: 340, lines: [newLine()] });
 const emptyState = () => { const p = { id: uid(), name: "Main", boxes: [] }; return { pages: [p], activeId: p.id }; };
 
@@ -35,7 +36,7 @@ function numInList(list, idx) {
 }
 function migrateLine(n) {
   if (!n || typeof n !== "object") return newLine();
-  return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || 14, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
+  return { id: n.id || uid(), text: n.text || "", type: n.type || (n.bullet ? "bullet" : "none"), fontSize: n.fontSize || DEFAULT_FONT, collapsed: n.collapsed || false, src: n.src, children: Array.isArray(n.children) ? n.children.map(migrateLine) : [] };
 }
 function serializeLines(nodes, depth = 0) {
   let out = ""; const indent = "  ".repeat(depth);
@@ -148,12 +149,10 @@ export default function Canvas() {
         const res = await fetch("/api/notes");
         const json = await res.json();
         let data = json.data;
-        // Handle both string and object forms
         if (typeof data === "string") { try { data = JSON.parse(data); } catch {} }
         const parsed = migrateState(data);
         if (parsed) { setState(parsed); setSyncStatus("saved"); return; }
       } catch {}
-      // Fall back to localStorage
       try {
         const raw = localStorage.getItem(CKEY) || localStorage.getItem("rushmore-canvas-v2") || localStorage.getItem("rushmore-canvas-v1");
         if (!raw) { setState(emptyState()); return; }
@@ -224,6 +223,15 @@ export default function Canvas() {
   const canvasW = Math.max(800, ...page.boxes.map(b => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map(b => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
 
+  // Font size of the currently focused line
+  const focusedFontSize = (() => {
+    if (!focusedId || !selBox) return null;
+    const box = page.boxes.find(b => b.id === selBox);
+    if (!box) return null;
+    const h = loc(box.lines, focusedId);
+    return h ? (h.node.fontSize || DEFAULT_FONT) : null;
+  })();
+
   const mut = (fn, rec = true) => setState(s => {
     if (rec) { setHistory(h => [...h.slice(-60), s]); setFuture([]); }
     const ns = structuredClone(s);
@@ -241,9 +249,20 @@ export default function Canvas() {
   const delBox = (id) => { mut(pg => { pg.boxes = pg.boxes.filter(b => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes(prev => { const s = new Set(prev); s.delete(id); return s; }); };
   const cleanEmptyBox = (id) => { const box = page.boxes.find(b => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id); };
   const setText = (bid, lid, text) => mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
-  const addAfter = (bid, lid, cp = 0) => { const n = newLine(); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; n.type = h.node.type; const full = h.node.text; h.node.text = full.slice(0, cp); n.text = full.slice(cp); if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); } else h.list.splice(h.i + 1, 0, n); }); setFocusId(n.id); setFocusCaret(0); };
+  const addAfter = (bid, lid, cp = 0) => { const n = newLine(); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; n.type = h.node.type; n.fontSize = h.node.fontSize || DEFAULT_FONT; const full = h.node.text; h.node.text = full.slice(0, cp); n.text = full.slice(cp); if (h.node.children.length && !h.node.collapsed) { n.type = h.node.children[0]?.type ?? n.type; h.node.children.unshift(n); } else h.list.splice(h.i + 1, 0, n); }); setFocusId(n.id); setFocusCaret(0); };
   const deleteSelectedLines = (bid) => { const ids = new Set(selLinesRef.current); if (ids.size === 0) return false; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function rm(nodes) { return nodes.filter(n => { n.children = rm(n.children); return !ids.has(n.id); }); } b.lines = rm(b.lines); if (!b.lines.length) b.lines.push(newLine()); }); setSelLines(new Set()); setLastSelLine(null); setFocusedId(null); return true; };
-  const copySelected = (bid) => { const ids = selLinesRef.current; if (ids.size === 0) return; const box = page.boxes.find(b => b.id === bid); if (!box) return; navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {}); };
+  const copySelected = (bid) => {
+    const ids = selLinesRef.current;
+    const box = page.boxes.find(b => b.id === bid);
+    if (!box) return;
+    // If multiple lines selected, copy all; otherwise copy just the focused line
+    if (ids.size > 1) {
+      navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {});
+    } else if (focusedId) {
+      const h = loc(box.lines, focusedId);
+      if (h) navigator.clipboard.writeText(serializeLines([h.node])).catch(() => {});
+    }
+  };
   const selectAll = (bid) => { const box = page.boxes.find(b => b.id === bid); if (!box) return; const all = allIds(box.lines); setSelLines(new Set(all)); setLastSelLine(all[all.length - 1] || null); };
   const bsLine = (bid, lid, cur, cp) => {
     if (selLinesRef.current.size > 1) { deleteSelectedLines(bid); return true; }
@@ -256,15 +275,49 @@ export default function Canvas() {
   const indent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h || h.i === 0) return; const prev = h.list[h.i - 1]; h.list.splice(h.i, 1); prev.collapsed = false; if (h.node.type === "none") h.node.type = prev.type; prev.children.push(h.node); }); setFocusId(lid); };
   const outdent = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const find = ns => { for (let i = 0; i < ns.length; i++) { const idx = ns[i].children.findIndex(c => c.id === lid); if (idx > -1) return { pl: ns, pi: i, idx }; const d = find(ns[i].children); if (d) return d; } return null; }; const h = find(b.lines); if (!h) return; const [node] = h.pl[h.pi].children.splice(h.idx, 1); h.pl.splice(h.pi + 1, 0, node); }); setFocusId(lid); };
   const toggle = (bid, lid) => { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.collapsed = !h.node.collapsed; }, false); };
-  const fsize = (bid, lid, d) => { const ids = selLinesRef.current; if (ids.size > 1) { const frozen = new Set(ids); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || 14) + d)); ap(n.children); } } ap(b.lines); }); return; } if (!lid) return; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || 14) + d)); }); setFocusId(lid); };
+  const fsize = (bid, lid, d) => { const ids = selLinesRef.current; if (ids.size > 1) { const frozen = new Set(ids); mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; function ap(ns) { for (const n of ns) { if (frozen.has(n.id)) n.fontSize = Math.max(10, Math.min(48, (n.fontSize || DEFAULT_FONT) + d)); ap(n.children); } } ap(b.lines); }); return; } if (!lid) return; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.fontSize = Math.max(10, Math.min(48, (h.node.fontSize || DEFAULT_FONT) + d)); }); setFocusId(lid); };
   const pasteAt = async (bid, lid) => {
     try {
       const items = await navigator.clipboard.read().catch(() => null);
-      if (items) { for (const item of items) { const imgType = item.types.find(t => t.startsWith("image/")); if (imgType) { const blob = await item.getType(imgType); const reader = new FileReader(); reader.onload = () => { const imgLine = { id: uid(), text: "", type: "image", src: reader.result, fontSize: 14, collapsed: false, children: [] }; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.list.splice(h.i + 1, 0, imgLine); else b.lines.push(imgLine); }); }; reader.readAsDataURL(blob); return; } if (item.types.includes("text/html")) { const htmlBlob = await item.getType("text/html"); const parsed = parseHtmlToLines(await htmlBlob.text()); if (parsed.length) { mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); }); setFocusId(parsed[0].id); return; } } } }
-      const text = await navigator.clipboard.readText(); if (!text.trim()) return;
-      const parsed = parsePlainToLines(text); if (!parsed.length) return;
-      mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
-      setFocusId(parsed[0].id);
+      if (items) {
+        for (const item of items) {
+          const imgType = item.types.find(t => t.startsWith("image/"));
+          if (imgType) {
+            const blob = await item.getType(imgType);
+            const reader = new FileReader();
+            reader.onload = () => { const imgLine = { id: uid(), text: "", type: "image", src: reader.result, fontSize: DEFAULT_FONT, collapsed: false, children: [] }; mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.list.splice(h.i + 1, 0, imgLine); else b.lines.push(imgLine); }); };
+            reader.readAsDataURL(blob); return;
+          }
+          if (item.types.includes("text/html")) {
+            const htmlBlob = await item.getType("text/html");
+            const parsed = parseHtmlToLines(await htmlBlob.text());
+            if (parsed.length) {
+              mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
+              setFocusId(parsed[parsed.length - 1].id); return;
+            }
+          }
+        }
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) return;
+      // Single-line: insert inline at caret
+      const el = inputs.current[lid];
+      const lines = text.split("\n").filter(l => l.trim());
+      if (lines.length <= 1) {
+        const pasteText = text.replace(/\n/g, " ").trimEnd();
+        if (!pasteText) return;
+        const caretPos = el ? el.selectionStart : 0;
+        const selEnd = el ? el.selectionEnd : caretPos;
+        mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.node.text = h.node.text.slice(0, caretPos) + pasteText + h.node.text.slice(selEnd); }, false);
+        const newCaret = caretPos + pasteText.length;
+        setFocusId(lid); setFocusCaret(newCaret);
+      } else {
+        // Multi-line: insert new nodes after current line
+        const parsed = parsePlainToLines(text);
+        if (!parsed.length) return;
+        mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
+        setFocusId(parsed[parsed.length - 1].id);
+      }
     } catch {}
   };
   const onLineDragStart = (e, bid, lid) => { e.stopPropagation(); dragLineRef.current = { bid, lid }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", lid); };
@@ -276,7 +329,7 @@ export default function Canvas() {
     if (e.ctrlKey && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "Z"))) { e.preventDefault(); redo(); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "a") { e.preventDefault(); selectAll(bid); return; }
-    if (e.ctrlKey && !e.shiftKey && e.key === "c") { if (selLinesRef.current.size > 1) { e.preventDefault(); copySelected(bid); return; } return; }
+    if (e.ctrlKey && !e.shiftKey && e.key === "c") { e.preventDefault(); copySelected(bid); return; }
     if (e.ctrlKey && !e.shiftKey && e.key === "v") { e.preventDefault(); pasteAt(bid, lid); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") { e.preventDefault(); cycleType(bid, lid, "bullet"); return; }
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "/") { e.preventDefault(); cycleType(bid, lid, "number"); return; }
@@ -308,8 +361,8 @@ export default function Canvas() {
             <>
               {n.type === "bullet" && <span className={"cv-marker cv-bullet" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{BULLET}</span>}
               {n.type === "number" && <span className={"cv-marker cv-num" + (hh ? " has-hidden" : "")} draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">{num}.</span>}
-              {n.type === "none" && <span className="cv-marker cv-spacer cv-drag-handle" draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} title="Drag to move">&#8942;</span>}
-              <textarea className="cv-input" ref={el => { inputs.current[n.id] = el; autoSize(el); }} style={{ fontSize: (n.fontSize || 14) + "px" }} value={n.text} placeholder="..." rows={1} onChange={e => { autoSize(e.target); setText(bid, n.id, e.target.value); }} onKeyDown={e => kd(e, bid, n.id)} onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines(prev => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine(prev => prev || n.id); }} onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }} />
+              {n.type === "none" && <span className="cv-marker cv-spacer" draggable onDragStart={e => onLineDragStart(e, bid, n.id)} onDragEnd={onLineDragEnd} />}
+              <textarea className="cv-input" ref={el => { inputs.current[n.id] = el; autoSize(el); }} style={{ fontSize: (n.fontSize || DEFAULT_FONT) + "px" }} value={n.text} placeholder="..." rows={1} onChange={e => { autoSize(e.target); setText(bid, n.id, e.target.value); }} onKeyDown={e => kd(e, bid, n.id)} onFocus={() => { setFocusedId(n.id); setSelBox(bid); setSelBoxes(new Set([bid])); setSelLines(prev => prev.size > 0 ? prev : new Set([n.id])); setLastSelLine(prev => prev || n.id); }} onBlur={() => { setTimeout(() => { if (document.activeElement === document.body || !cvRef.current?.contains(document.activeElement)) { cleanEmptyBox(bid); } }, 150); }} />
             </>
           )}
         </div>
@@ -335,21 +388,24 @@ export default function Canvas() {
           <button className="notes-btn" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="notes-btn" onClick={redo} disabled={!future.length}>Redo</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Bullet" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "bullet"); }}>{"\u2022"}</button>
-          <button className="notes-btn" title="Number" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "number"); }}>1.</button>
+          <button className="notes-btn" title="Bullet (Ctrl+.)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "bullet"); }}>{"\u2022"}</button>
+          <button className="notes-btn" title="Number (Ctrl+/)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && cycleType(selBox, focusedId, "number"); }}>1.</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Indent" onMouseDown={e => { e.preventDefault(); focusedId && selBox && indent(selBox, focusedId); }}>{"\u2192"}</button>
-          <button className="notes-btn" title="Outdent" onMouseDown={e => { e.preventDefault(); focusedId && selBox && outdent(selBox, focusedId); }}>{"\u2190"}</button>
+          <button className="notes-btn" title="Indent (Tab)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && indent(selBox, focusedId); }}>{"\u2192"}</button>
+          <button className="notes-btn" title="Outdent (Shift+Tab)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && outdent(selBox, focusedId); }}>{"\u2190"}</button>
           <span className="notes-sep" />
-          <button className="notes-btn" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
-          <button className="notes-btn" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
+          <button className="notes-btn" title="Font smaller (Ctrl+Shift+-)" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
+          <span className="cv-fontsize-display">{focusedFontSize ?? "--"}px</span>
+          <button className="notes-btn" title="Font larger (Ctrl+Shift+.)" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
           <span className="notes-sep" />
-          {selBox && selLines.size > 1 && <button className="notes-btn" onClick={() => copySelected(selBox)}>Copy</button>}
-          {selBox && selLines.size > 1 && <button className="notes-btn cv-del-btn" onClick={() => deleteSelectedLines(selBox)}>Del lines</button>}
-          {selBox && selLines.size <= 1 && <button className="notes-btn cv-del-btn" onClick={() => delBox(selBox)}>Del box</button>}
+          {/* Always-visible Copy and Del box buttons — fixed width so toolbar never shifts */}
+          <button className="notes-btn" style={{ minWidth: 48 }} onMouseDown={e => { e.preventDefault(); selBox && copySelected(selBox); }} title="Copy selected (Ctrl+C)">Copy</button>
+          <button className="notes-btn cv-del-btn" style={{ minWidth: 60 }} onMouseDown={e => { e.preventDefault(); if (selBox) { if (selLinesRef.current.size > 1) deleteSelectedLines(selBox); else delBox(selBox); } }} title="Delete">
+            {selBox && selLines.size > 1 ? "Del lines" : "Del box"}
+          </button>
         </div>
         {syncLabel && <span style={{ fontSize: 10, color: syncColor, marginLeft: 8, letterSpacing: "0.05em" }}>{syncLabel}</span>}
-        <span className="notes-hint">Ctrl+A all · Ctrl+C copy · drag &#8942; move</span>
+        <span className="notes-hint">Ctrl+A · Ctrl+C copy · Shift+click select · drag move</span>
       </div>
       <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
         onDoubleClick={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
