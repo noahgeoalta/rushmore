@@ -67,9 +67,6 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   height: 420px;
 }
-
-/* Left column: video + status + mode pills
-   Width trimmed ~17% from the right: 166px instead of 200px */
 .rp-video-col {
   display: flex;
   flex-direction: column;
@@ -84,7 +81,6 @@ a { color: inherit; text-decoration: none; }
 .rp-video-box {
   position: relative;
   width: 100%;
-  /* Not a perfect square — just fill the column width, height set by content */
   aspect-ratio: 1 / 1;
   background: #000;
   border-radius: 6px;
@@ -96,7 +92,8 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center center;
+  /* Shift the video content rightward so the face sits toward the right edge */
+  object-position: right center;
 }
 .rp-flash {
   position: absolute;
@@ -127,8 +124,6 @@ a { color: inherit; text-decoration: none; }
   font-size: 9px;
   color: var(--faint);
 }
-
-/* Mode pills — stacked in left column, color-coded */
 .rp-mode-btns {
   display: flex;
   flex-direction: column;
@@ -157,15 +152,9 @@ a { color: inherit; text-decoration: none; }
   transition: opacity 0.1s, background 0.1s;
   opacity: 0.55;
 }
-.rp-mode-pill:hover {
-  opacity: 1;
-}
-.rp-mode-pill.active {
-  opacity: 1;
-  border-style: solid;
-}
+.rp-mode-pill:hover { opacity: 1; }
+.rp-mode-pill.active { opacity: 1; border-style: solid; }
 
-/* Right column: chat */
 .rp-chat-col {
   display: flex;
   flex-direction: column;
