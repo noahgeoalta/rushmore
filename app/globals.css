@@ -69,7 +69,6 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--edge);
   border-radius: 10px;
   overflow: hidden;
-  /* NO fixed height — shell grows with chat content */
 }
 .rp-video-col {
   display: flex;
@@ -96,7 +95,6 @@ a { color: inherit; text-decoration: none; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
 .rp-usage { display: flex; gap: 6px; font-size: 9px; color: var(--faint); }
 
-/* Chat column — grows naturally, no fixed height */
 .rp-chat-col {
   display: flex;
   flex-direction: column;
@@ -119,13 +117,12 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid var(--edge);
   flex-shrink: 0;
 }
-/* Feed: no fixed height, no overflow — just stacks messages, shell grows */
 .rp-feed {
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 48px; /* show at least one message slot when empty */
+  min-height: 48px;
 }
 
 .rp-mic-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 12px; cursor: pointer; display: grid; place-items: center; transition: all 0.15s; touch-action: manipulation; flex-shrink: 0; }
@@ -137,8 +134,29 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 
 /* ── Notes ── */
-.notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-.notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 53px; z-index: 8; background: var(--bg); padding: 10px 24px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
+.notes-main {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Notes bar: sticky below the app-bar on desktop */
+.notes-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  position: sticky;
+  top: 53px;
+  z-index: 8;
+  background: var(--bg);
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--edge);
+  flex-shrink: 0;
+}
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
 .page-tab.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
@@ -271,7 +289,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-card { max-width: 100%; min-width: 0; flex: none; width: 100%; }
   .cmd-riipen-team { min-width: 100px; font-size: 13px; }
   .cmd-riipen-row { gap: 6px; }
-  /* Mobile RUSHMORE: video strip on top, chat grows below */
+  /* Mobile RUSHMORE */
   .rp-shell { flex-direction: column; border-radius: 8px; }
   .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; }
   .rp-video-box { width: 56px; height: 56px; aspect-ratio: unset; flex-shrink: 0; }
@@ -281,15 +299,50 @@ a { color: inherit; text-decoration: none; }
   .ai-send-btn { padding: 8px 10px; font-size: 11px; letter-spacing: 0; }
   .ai-textarea { font-size: 13px; padding: 7px 10px; }
   .ai-msg-bubble { font-size: 13px; padding: 8px 10px; line-height: 1.5; }
+
+  /* ── Notes mobile ── */
   .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-  .notes-bar { position: fixed; top: 46px; left: 0; right: 0; z-index: 9; background: var(--bg); border-bottom: 1px solid var(--edge); padding: 6px 10px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 0; flex-shrink: 0; }
+
+  /*
+    Notes bar: fixed at top, below the app-bar (~46px).
+    Two rows on mobile: tabs row + toolbar row.
+    Approximate height: ~42px tabs + ~36px toolbar + 2px border = ~80px total.
+    We give it a bit more headroom with 84px.
+  */
+  .notes-bar {
+    position: fixed;
+    top: 46px;
+    left: 0;
+    right: 0;
+    z-index: 9;
+    background: var(--bg);
+    border-bottom: 1px solid var(--edge);
+    padding: 6px 10px;
+    gap: 4px;
+    flex-wrap: wrap;       /* allow tabs + toolbar to stack */
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
   .notes-bar::-webkit-scrollbar { display: none; }
   .notes-toolbar { gap: 3px; }
   .notes-btn { padding: 4px 8px; font-size: 11px; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
-  .cv-scroll-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; padding-top: calc(46px + 8px); }
+
+  /*
+    Scroll wrap: padding-top must clear the fixed notes-bar.
+    app-bar ≈ 46px + notes-bar ≈ 84px = 130px total from top of viewport.
+    Add 8px breathing room = 138px. Use a generous value so nothing ever hides.
+  */
+  .cv-scroll-wrap {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px 24px;
+    padding-top: 90px; /* clears the fixed notes-bar height */
+  }
   .cv-canvas { min-height: 1400px; }
 }
 
