@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Canvas from "@/components/Canvas";
-import RushmorePanel, { MODES } from "@/components/RushmorePanel";
+import RushmorePanel from "@/components/RushmorePanel";
 import MicrosoftPanel from "@/components/MicrosoftPanel";
 import contextsData from "@/data/contexts.json";
 
@@ -82,7 +82,6 @@ function IconBoardChip({ label, url, icon }) {
   return <a href={url} target="_blank" rel="noreferrer" className="cmd-chip"><ImgIcon src={icon} size={15} />{label}</a>;
 }
 
-// Work card order: GeoAlta, GeoComforter, ChronoSlate, NMGCO
 const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
 
 function ContextCard({ ctx }) {
@@ -111,7 +110,7 @@ function ContextCard({ ctx }) {
   );
 }
 
-function RiipenSection({ ctx, activeMode, onModeChange }) {
+function RiipenSection({ ctx }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
     if (!groups[l.group]) groups[l.group] = [];
@@ -141,9 +140,8 @@ function RiipenSection({ ctx, activeMode, onModeChange }) {
 }
 
 export default function Home() {
-  const [view,       setView]       = useState("command");
-  const [msAuthed,   setMsAuthed]   = useState(false);
-  const [activeMode, setActiveMode] = useState(null);
+  const [view,     setView]     = useState("command");
+  const [msAuthed, setMsAuthed] = useState(false);
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -207,7 +205,6 @@ export default function Home() {
                 {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
                 {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
                 {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
-                {/* Rushmore Chat — browser link, orderIcon2 */}
                 <Chip label="Rushmore Chat" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.orderIcon2} />
               </div>
               <div className="cmd-row">
@@ -220,7 +217,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* WORK section — GeoAlta, GeoComforter, ChronoSlate, NMGCO */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK</span></div>
             <div className="cmd-cards-row">
@@ -228,16 +224,12 @@ export default function Home() {
             </div>
           </section>
 
-          {/* RUSHMORE — between WORK and RIIPEN */}
           <section className="cmd-section">
-            <div className="cmd-section-header">
-              <span>RUSHMORE</span>
-              {activeMode && <span style={{ fontSize: 10, color: "var(--orange)", letterSpacing: "0.15em", fontWeight: 700 }}>{activeMode.toUpperCase()} MODE</span>}
-            </div>
-            <RushmorePanel activeMode={activeMode} onModeChange={setActiveMode} />
+            <div className="cmd-section-header"><span>RUSHMORE</span></div>
+            <RushmorePanel />
           </section>
 
-          {geocomforter && <RiipenSection ctx={geocomforter} activeMode={activeMode} onModeChange={setActiveMode} />}
+          {geocomforter && <RiipenSection ctx={geocomforter} />}
         </main>
       )}
 
