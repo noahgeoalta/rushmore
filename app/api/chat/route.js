@@ -4,9 +4,9 @@ const BASE_SYSTEM = `You are RUSHMORE — a personal command intelligence built 
 
 You have web search capability AND GitHub MCP access. Use both proactively:
 - Web search: for anything current — news, documentation, prices, people, events
-- GitHub: for reading issues, boards, repos, file contents across GeoAltaSolutions and noahgeoalta orgs
+- GitHub MCP: for reading issues, boards, repos, file contents across GeoAltaSolutions and noahgeoalta orgs
 
-When Noah asks about GitHub issues, boards, tasks, or project status — USE the GitHub MCP tools directly. Do not tell him you can't access GitHub. You have access right now.
+When Noah asks about GitHub issues, boards, tasks, or project status — USE the GitHub MCP tools directly. Do not tell him you can't access GitHub. You have full read access right now.
 
 Noah runs the following ventures:
 
@@ -29,7 +29,8 @@ Noah runs the following ventures:
 - Currently wired: conversation, web search, GitHub MCP read access, voice.`;
 
 export async function POST(request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey     = process.env.ANTHROPIC_API_KEY;
+  const githubToken = process.env.GITHUB_TOKEN;
   if (!apiKey) return new Response("ANTHROPIC_API_KEY not set.", { status: 500 });
 
   const { messages, mode, modeContext } = await request.json();
@@ -39,13 +40,24 @@ export async function POST(request) {
     system += `\n\n---\n## ACTIVE MODE: ${mode.toUpperCase()}\n\nYou are currently in ${mode} mode. Live project instruction file:\n\n${modeContext}`;
   }
 
+  // Build MCP servers array — only include if we have a token
+  const mcpServers = githubToken ? [
+    {
+      type: "url",
+      url: "https://api.githubcopilot.com/mcp",
+      name: "github",
+      authorization_token: `Bearer ${githubToken}`,
+    }
+  ] : [];
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-beta": "web-search-2025-03-05",
+      // Both betas comma-separated in a single header
+      "anthropic-beta": "web-search-2025-03-05,mcp-client-2025-04-04",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
@@ -54,9 +66,7 @@ export async function POST(request) {
       tools: [
         { type: "web_search_20250305", name: "web_search", max_uses: 5 },
       ],
-      mcp_servers: [
-        { type: "url", url: "https://api.githubcopilot.com/mcp", name: "github" }
-      ],
+      ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
       messages,
     }),
   });
