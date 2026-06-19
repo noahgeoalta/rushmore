@@ -65,7 +65,8 @@ a { color: inherit; text-decoration: none; }
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; height: 420px; }
 .rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); overflow: hidden; }
 .rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
-.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% center; }
+/* Video shifted right ~72% — face centered without cropping */
+.rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 72% center; }
 .rp-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; background: radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%); box-shadow: 0 0 30px 8px rgba(60,220,60,0.3); z-index: 3; }
 .rp-status { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
@@ -88,8 +89,9 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 
-/* ── Notes ── */
-.notes-main { padding: 16px 24px 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+/* ── Notes (desktop) ── */
+.notes-main { padding: 16px 24px 0; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Sticky toolbar scrolls with page on desktop */
 .notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; overflow-x: auto; position: sticky; top: 53px; z-index: 8; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--edge); }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
@@ -107,7 +109,8 @@ a { color: inherit; text-decoration: none; }
 .notes-hint { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; }
 .cv-fontsize-display { font-size: 12px; font-weight: 700; color: var(--dim); min-width: 36px; text-align: center; letter-spacing: 0.03em; flex-shrink: 0; }
 
-.cv-wrap { flex: 1; overflow: auto; position: relative; }
+/* Notes canvas — scrollable area */
+.cv-scroll-wrap { flex: 1; overflow: auto; position: relative; }
 .cv-canvas { position: relative; min-height: 600px; background: var(--bg); }
 .cv-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--faint); font-size: 1rem; pointer-events: none; text-align: center; }
 .cv-box { position: absolute; min-width: 160px; background: transparent; border: 1px solid transparent; border-radius: 8px; transition: border-color 0.1s; }
@@ -205,6 +208,9 @@ a { color: inherit; text-decoration: none; }
 /* ── Mobile bottom nav ── */
 .mobile-nav { display: none; }
 
+/* ───────────────────
+   MOBILE  (≤700px)
+─────────────────── */
 @media (max-width: 700px) {
   html { font-size: 15px; }
   .app-bar { padding: 8px 14px; gap: 8px; }
@@ -212,6 +218,7 @@ a { color: inherit; text-decoration: none; }
   .wordmark { font-size: 12px; letter-spacing: 0.18em; }
   .app-nav { display: none; }
 
+  /* Fixed bottom nav */
   .mobile-nav {
     display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
     background: #0e0e0e; border-top: 1px solid var(--edge);
@@ -226,9 +233,10 @@ a { color: inherit; text-decoration: none; }
   .mobile-nav-btn.active { color: var(--orange); }
   .mobile-nav-btn .mobile-nav-icon { font-size: 22px; line-height: 1; }
 
+  /* Global bottom padding for fixed nav */
   .app-shell { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
 
-  /* Command */
+  /* Command page */
   .cmd-main { padding: 14px 12px 24px; }
   .cmd-section-header { font-size: 11px; letter-spacing: 0.15em; }
   .cmd-chip { font-size: 13px; padding: 6px 10px; gap: 5px; }
@@ -239,30 +247,94 @@ a { color: inherit; text-decoration: none; }
   .cmd-riipen-team { min-width: 100px; font-size: 13px; }
   .cmd-riipen-row { gap: 6px; }
 
-  /* RUSHMORE panel */
-  .rp-shell { flex-direction: column; height: auto; }
-  .rp-video-col {
-    width: 100%; border-right: none; border-bottom: 1px solid var(--edge);
-    flex-direction: row; align-items: flex-start; padding: 10px 12px; gap: 12px;
+  /* RUSHMORE panel: full-width stacked layout */
+  .rp-shell {
+    flex-direction: column;
+    height: auto;
+    border-radius: 8px;
   }
-  .rp-video-box { width: 80px; height: 80px; flex-shrink: 0; aspect-ratio: unset; }
-  .rp-mode-btns { flex-direction: row; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-  .rp-mode-pill { width: auto; font-size: 10px; padding: 4px 8px; }
-  .rp-chat-col { height: 340px; }
-  .rp-toolbar { padding: 6px 10px; gap: 4px; }
-  .ai-ctrl-btn { padding: 4px 8px; font-size: 10px; }
-  .rp-input-row { padding: 6px 10px; gap: 6px; }
-  .rp-feed { padding: 10px; }
+  /* Top section: small square video + info + mode pills in a row */
+  .rp-video-col {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--edge);
+    flex-direction: column;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  /* Video: small square on its own row, centered */
+  .rp-video-box {
+    width: 72px;
+    height: 72px;
+    aspect-ratio: unset;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  /* Mode pills: horizontal scrolling row */
+  .rp-mode-btns {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 5px;
+    margin-top: 0;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rp-mode-pill {
+    width: auto;
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 5px 10px;
+    opacity: 0.7;
+  }
+  .rp-mode-pill.active { opacity: 1; }
+  /* Chat area: enough height to be usable */
+  .rp-chat-col {
+    display: flex;
+    flex-direction: column;
+    height: 380px;
+    min-height: 0;
+  }
+  .rp-toolbar { padding: 6px 10px; gap: 5px; flex-shrink: 0; }
+  .rp-input-row { padding: 6px 10px; gap: 6px; flex-shrink: 0; }
+  /* Feed must flex to fill remaining height */
+  .rp-feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ai-ctrl-btn { padding: 4px 7px; font-size: 10px; }
   .ai-send-btn { padding: 8px 10px; font-size: 11px; }
+  .ai-textarea { font-size: 13px; }
+  .ai-msg-bubble { font-size: 12px; padding: 7px 10px; }
 
-  /* Notes sticky bar */
-  .notes-main { padding: 10px 10px 0; }
-  .notes-bar { top: 46px; padding: 6px 0; gap: 4px; }
+  /* Notes: normal scroll — toolbar scrolls WITH the page (not sticky/fixed) */
+  .notes-main {
+    padding: 10px 10px 0;
+    display: block;        /* remove flex so content flows normally */
+    overflow-y: auto;
+    height: calc(100vh - 46px - 62px - env(safe-area-inset-bottom));
+  }
+  .notes-bar {
+    position: static;      /* NOT sticky on mobile — scrolls with content */
+    top: unset;
+    background: var(--bg);
+    padding: 6px 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--edge);
+    overflow-x: auto;
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
   .notes-toolbar { gap: 3px; }
   .notes-btn { padding: 4px 8px; font-size: 11px; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
+  /* Canvas fills the rest naturally */
+  .cv-scroll-wrap { overflow: visible; height: auto; }
+  .cv-canvas { min-height: 1200px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
