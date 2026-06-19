@@ -2,11 +2,9 @@ export const runtime = "edge";
 
 const BASE_SYSTEM = `You are RUSHMORE — a personal command intelligence built for Noah Garcia. You are sharp, direct, and deeply familiar with every project Noah is running. You have the personality of Q from Star Trek: brilliant, slightly theatrical, always several steps ahead, but ultimately loyal and useful. You don't waste words. You don't over-explain unless asked. You act.
 
-You have web search capability AND GitHub MCP access. Use both proactively:
-- Web search: for anything current — news, documentation, prices, people, events
-- GitHub MCP: for reading issues, boards, repos, file contents across GeoAltaSolutions and noahgeoalta orgs
+You have web search capability. When Noah asks about current events, documentation, or anything online, search for it.
 
-When Noah asks about GitHub issues, boards, tasks, or project status — USE the GitHub MCP tools directly. Do not tell him you can't access GitHub. You have full read access right now.
+For GitHub — Noah will paste in issue lists, board contents, or file contents when he needs you to work with them. You can also read files directly from repos when in a project mode.
 
 Noah runs the following ventures:
 
@@ -23,13 +21,12 @@ Noah runs the following ventures:
 ## RUSHMORE — This system. GitHub: noahgeoalta/rushmore
 
 ## HOW YOU OPERATE
-- When Noah asks about a project board, issues, or status — query GitHub directly using your MCP tools.
 - Keep responses tight. Use short paragraphs or bullets. Never pad.
 - If in a project mode, focus on that project but answer anything.
-- Currently wired: conversation, web search, GitHub MCP read access, voice.`;
+- Currently wired: conversation, web search, voice, GitHub file context (via mode loading).`;
 
 export async function POST(request) {
-  const apiKey     = process.env.ANTHROPIC_API_KEY;
+  const apiKey      = process.env.ANTHROPIC_API_KEY;
   const githubToken = process.env.GITHUB_TOKEN;
   if (!apiKey) return new Response("ANTHROPIC_API_KEY not set.", { status: 500 });
 
@@ -40,15 +37,30 @@ export async function POST(request) {
     system += `\n\n---\n## ACTIVE MODE: ${mode.toUpperCase()}\n\nYou are currently in ${mode} mode. Live project instruction file:\n\n${modeContext}`;
   }
 
-  // Build MCP servers array — only include if we have a token
+  // MCP: GitHub's official MCP server endpoint
+  // authorization_token must be the raw token (no "Bearer" prefix per Anthropic docs)
   const mcpServers = githubToken ? [
     {
       type: "url",
-      url: "https://api.githubcopilot.com/mcp",
+      url: "https://api.githubcopilot.com/mcp/",
       name: "github",
-      authorization_token: `Bearer ${githubToken}`,
+      authorization_token: githubToken,
     }
   ] : [];
+
+  const body = {
+    model: "claude-sonnet-4-6",
+    max_tokens: 1500,
+    system,
+    tools: [
+      { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+    ],
+    messages,
+  };
+
+  if (mcpServers.length > 0) {
+    body.mcp_servers = mcpServers;
+  }
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -56,22 +68,18 @@ export async function POST(request) {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      // Both betas comma-separated in a single header
       "anthropic-beta": "web-search-2025-03-05,mcp-client-2025-04-04",
     },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      system,
-      tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: 5 },
-      ],
-      ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
-      messages,
-    }),
+    body: JSON.stringify(body),
   });
 
   const data = await res.json();
+
+  // Log any MCP errors to help debug
+  if (data.error) {
+    console.error("Anthropic API error:", JSON.stringify(data.error));
+  }
+
   return new Response(JSON.stringify(data), {
     status: res.status,
     headers: { "Content-Type": "application/json" },
