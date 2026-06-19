@@ -61,70 +61,19 @@ a { color: inherit; text-decoration: none; }
 .cmd-riipen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmd-riipen-team { font-size: 15px; font-weight: 600; color: var(--dim); min-width: 180px; flex-shrink: 0; }
 
-/* ── RUSHMORE panel — grows with content, no fixed height ── */
-.rp-shell {
-  display: flex;
-  gap: 0;
-  background: #0a0a0a;
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.rp-video-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  flex-shrink: 0;
-  width: 166px;
-  background: #080808;
-  border-right: 1px solid var(--edge);
-}
-.rp-video-box {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  background: #000;
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
+/* ── RUSHMORE panel ── */
+.rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+.rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); }
+.rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
 .rp-video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 42% center; }
 .rp-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; background: radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%); box-shadow: 0 0 30px 8px rgba(60,220,60,0.3); z-index: 3; }
 .rp-status { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .rp-mode-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
 .rp-usage { display: flex; gap: 6px; font-size: 9px; color: var(--faint); }
-
-.rp-chat-col {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.rp-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--edge);
-  flex-shrink: 0;
-}
-.rp-input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--edge);
-  flex-shrink: 0;
-}
-.rp-feed {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 48px;
-}
-
+.rp-chat-col { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.rp-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
+.rp-input-row { display: flex; align-items: flex-end; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
+.rp-feed { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 48px; }
 .rp-mic-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 12px; cursor: pointer; display: grid; place-items: center; transition: all 0.15s; touch-action: manipulation; flex-shrink: 0; }
 .rp-mic-btn:hover { border-color: #ff4444; color: #ff4444; }
 .rp-mic-btn.listening { border-color: #ff4444; color: #ff4444; background: #1a0000; animation: pulse 0.8s ease-in-out infinite; }
@@ -134,15 +83,20 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 
 /* ── Notes ── */
+/*
+  Key layout: notes-main is a flex column that fills remaining viewport height.
+  notes-bar is sticky at top — stays in normal flow, no fixed positioning.
+  cv-scroll-wrap fills remaining space and scrolls internally.
+  This means the header is ALWAYS above the content, never overlapping.
+*/
 .notes-main {
-  padding: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  padding: 0;
 }
-/* Notes bar: sticky below the app-bar on desktop */
 .notes-bar {
   display: flex;
   align-items: center;
@@ -155,7 +109,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg);
   padding: 10px 24px;
   border-bottom: 1px solid var(--edge);
-  flex-shrink: 0;
+  flex-shrink: 0; /* never shrink — always full height */
 }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
@@ -172,7 +126,8 @@ a { color: inherit; text-decoration: none; }
 .notes-sep { width: 1px; height: 16px; background: var(--edge); margin: 0 3px; flex-shrink: 0; }
 .notes-hint { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; }
 .cv-fontsize-display { font-size: 12px; font-weight: 700; color: var(--dim); min-width: 36px; text-align: center; letter-spacing: 0.03em; flex-shrink: 0; }
-.cv-scroll-wrap { flex: 1; overflow: auto; position: relative; padding: 16px 24px; }
+/* cv-scroll-wrap fills remaining height and scrolls — header always above it */
+.cv-scroll-wrap { flex: 1; overflow: auto; position: relative; padding: 16px 24px; min-height: 0; }
 .cv-canvas { position: relative; min-height: 600px; background: var(--bg); }
 .cv-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--faint); font-size: 1rem; pointer-events: none; text-align: center; }
 .cv-box { position: absolute; min-width: 160px; background: transparent; border: 1px solid transparent; border-radius: 8px; transition: border-color 0.1s; }
@@ -289,7 +244,6 @@ a { color: inherit; text-decoration: none; }
   .cmd-card { max-width: 100%; min-width: 0; flex: none; width: 100%; }
   .cmd-riipen-team { min-width: 100px; font-size: 13px; }
   .cmd-riipen-row { gap: 6px; }
-  /* Mobile RUSHMORE */
   .rp-shell { flex-direction: column; border-radius: 8px; }
   .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; }
   .rp-video-box { width: 56px; height: 56px; aspect-ratio: unset; flex-shrink: 0; }
@@ -300,26 +254,31 @@ a { color: inherit; text-decoration: none; }
   .ai-textarea { font-size: 13px; padding: 7px 10px; }
   .ai-msg-bubble { font-size: 13px; padding: 8px 10px; line-height: 1.5; }
 
-  /* ── Notes mobile ── */
-  .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-
-  /*
-    Notes bar: fixed at top, below the app-bar (~46px).
-    Two rows on mobile: tabs row + toolbar row.
-    Approximate height: ~42px tabs + ~36px toolbar + 2px border = ~80px total.
-    We give it a bit more headroom with 84px.
+  /* ── Notes mobile ──
+     Same approach as desktop: flex column, bar is sticky, wrap scrolls.
+     NO position:fixed, NO padding-top hacks.
+     The bar sits in normal flow above the scroll area.
   */
+  .notes-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+  }
   .notes-bar {
-    position: fixed;
-    top: 46px;
-    left: 0;
-    right: 0;
+    position: sticky;
+    top: 46px; /* app-bar height on mobile */
+    left: auto;
+    right: auto;
+    width: auto;
     z-index: 9;
     background: var(--bg);
     border-bottom: 1px solid var(--edge);
     padding: 6px 10px;
     gap: 4px;
-    flex-wrap: wrap;       /* allow tabs + toolbar to stack */
+    flex-wrap: wrap;
     overflow-x: auto;
     scrollbar-width: none;
     flex-shrink: 0;
@@ -330,18 +289,13 @@ a { color: inherit; text-decoration: none; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
-
-  /*
-    Scroll wrap: padding-top must clear the fixed notes-bar.
-    app-bar ≈ 46px + notes-bar ≈ 84px = 130px total from top of viewport.
-    Add 8px breathing room = 138px. Use a generous value so nothing ever hides.
-  */
+  /* No padding-top needed — bar is in normal flow above this */
   .cv-scroll-wrap {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 8px 10px 24px;
-    padding-top: 90px; /* clears the fixed notes-bar height */
+    min-height: 0;
   }
   .cv-canvas { min-height: 1400px; }
 }
