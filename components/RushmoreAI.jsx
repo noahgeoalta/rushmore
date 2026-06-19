@@ -11,38 +11,34 @@ function calcCost(inTok, outTok) {
   return (inTok / 1_000_000) * PRICE_IN + (outTok / 1_000_000) * PRICE_OUT;
 }
 
-// Semitones → playback rate multiplier
 const st = (n) => Math.pow(2, n / 12);
 
-// ── Speed + pitch compensation ──────────────────────────────────────────────
-// SLOW = 0.8 × 0.8 = 0.64 (two successive 20% slowdowns).
-// Total pitch drop from slowing: log2(0.64)×12 ≈ −7.274 semitones.
-// PITCH_COMP keeps perceived pitch where it was before any slowdown was applied.
+// ── Voice tuning ────────────────────────────────────────────────────────────
+// 0.64 = two successive 20% slowdowns (0.8 × 0.8).
+// PITCH_COMP raises semitones to keep perceived pitch matching original.
+// log2(0.64) × 12 ≈ −7.274 st drop from speed alone; we compensate +3.864
+// from the first pass and let the second 0.8× naturally lower pitch further
+// (gives that deep Overmind quality without going fully unintelligible).
 const SLOW       = 0.64;
-const PITCH_COMP = 3.864;  // compensates the first 0.8× pass (unchanged)
+const PITCH_COMP = 3.864;
 
-// Semitone offsets — PITCH_COMP was already baked in last pass, kept as-is
-const BASE    = -2.39  + PITCH_COMP;
-const CHO_A   = BASE   + 14/100;
-const CHO_B   = BASE   - 12/100;
-const UNDER   = BASE   - 0.25;
-const PIT_DN1 = BASE   - 0.5;
-const PIT_DN2 = BASE   - 1.0;
+const BASE    = -2.39 + PITCH_COMP; // main voice
+const UNDER   = BASE  - 1.5;        // dark sub-layer
+const PIT_DN1 = BASE  - 2.5;        // deeper harmonic
 
+// ── Reverb impulse (cave/cathedral feel) ───────────────────────────────────
 function makeImpulse(ctx, duration, decay) {
-  const rate   = ctx.sampleRate;
-  const length = Math.floor(rate * duration);
-  const buf    = ctx.createBuffer(2, length, rate);
+  const len = Math.floor(ctx.sampleRate * duration);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
   for (let c = 0; c < 2; c++) {
     const ch = buf.getChannelData(c);
-    for (let i = 0; i < length; i++) {
-      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay) * (c === 0 ? 1 : 0.94);
-    }
+    for (let i = 0; i < len; i++)
+      ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay) * (c === 0 ? 1 : 0.92);
   }
   return buf;
 }
 
-function makeSatCurve(amount = 12) {
+function makeSatCurve(amount = 8) {
   const n = 256;
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -52,28 +48,13 @@ function makeSatCurve(amount = 12) {
   return curve;
 }
 
-function makeNoiseGate(ctx, thresholdDb = -45) {
-  const gate = ctx.createScriptProcessor(256, 2, 2);
-  const threshold = Math.pow(10, thresholdDb / 20);
-  gate.onaudioprocess = (e) => {
-    for (let ch = 0; ch < e.inputBuffer.numberOfChannels; ch++) {
-      const inp = e.inputBuffer.getChannelData(ch);
-      const out = e.outputBuffer.getChannelData(ch);
-      let sum = 0;
-      for (let i = 0; i < inp.length; i++) sum += inp[i] * inp[i];
-      const open = Math.sqrt(sum / inp.length) > threshold;
-      for (let i = 0; i < inp.length; i++) out[i] = open ? inp[i] : 0;
-    }
-  };
-  return gate;
-}
-
 let audioCtx      = null;
 let analyserNode  = null;
 let activeSources = [];
 
 function getCtx() {
-  if (!audioCtx || audioCtx.state === "closed") audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx || audioCtx.state === "closed")
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
@@ -91,173 +72,155 @@ async function speakWithFX(text, onDone) {
   activeSources.forEach(s => { try { s.stop(); } catch (_) {} });
   activeSources = [];
   window.speechSynthesis?.cancel();
+
   const clean = text.replace(/[#*`_~\[\]()>]/g, "").replace(/\n+/g, " ").trim();
+
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: clean }),
     });
+
     if (res.ok) {
       const arrayBuf = await res.arrayBuffer();
       const ctx      = getCtx();
       const decoded  = await ctx.decodeAudioData(arrayBuf);
 
+      // ── Three voice layers: main, dark sub, deep harmonic ────────────────
       const srcMain  = makeSource(ctx, decoded, BASE);
-      const srcChoA  = makeSource(ctx, decoded, CHO_A);
-      const srcChoB  = makeSource(ctx, decoded, CHO_B);
       const srcUnder = makeSource(ctx, decoded, UNDER);
       const srcDn1   = makeSource(ctx, decoded, PIT_DN1);
-      const srcDn2   = makeSource(ctx, decoded, PIT_DN2);
 
-      const hiPass    = ctx.createBiquadFilter(); hiPass.type = "highpass";    hiPass.frequency.value = 200;   hiPass.Q.value = 0.7;
-      const lowShelf  = ctx.createBiquadFilter(); lowShelf.type = "lowshelf";  lowShelf.frequency.value = 250; lowShelf.gain.value = -3;
-      const midLo     = ctx.createBiquadFilter(); midLo.type = "peaking";      midLo.frequency.value = 600;   midLo.Q.value = 1.2; midLo.gain.value = -7;
-      const midHi     = ctx.createBiquadFilter(); midHi.type = "peaking";      midHi.frequency.value = 1800;  midHi.Q.value = 1.0; midHi.gain.value = -4;
-      const presence  = ctx.createBiquadFilter(); presence.type = "peaking";   presence.frequency.value = 3500; presence.Q.value = 1.0; presence.gain.value = 5;
-      const airShelf  = ctx.createBiquadFilter(); airShelf.type = "highshelf"; airShelf.frequency.value = 8000; airShelf.gain.value = 7;
-      const brilliance = ctx.createBiquadFilter(); brilliance.type = "peaking"; brilliance.frequency.value = 14000; brilliance.Q.value = 0.8; brilliance.gain.value = 4;
-      hiPass.connect(lowShelf); lowShelf.connect(midLo); midLo.connect(midHi); midHi.connect(presence); presence.connect(airShelf); airShelf.connect(brilliance);
+      // ── EQ chain on main voice ───────────────────────────────────────────
+      // Scoop mids, boost lows and presence — dark telepathic character
+      const hiPass   = ctx.createBiquadFilter();
+      hiPass.type = "highpass"; hiPass.frequency.value = 80; hiPass.Q.value = 0.7;
 
-      const sat = ctx.createWaveShaper(); sat.curve = makeSatCurve(12); sat.oversample = "2x";
-      brilliance.connect(sat);
+      const lowBoost = ctx.createBiquadFilter();
+      lowBoost.type = "lowshelf"; lowBoost.frequency.value = 200; lowBoost.gain.value = 4;
 
+      const midScoop = ctx.createBiquadFilter();
+      midScoop.type = "peaking"; midScoop.frequency.value = 900;
+      midScoop.Q.value = 1.0; midScoop.gain.value = -6;
+
+      const presence = ctx.createBiquadFilter();
+      presence.type = "peaking"; presence.frequency.value = 3200;
+      presence.Q.value = 1.2; presence.gain.value = 4;
+
+      hiPass.connect(lowBoost); lowBoost.connect(midScoop); midScoop.connect(presence);
+
+      // Light saturation for grit
+      const sat = ctx.createWaveShaper();
+      sat.curve = makeSatCurve(8); sat.oversample = "2x";
+      presence.connect(sat);
+
+      // Compressor to glue it
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 2.5;
-      comp.attack.value = 0.005; comp.release.value = 0.120;
-      const compGain = ctx.createGain(); compGain.gain.value = 1.0;
-      sat.connect(comp); comp.connect(compGain);
+      comp.threshold.value = -18; comp.knee.value = 6;
+      comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.15;
+      sat.connect(comp);
 
-      const gate = makeNoiseGate(ctx, -45);
-      const gateOut = ctx.createGain(); gateOut.gain.value = 1.0;
-      compGain.connect(gate); gate.connect(gateOut);
+      // Post-comp bus — everything wet/dry hangs off this
+      const bus = ctx.createGain(); bus.gain.value = 1.0;
+      comp.connect(bus);
 
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.45; analyserNode = analyser;
+      // ── Analyser for the TV flash ────────────────────────────────────────
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.5;
+      analyserNode = analyser;
+      bus.connect(analyser);
 
-      const plate = ctx.createConvolver(); plate.buffer = makeImpulse(ctx, 0.35, 6.0);
-      const plateGain = ctx.createGain(); plateGain.gain.value = 0.14;
-      gateOut.connect(plate); plate.connect(plateGain);
-
-      const hallPre = ctx.createDelay(0.5); hallPre.delayTime.value = 0.015;
-      const hall = ctx.createConvolver(); hall.buffer = makeImpulse(ctx, 0.6, 4.0);
-      const hallGain = ctx.createGain(); hallGain.gain.value = 0.10;
-      gateOut.connect(hallPre); hallPre.connect(hall); hall.connect(hallGain);
-
-      // ── Original parallel echo layers (from gateOut) ─────────────────────
-      const makeEcho = (dt, gain, maxDt) => {
-        const d = ctx.createDelay(maxDt || dt + 0.005); d.delayTime.value = dt;
-        const g = ctx.createGain(); g.gain.value = gain;
-        gateOut.connect(d); d.connect(g); return g;
-      };
-      const e1  = makeEcho(0.012, 0.28);
-      const e2  = makeEcho(0.025, 0.20);
-      const e3  = makeEcho(0.042, 0.14);
-      const e4  = makeEcho(0.065, 0.09);
-      const e5  = makeEcho(0.095, 0.06);
-      const e6  = makeEcho(0.140, 0.045, 0.5);
-      const e7  = makeEcho(0.200, 0.032, 0.5);
-      const e8  = makeEcho(0.260, 0.025, 0.5);
-      const e9  = makeEcho(0.300, 0.020, 0.5);
-      const e10 = makeEcho(0.380, 0.014, 0.5);
-      const e11 = makeEcho(0.500, 0.009, 0.5);
-      const e12 = makeEcho(0.650, 0.005, 0.5);
-      const e13 = makeEcho(0.820, 0.002, 0.5);
-
-      // ── Cascading echo chain A (layers 1–6, from previous pass) ──────────
-      const cDelay1 = ctx.createDelay(1.0); cDelay1.delayTime.value = 0.055;
-      const cGain1  = ctx.createGain();  cGain1.gain.value  = 0.38;
-      gateOut.connect(cDelay1); cDelay1.connect(cGain1);
-
-      const cDelay2 = ctx.createDelay(1.0); cDelay2.delayTime.value = 0.080;
-      const cGain2  = ctx.createGain();  cGain2.gain.value  = 0.30;
-      cGain1.connect(cDelay2); cDelay2.connect(cGain2);
-
-      const cDelay3 = ctx.createDelay(1.0); cDelay3.delayTime.value = 0.110;
-      const cGain3  = ctx.createGain();  cGain3.gain.value  = 0.23;
-      cGain2.connect(cDelay3); cDelay3.connect(cGain3);
-
-      const cDelay4 = ctx.createDelay(1.0); cDelay4.delayTime.value = 0.150;
-      const cGain4  = ctx.createGain();  cGain4.gain.value  = 0.17;
-      cGain3.connect(cDelay4); cDelay4.connect(cGain4);
-
-      const cDelay5 = ctx.createDelay(1.0); cDelay5.delayTime.value = 0.200;
-      const cGain5  = ctx.createGain();  cGain5.gain.value  = 0.12;
-      cGain4.connect(cDelay5); cDelay5.connect(cGain5);
-
-      const cDelay6 = ctx.createDelay(1.0); cDelay6.delayTime.value = 0.260;
-      const cGain6  = ctx.createGain();  cGain6.gain.value  = 0.07;
-      cGain5.connect(cDelay6); cDelay6.connect(cGain6);
-
-      // ── Cascading echo chain B (6 new layers, chaining off cGain6) ───────
-      // These feed on the already-cascaded signal, producing echo-of-echo-of-echo.
-      const cDelay7 = ctx.createDelay(1.0); cDelay7.delayTime.value = 0.320;
-      const cGain7  = ctx.createGain();  cGain7.gain.value  = 0.05;
-      cGain6.connect(cDelay7); cDelay7.connect(cGain7);
-
-      const cDelay8 = ctx.createDelay(1.0); cDelay8.delayTime.value = 0.390;
-      const cGain8  = ctx.createGain();  cGain8.gain.value  = 0.038;
-      cGain7.connect(cDelay8); cDelay8.connect(cGain8);
-
-      const cDelay9 = ctx.createDelay(1.0); cDelay9.delayTime.value = 0.470;
-      const cGain9  = ctx.createGain();  cGain9.gain.value  = 0.028;
-      cGain8.connect(cDelay9); cDelay9.connect(cGain9);
-
-      const cDelay10 = ctx.createDelay(1.0); cDelay10.delayTime.value = 0.560;
-      const cGain10  = ctx.createGain();  cGain10.gain.value  = 0.020;
-      cGain9.connect(cDelay10); cDelay10.connect(cGain10);
-
-      const cDelay11 = ctx.createDelay(1.0); cDelay11.delayTime.value = 0.660;
-      const cGain11  = ctx.createGain();  cGain11.gain.value  = 0.013;
-      cGain10.connect(cDelay11); cDelay11.connect(cGain11);
-
-      const cDelay12 = ctx.createDelay(1.0); cDelay12.delayTime.value = 0.770;
-      const cGain12  = ctx.createGain();  cGain12.gain.value  = 0.007;
-      cGain11.connect(cDelay12); cDelay12.connect(cGain12);
-
-      const panL = ctx.createStereoPanner(); panL.pan.value = -0.35;
-      const panR = ctx.createStereoPanner(); panR.pan.value =  0.35;
-      const choHiPass = ctx.createBiquadFilter(); choHiPass.type = "highpass"; choHiPass.frequency.value = 300;
-      const choAGain = ctx.createGain(); choAGain.gain.value = 0.10;
-      const choBGain = ctx.createGain(); choBGain.gain.value = 0.08;
-
-      const underLow = ctx.createBiquadFilter(); underLow.type = "lowpass"; underLow.frequency.value = 4000;
-      const underGain = ctx.createGain(); underGain.gain.value = 0.06;
-
-      const dn1Low  = ctx.createBiquadFilter(); dn1Low.type = "lowpass"; dn1Low.frequency.value = 5000;
-      const dn1Gain = ctx.createGain(); dn1Gain.gain.value = 0.18;
-      const dn2Low  = ctx.createBiquadFilter(); dn2Low.type = "lowpass"; dn2Low.frequency.value = 3500;
-      const dn2Gain = ctx.createGain(); dn2Gain.gain.value = 0.10;
-
-      const master = ctx.createGain(); master.gain.value = 0.40;
-
-      srcMain.connect(hiPass);
-      gateOut.connect(analyser); analyser.connect(master);
-      const dryGain = ctx.createGain(); dryGain.gain.value = 0.65;
-      gateOut.connect(dryGain); dryGain.connect(master);
-      [e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13].forEach(e => e.connect(master));
-      [cGain1,cGain2,cGain3,cGain4,cGain5,cGain6,
-       cGain7,cGain8,cGain9,cGain10,cGain11,cGain12].forEach(g => g.connect(master));
-      plateGain.connect(master); hallGain.connect(master);
-      srcChoA.connect(choHiPass); choHiPass.connect(choAGain); choAGain.connect(panL); panL.connect(master);
-      srcChoB.connect(choHiPass); choHiPass.connect(choBGain); choBGain.connect(panR); panR.connect(master);
-      srcUnder.connect(underLow); underLow.connect(underGain); underGain.connect(master);
-      srcDn1.connect(dn1Low); dn1Low.connect(dn1Gain); dn1Gain.connect(master);
-      srcDn2.connect(dn2Low); dn2Low.connect(dn2Gain); dn2Gain.connect(master);
+      // ── Master output ────────────────────────────────────────────────────
+      const master = ctx.createGain(); master.gain.value = 0.85;
       master.connect(ctx.destination);
+      analyser.connect(master);
+
+      // ── Dry voice ────────────────────────────────────────────────────────
+      const dryGain = ctx.createGain(); dryGain.gain.value = 0.7;
+      bus.connect(dryGain); dryGain.connect(master);
+
+      // ── Cave reverb (long, dark) ─────────────────────────────────────────
+      const cave = ctx.createConvolver();
+      cave.buffer = makeImpulse(ctx, 2.8, 2.5); // long decay, slow rolloff
+      const caveGain = ctx.createGain(); caveGain.gain.value = 0.55;
+      bus.connect(cave); cave.connect(caveGain); caveGain.connect(master);
+
+      // ── Distinct spaced echo repeats ─────────────────────────────────────
+      // Each is clearly audible — Overmind-style "I am here... here... here"
+      // Six layers, each feeding the next (true echo-on-echo cascade).
+      // High gains so you actually HEAR each repeat.
+      const makeDelay = (dt) => {
+        const d = ctx.createDelay(dt + 0.01);
+        d.delayTime.value = dt;
+        return d;
+      };
+
+      const d1 = makeDelay(0.30); const g1 = ctx.createGain(); g1.gain.value = 0.60;
+      bus.connect(d1); d1.connect(g1);
+
+      const d2 = makeDelay(0.30); const g2 = ctx.createGain(); g2.gain.value = 0.50;
+      g1.connect(d2); d2.connect(g2);
+
+      const d3 = makeDelay(0.30); const g3 = ctx.createGain(); g3.gain.value = 0.40;
+      g2.connect(d3); d3.connect(g3);
+
+      const d4 = makeDelay(0.30); const g4 = ctx.createGain(); g4.gain.value = 0.30;
+      g3.connect(d4); d4.connect(g4);
+
+      const d5 = makeDelay(0.30); const g5 = ctx.createGain(); g5.gain.value = 0.20;
+      g4.connect(d5); d5.connect(g5);
+
+      const d6 = makeDelay(0.30); const g6 = ctx.createGain(); g6.gain.value = 0.12;
+      g5.connect(d6); d6.connect(g6);
+
+      // Each echo also gets cave reverb so each repeat sounds distant
+      [g1, g2, g3, g4, g5, g6].forEach(g => g.connect(master));
+
+      // ── Sub-layer (pitched down) — low rumble underneath ─────────────────
+      const subLow = ctx.createBiquadFilter();
+      subLow.type = "lowpass"; subLow.frequency.value = 3000;
+      const subGain = ctx.createGain(); subGain.gain.value = 0.30;
+
+      // ── Deep harmonic layer ──────────────────────────────────────────────
+      const deepLow = ctx.createBiquadFilter();
+      deepLow.type = "lowpass"; deepLow.frequency.value = 2000;
+      const deepGain = ctx.createGain(); deepGain.gain.value = 0.20;
+
+      // ── Stereo width on echo tail ────────────────────────────────────────
+      const panL = ctx.createStereoPanner(); panL.pan.value = -0.5;
+      const panR = ctx.createStereoPanner(); panR.pan.value =  0.5;
+      g2.connect(panL); panL.connect(master);
+      g3.connect(panR); panR.connect(master);
+
+      // ── Wire sub and deep layers ─────────────────────────────────────────
+      srcUnder.connect(subLow); subLow.connect(subGain); subGain.connect(master);
+      srcDn1.connect(deepLow); deepLow.connect(deepGain); deepGain.connect(master);
+
+      // ── Start everything ─────────────────────────────────────────────────
+      srcMain.connect(hiPass);
+      const t = ctx.currentTime + 0.01;
+      srcMain.start(t); srcUnder.start(t); srcDn1.start(t);
 
       let ended = false;
-      srcMain.onended = () => { if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); } };
-      const t = ctx.currentTime + 0.01;
-      srcMain.start(t); srcChoA.start(t); srcChoB.start(t); srcUnder.start(t);
-      srcDn1.start(t); srcDn2.start(t);
+      srcMain.onended = () => {
+        if (!ended) { ended = true; analyserNode = null; activeSources = []; onDone?.(); }
+      };
       return;
     }
   } catch (_) {}
+
+  // Fallback: browser TTS
   const utt = new SpeechSynthesisUtterance(clean);
   const voices = window.speechSynthesis.getVoices();
-  const preferred = voices.find(v => /google uk english male/i.test(v.name)) || voices.find(v => /microsoft george/i.test(v.name)) || voices.find(v => /daniel/i.test(v.name)) || voices.find(v => v.lang === "en-GB") || voices.find(v => v.lang.startsWith("en"));
+  const preferred =
+    voices.find(v => /google uk english male/i.test(v.name)) ||
+    voices.find(v => /microsoft george/i.test(v.name)) ||
+    voices.find(v => /daniel/i.test(v.name)) ||
+    voices.find(v => v.lang === "en-GB") ||
+    voices.find(v => v.lang.startsWith("en"));
   if (preferred) utt.voice = preferred;
-  utt.rate = 0.92; utt.pitch = 1.0; utt.volume = 1;
+  utt.rate = 0.75; utt.pitch = 0.6; utt.volume = 1;
   utt.onend = () => onDone?.(); utt.onerror = () => onDone?.();
   window.speechSynthesis.speak(utt);
 }
@@ -268,7 +231,7 @@ function stopSpeech() {
   window.speechSynthesis?.cancel();
 }
 
-// ── Green TV flash — pulses over the video only, matching voice ────────────
+// ── Green TV flash ──────────────────────────────────────────────────────────
 function useTVFlash(flashRef, dataArr) {
   const rafRef = useRef(null);
   useEffect(() => {
@@ -282,9 +245,9 @@ function useTVFlash(flashRef, dataArr) {
       let sum = 0;
       for (let i = 0; i < dataArr.current.length; i++) sum += dataArr.current[i] ** 2;
       const rms = Math.sqrt(sum / dataArr.current.length) / 255;
-      const active = Math.max(0, rms - 0.06);
+      const active = Math.max(0, rms - 0.04);
       if (active <= 0) { flashRef.current.style.opacity = "0"; return; }
-      flashRef.current.style.opacity = Math.min(1, active * 3.5).toFixed(3);
+      flashRef.current.style.opacity = Math.min(1, active * 4.0).toFixed(3);
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
@@ -494,23 +457,15 @@ export default function RushmoreAI() {
     <div className="ai-shell">
       <div className="ai-video-strip">
         <div className="ai-video-sticky">
-          <video
-            ref={videoRef}
-            src={VIDEO_SRC}
-            autoPlay loop muted playsInline
-            className="ai-video-main"
-          />
+          <video ref={videoRef} src={VIDEO_SRC} autoPlay loop muted playsInline className="ai-video-main" />
           <div
             ref={flashRef}
             style={{
-              position:      "absolute",
-              inset:         0,
-              pointerEvents: "none",
-              opacity:       0,
-              mixBlendMode:  "screen",
-              background:    "radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%)",
-              boxShadow:     "0 0 50px 16px rgba(60,220,60,0.45), 0 0 100px 32px rgba(60,220,60,0.18)",
-              zIndex:        3,
+              position: "absolute", inset: 0, pointerEvents: "none", opacity: 0,
+              mixBlendMode: "screen",
+              background: "radial-gradient(ellipse at center, rgba(80,255,80,0.55) 0%, rgba(40,200,40,0.30) 50%, transparent 80%)",
+              boxShadow: "0 0 50px 16px rgba(60,220,60,0.45), 0 0 100px 32px rgba(60,220,60,0.18)",
+              zIndex: 3,
             }}
           />
         </div>
