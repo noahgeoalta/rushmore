@@ -49,9 +49,8 @@ function spIcon(ctxId, label) {
 }
 
 function resolveUrl(url, desktop) {
-  if (desktop && url?.startsWith("https://claude.ai/")) {
+  if (desktop && url?.startsWith("https://claude.ai/"))
     return url.replace("https://", "claude://");
-  }
   return url;
 }
 
@@ -59,17 +58,14 @@ function ImgIcon({ src, size = 15 }) {
   if (!src) return null;
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
+
+// Standard chip (Claude projects, SP links, etc.)
 function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   const href = resolveUrl(url, desktop);
   const isDesktop = desktop && href?.startsWith("claude://");
   return (
-    <a
-      href={href}
-      target={isDesktop ? undefined : "_blank"}
-      rel={isDesktop ? undefined : "noreferrer"}
-      className="cmd-chip"
-      title={isDesktop ? "Opens in Claude desktop app" : undefined}
-    >
+    <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"}
+      className="cmd-chip" title={isDesktop ? "Opens in Claude desktop app" : undefined}>
       {imgSrc  && <ImgIcon src={imgSrc} size={15} />}
       {symbol  && <span className="cmd-chip-icon">{symbol}</span>}
       {label}
@@ -77,11 +73,28 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
     </a>
   );
 }
-function BoardChip({ label, url, tag }) {
-  const cls = tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board";
-  const text = tag === "dev" ? "Dev Board" : tag === "biz" ? "Biz Board" : label;
+
+// Repo chip — distinct darker gray look
+function RepoChip({ label, url }) {
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip">
+      <span className="cmd-repo-icon">⊞</span>
+      {label}
+    </a>
+  );
+}
+
+// Board chip — colored by type
+function BoardChip({ url, tag }) {
+  const cls = tag === "dev" ? "cmd-board-chip dev"
+            : tag === "biz" ? "cmd-board-chip biz"
+            : "cmd-board-chip board";
+  const text = tag === "dev" ? "Development"
+             : tag === "biz" ? "Business"
+             : "Board";
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
+
 function IconBoardChip({ label, url, icon }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-chip">
@@ -90,33 +103,47 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-function GitHubSection({ ctx }) {
+// Work context card — order: QuestLog → GitHub (boards+repo) → other Claude → SharePoint
+function ContextCard({ ctx }) {
+  const sp      = ctx.sharepoint || [];
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
-  return (
-    <div className="gh-section">
-      <div className="gh-section-label"><span>GITHUB</span></div>
-      <div className="cmd-board-row">
-        {ghRepos.map(r => <Chip key={r.url} label={r.label} url={r.url} symbol="⊞" />)}
-        {ghBoards.map(b => <BoardChip key={b.url} label={b.label} url={b.url} tag={b.tag} />)}
-      </div>
-    </div>
-  );
-}
+  const logo    = CTX_LOGO[ctx.id];
 
-function ContextCard({ ctx }) {
-  const sp     = ctx.sharepoint || [];
-  const claude = (ctx.launchpad || []).filter(l => l.group === "Claude");
-  const logo   = CTX_LOGO[ctx.id];
+  const allClaude = (ctx.launchpad || []).filter(
+    l => l.group === "Claude" && !l.label.includes("Riipen Overlord")
+  );
+  const questLog   = allClaude.filter(l => l.label.includes("QuestLog"));
+  const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
+
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
-        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
-              : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+        {logo
+          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+          : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-      {claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+
+      {/* 1. QuestLog */}
+      {questLog.map(l => (
+        <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />
+      ))}
+
+      {/* 2. GitHub: boards then repo */}
+      {(ghBoards.length > 0 || ghRepos.length > 0) && (
+        <div className="cmd-board-row">
+          {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
+          {ghRepos.map(r => <RepoChip key={r.url} label={r.label} url={r.url} />)}
+        </div>
+      )}
+
+      {/* 3. Other Claude projects */}
+      {otherClaude.map(l => (
+        <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />
+      ))}
+
+      {/* 4. SharePoint */}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-      <GitHubSection ctx={ctx} />
     </div>
   );
 }
@@ -127,8 +154,8 @@ function RiipenSection({ ctx }) {
     if (!groups[l.group]) groups[l.group] = [];
     groups[l.group].push(l);
   }
-  const topLevel = groups["Riipen"] || [];
-  const riipenOverlord = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
+  const topLevel = (groups["Riipen"] || []);
+  // Riipen Overlord removed from here too
   const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
   return (
     <section className="cmd-section">
@@ -136,7 +163,6 @@ function RiipenSection({ ctx }) {
       <div className="cmd-riipen">
         <div className="cmd-riipen-top">
           {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
-          {riipenOverlord && <Chip label="Riipen Overlord" url={riipenOverlord.url} img={IMG.claude} desktop={riipenOverlord.desktop} />}
         </div>
         {teamKeys.map(key => (
           <div key={key} className="cmd-riipen-row">
@@ -222,7 +248,7 @@ export default function Home() {
               </div>
               <div className="cmd-row">
                 {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
-                <Chip label="ChatGPT" url="https://chatgpt.com"            img={IMG.chatgpt} />
+                <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
                 <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
                 {RUSHMORE_REPO && <Chip label="Rushmore Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
                 {RUSHMORE_CHAT && <Chip label="Rushmore Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
@@ -231,7 +257,7 @@ export default function Home() {
           </section>
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK — GITHUB</span></div>
+            <div className="cmd-section-header"><span>WORK</span></div>
             <div className="cmd-cards-row">
               {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
             </div>
@@ -247,7 +273,6 @@ export default function Home() {
         <main className="notes-main"><Canvas /></main>
       )}
 
-      {/* Mobile-only bottom navigation bar */}
       <nav className="mobile-nav">
         <button className={"mobile-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>
           <span className="mobile-nav-icon">📋</span>
