@@ -82,20 +82,18 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 
-/* ── Notes ── */
-/*
-  Key layout: notes-main is a flex column that fills remaining viewport height.
-  notes-bar is sticky at top — stays in normal flow, no fixed positioning.
-  cv-scroll-wrap fills remaining space and scrolls internally.
-  This means the header is ALWAYS above the content, never overlapping.
+/* ── Notes ──
+   notes-main is itself the scroll container.
+   notes-bar is sticky at the top of that scroll container.
+   cv-canvas sits directly below with no extra wrapper.
 */
 .notes-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
   padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* needed so sticky children work: the scroll happens HERE */
 }
 .notes-bar {
   display: flex;
@@ -104,12 +102,12 @@ a { color: inherit; text-decoration: none; }
   flex-wrap: wrap;
   overflow-x: auto;
   position: sticky;
-  top: 53px;
+  top: 0;   /* sticks to top of notes-main scroll container */
   z-index: 8;
   background: var(--bg);
   padding: 10px 24px;
   border-bottom: 1px solid var(--edge);
-  flex-shrink: 0; /* never shrink — always full height */
+  flex-shrink: 0;
 }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
@@ -126,8 +124,8 @@ a { color: inherit; text-decoration: none; }
 .notes-sep { width: 1px; height: 16px; background: var(--edge); margin: 0 3px; flex-shrink: 0; }
 .notes-hint { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; }
 .cv-fontsize-display { font-size: 12px; font-weight: 700; color: var(--dim); min-width: 36px; text-align: center; letter-spacing: 0.03em; flex-shrink: 0; }
-/* cv-scroll-wrap fills remaining height and scrolls — header always above it */
-.cv-scroll-wrap { flex: 1; overflow: auto; position: relative; padding: 16px 24px; min-height: 0; }
+/* cv-scroll-wrap is now just a padding wrapper, no overflow — notes-main scrolls */
+.cv-scroll-wrap { padding: 16px 24px 40px; }
 .cv-canvas { position: relative; min-height: 600px; background: var(--bg); }
 .cv-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--faint); font-size: 1rem; pointer-events: none; text-align: center; }
 .cv-box { position: absolute; min-width: 160px; background: transparent; border: 1px solid transparent; border-radius: 8px; transition: border-color 0.1s; }
@@ -253,50 +251,14 @@ a { color: inherit; text-decoration: none; }
   .ai-send-btn { padding: 8px 10px; font-size: 11px; letter-spacing: 0; }
   .ai-textarea { font-size: 13px; padding: 7px 10px; }
   .ai-msg-bubble { font-size: 13px; padding: 8px 10px; line-height: 1.5; }
-
-  /* ── Notes mobile ──
-     Same approach as desktop: flex column, bar is sticky, wrap scrolls.
-     NO position:fixed, NO padding-top hacks.
-     The bar sits in normal flow above the scroll area.
-  */
-  .notes-main {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    padding: 0;
-  }
-  .notes-bar {
-    position: sticky;
-    top: 46px; /* app-bar height on mobile */
-    left: auto;
-    right: auto;
-    width: auto;
-    z-index: 9;
-    background: var(--bg);
-    border-bottom: 1px solid var(--edge);
-    padding: 6px 10px;
-    gap: 4px;
-    flex-wrap: wrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    flex-shrink: 0;
-  }
-  .notes-bar::-webkit-scrollbar { display: none; }
+  /* Notes mobile — same approach as desktop, just tighter padding */
+  .notes-bar { padding: 6px 10px; gap: 4px; }
   .notes-toolbar { gap: 3px; }
   .notes-btn { padding: 4px 8px; font-size: 11px; }
   .notes-hint { display: none; }
   .page-tab { font-size: 12px; padding: 5px 10px; }
   .cv-fontsize-display { min-width: 28px; font-size: 11px; }
-  /* No padding-top needed — bar is in normal flow above this */
-  .cv-scroll-wrap {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 8px 10px 24px;
-    min-height: 0;
-  }
+  .cv-scroll-wrap { padding: 8px 10px 24px; }
   .cv-canvas { min-height: 1400px; }
 }
 
