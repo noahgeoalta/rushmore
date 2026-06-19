@@ -59,7 +59,6 @@ function ImgIcon({ src, size = 15 }) {
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
 
-// Standard chip (Claude projects, SP links, etc.)
 function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   const href = resolveUrl(url, desktop);
   const isDesktop = desktop && href?.startsWith("claude://");
@@ -74,7 +73,6 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   );
 }
 
-// Repo chip — distinct darker gray look
 function RepoChip({ label, url }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip">
@@ -84,7 +82,6 @@ function RepoChip({ label, url }) {
   );
 }
 
-// Board chip — colored by type
 function BoardChip({ url, tag }) {
   const cls = tag === "dev" ? "cmd-board-chip dev"
             : tag === "biz" ? "cmd-board-chip biz"
@@ -103,17 +100,15 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-// Work context card — order: QuestLog → GitHub (boards+repo) → other Claude → SharePoint
 function ContextCard({ ctx }) {
-  const sp      = ctx.sharepoint || [];
+  const sp       = ctx.sharepoint || [];
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
-  const logo    = CTX_LOGO[ctx.id];
+  const logo     = CTX_LOGO[ctx.id];
 
-  const allClaude = (ctx.launchpad || []).filter(
-    l => l.group === "Claude" && !l.label.includes("Riipen Overlord")
-  );
-  const questLog   = allClaude.filter(l => l.label.includes("QuestLog"));
+  // Riipen Overlord lives in the Riipen section, not the work card
+  const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
+  const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
 
   return (
@@ -123,26 +118,14 @@ function ContextCard({ ctx }) {
           ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
           : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-
-      {/* 1. QuestLog */}
-      {questLog.map(l => (
-        <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />
-      ))}
-
-      {/* 2. GitHub: boards then repo */}
+      {questLog.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {(ghBoards.length > 0 || ghRepos.length > 0) && (
         <div className="cmd-board-row">
           {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
           {ghRepos.map(r => <RepoChip key={r.url} label={r.label} url={r.url} />)}
         </div>
       )}
-
-      {/* 3. Other Claude projects */}
-      {otherClaude.map(l => (
-        <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />
-      ))}
-
-      {/* 4. SharePoint */}
+      {otherClaude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
     </div>
   );
@@ -154,15 +137,17 @@ function RiipenSection({ ctx }) {
     if (!groups[l.group]) groups[l.group] = [];
     groups[l.group].push(l);
   }
-  const topLevel = (groups["Riipen"] || []);
-  // Riipen Overlord removed from here too
-  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
+  const topLevel   = groups["Riipen"] || [];
+  const overlord   = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
+  const teamKeys   = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
+
   return (
     <section className="cmd-section">
       <div className="cmd-section-header"><span>RIIPEN</span></div>
       <div className="cmd-riipen">
         <div className="cmd-riipen-top">
           {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
+          {overlord && <Chip label="Riipen Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
         </div>
         {teamKeys.map(key => (
           <div key={key} className="cmd-riipen-row">
