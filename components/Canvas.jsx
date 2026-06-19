@@ -186,7 +186,12 @@ export default function Canvas() {
   useEffect(() => {
     if (!drag && !resize) return;
     const move = (e) => {
-      if (drag) { const nx = Math.max(0, drag.ox + e.clientX - drag.sx); const ny = Math.max(0, drag.oy + e.clientY - drag.sy); setState(s => { const ns = structuredClone(s); const pg = ns.pages.find(p => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find(b => b.id === drag.id); if (b) { b.x = nx; b.y = ny; } return ns; }); }
+      if (drag) {
+        // Clamp to minimum 8px from left/top so the drag bar is always reachable
+        const nx = Math.max(8, drag.ox + e.clientX - drag.sx);
+        const ny = Math.max(8, drag.oy + e.clientY - drag.sy);
+        setState(s => { const ns = structuredClone(s); const pg = ns.pages.find(p => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find(b => b.id === drag.id); if (b) { b.x = nx; b.y = ny; } return ns; });
+      }
       if (resize) { const nw = Math.max(120, resize.ow + e.clientX - resize.sx); setState(s => { const ns = structuredClone(s); const pg = ns.pages.find(p => p.id === ns.activeId) || ns.pages[0]; const b = pg.boxes.find(b => b.id === resize.id); if (b) b.w = nw; return ns; }); }
     };
     const up = () => { setDrag(null); setResize(null); };
@@ -216,14 +221,13 @@ export default function Canvas() {
     return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   }, [lasso]);
 
-  if (!mounted) return <div className="cv-canvas" style={{ minHeight: 400 }} />;
-  if (!state) return <div className="cv-canvas" style={{ minHeight: 400 }}><div style={{ padding: 20, color: "#555", fontSize: 13 }}>Loading notes\u2026</div></div>;
+  if (!mounted) return <div className="cv-scroll-wrap"><div className="cv-canvas" style={{ minHeight: 400 }} /></div>;
+  if (!state) return <div className="cv-scroll-wrap"><div className="cv-canvas" style={{ minHeight: 400 }}><div style={{ padding: 20, color: "#555", fontSize: 13 }}>Loading notes\u2026</div></div></div>;
 
   const page = state.pages.find(p => p.id === state.activeId) || state.pages[0];
   const canvasW = Math.max(800, ...page.boxes.map(b => b.x + b.w + 80));
   const canvasH = Math.max(600, ...page.boxes.map(b => b.y + (boxRefs.current[b.id]?.offsetHeight || 100) + 80));
 
-  // Font size of the currently focused line
   const focusedFontSize = (() => {
     if (!focusedId || !selBox) return null;
     const box = page.boxes.find(b => b.id === selBox);
@@ -245,7 +249,7 @@ export default function Canvas() {
   const delPage = (id) => { if (!confirm("Delete page?")) return; setState(s => { const pages = s.pages.filter(p => p.id !== id); const safe = pages.length ? pages : [emptyState().pages[0]]; return { pages: safe, activeId: s.activeId === id ? safe[0].id : s.activeId }; }); };
   const renamePage = (id) => { const pg = state.pages.find(p => p.id === id); const name = prompt("Rename:", pg.name); if (name) setState(s => ({ ...s, pages: s.pages.map(p => p.id === id ? { ...p, name } : p) })); };
   const dropPage = (id) => { if (!dragPage || dragPage === id) return; setState(s => { const pages = [...s.pages]; const fi = pages.findIndex(p => p.id === dragPage); const ti = pages.findIndex(p => p.id === id); const [m] = pages.splice(fi, 1); pages.splice(ti, 0, m); return { ...s, pages }; }); setDragPage(null); setOverPage(null); };
-  const addBox = (x, y) => { const b = newBox(x, y); mut(pg => pg.boxes.push(b)); setSelBox(b.id); setSelBoxes(new Set([b.id])); setFocusId(b.lines[0].id); setSelLines(new Set()); };
+  const addBox = (x, y) => { const b = newBox(Math.max(8, x), Math.max(8, y)); mut(pg => pg.boxes.push(b)); setSelBox(b.id); setSelBoxes(new Set([b.id])); setFocusId(b.lines[0].id); setSelLines(new Set()); };
   const delBox = (id) => { mut(pg => { pg.boxes = pg.boxes.filter(b => b.id !== id); }); if (selBox === id) setSelBox(null); setSelBoxes(prev => { const s = new Set(prev); s.delete(id); return s; }); };
   const cleanEmptyBox = (id) => { const box = page.boxes.find(b => b.id === id); if (!box) return; if (box.lines.length === 1 && !box.lines[0].text && box.lines[0].type === "none" && !box.lines[0].children.length) delBox(id); };
   const setText = (bid, lid, text) => mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (h) h.node.text = text; }, false);
@@ -255,7 +259,6 @@ export default function Canvas() {
     const ids = selLinesRef.current;
     const box = page.boxes.find(b => b.id === bid);
     if (!box) return;
-    // If multiple lines selected, copy all; otherwise copy just the focused line
     if (ids.size > 1) {
       navigator.clipboard.writeText(serializeLines(collectSelected(box.lines, ids))).catch(() => {});
     } else if (focusedId) {
@@ -300,7 +303,6 @@ export default function Canvas() {
       }
       const text = await navigator.clipboard.readText();
       if (!text.trim()) return;
-      // Single-line: insert inline at caret
       const el = inputs.current[lid];
       const lines = text.split("\n").filter(l => l.trim());
       if (lines.length <= 1) {
@@ -312,7 +314,6 @@ export default function Canvas() {
         const newCaret = caretPos + pasteText.length;
         setFocusId(lid); setFocusCaret(newCaret);
       } else {
-        // Multi-line: insert new nodes after current line
         const parsed = parsePlainToLines(text);
         if (!parsed.length) return;
         mut(pg => { const b = pg.boxes.find(b => b.id === bid); if (!b) return; const h = loc(b.lines, lid); if (!h) return; h.list.splice(h.i + 1, 0, ...parsed); });
@@ -377,6 +378,7 @@ export default function Canvas() {
 
   return (
     <>
+      {/* notes-bar: sticky at top of notes-main scroll container */}
       <div className="notes-bar">
         {state.pages.map(p => (
           <button key={p.id} className={"page-tab" + (p.id === state.activeId ? " active" : "") + (overPage === p.id && dragPage !== p.id ? " page-drag-over" : "")} draggable onDragStart={() => setDragPage(p.id)} onDragEnd={() => { setDragPage(null); setOverPage(null); }} onDragOver={e => { e.preventDefault(); setOverPage(p.id); }} onDragLeave={() => setOverPage(null)} onDrop={() => dropPage(p.id)} onClick={() => { setState(s => ({ ...s, activeId: p.id })); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }} onDoubleClick={() => renamePage(p.id)} title="Double-click to rename">
@@ -394,11 +396,10 @@ export default function Canvas() {
           <button className="notes-btn" title="Indent (Tab)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && indent(selBox, focusedId); }}>{"\u2192"}</button>
           <button className="notes-btn" title="Outdent (Shift+Tab)" onMouseDown={e => { e.preventDefault(); focusedId && selBox && outdent(selBox, focusedId); }}>{"\u2190"}</button>
           <span className="notes-sep" />
-          <button className="notes-btn" title="Font smaller (Ctrl+Shift+-)" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
+          <button className="notes-btn" title="Font smaller" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, -2); }}>A-</button>
           <span className="cv-fontsize-display">{focusedFontSize ?? "--"}px</span>
-          <button className="notes-btn" title="Font larger (Ctrl+Shift+.)" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
+          <button className="notes-btn" title="Font larger" onMouseDown={e => { e.preventDefault(); selBox && fsize(selBox, focusedId, 2); }}>A+</button>
           <span className="notes-sep" />
-          {/* Always-visible Copy and Del box buttons — fixed width so toolbar never shifts */}
           <button className="notes-btn" style={{ minWidth: 48 }} onMouseDown={e => { e.preventDefault(); selBox && copySelected(selBox); }} title="Copy selected (Ctrl+C)">Copy</button>
           <button className="notes-btn cv-del-btn" style={{ minWidth: 60 }} onMouseDown={e => { e.preventDefault(); if (selBox) { if (selLinesRef.current.size > 1) deleteSelectedLines(selBox); else delBox(selBox); } }} title="Delete">
             {selBox && selLines.size > 1 ? "Del lines" : "Del box"}
@@ -407,20 +408,24 @@ export default function Canvas() {
         {syncLabel && <span style={{ fontSize: 10, color: syncColor, marginLeft: 8, letterSpacing: "0.05em" }}>{syncLabel}</span>}
         <span className="notes-hint">Ctrl+A · Ctrl+C copy · Shift+click select · drag move</span>
       </div>
-      <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
-        onDoubleClick={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
-        onMouseDown={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
-        onClick={e => { if (e.target === cvRef.current) { setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); } }}
-      >
-        {lassoRect && lassoRect.width > 2 && <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />}
-        {page.boxes.map(box => (
-          <div key={box.id} ref={el => (boxRefs.current[box.id] = el)} className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")} style={{ left: box.x, top: box.y, width: box.w }} onClick={e => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}>
-            <div className="cv-drag-bar" onMouseDown={e => { if (["TEXTAREA","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move box" />
-            <div className="cv-body">{renderLines(box.id, box.lines)}</div>
-            <div className="cv-resize" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
-          </div>
-        ))}
-        {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
+
+      {/* cv-scroll-wrap is now just a padding wrapper — notes-main does the scrolling */}
+      <div className="cv-scroll-wrap">
+        <div className="cv-canvas" ref={cvRef} style={{ width: canvasW, minHeight: canvasH }}
+          onDoubleClick={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); addBox(e.clientX - r.left - 170, e.clientY - r.top - 14); }}
+          onMouseDown={e => { if (e.target !== cvRef.current) return; const r = cvRef.current.getBoundingClientRect(); setLasso({ sx: e.clientX - r.left, sy: e.clientY - r.top, ex: e.clientX - r.left, ey: e.clientY - r.top }); setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); }}
+          onClick={e => { if (e.target === cvRef.current) { setSelBox(null); setSelLines(new Set()); setSelBoxes(new Set()); } }}
+        >
+          {lassoRect && lassoRect.width > 2 && <div style={{ position: "absolute", border: "1px solid #ff8c3a", background: "rgba(255,140,58,0.06)", borderRadius: 4, pointerEvents: "none", left: lassoRect.left, top: lassoRect.top, width: lassoRect.width, height: lassoRect.height }} />}
+          {page.boxes.map(box => (
+            <div key={box.id} ref={el => (boxRefs.current[box.id] = el)} className={"cv-box" + (selBox === box.id || selBoxes.has(box.id) ? " selected" : "")} style={{ left: box.x, top: box.y, width: box.w }} onClick={e => { e.stopPropagation(); setSelBox(box.id); setSelBoxes(new Set([box.id])); }}>
+              <div className="cv-drag-bar" onMouseDown={e => { if (["TEXTAREA","BUTTON","SPAN","IMG"].includes(e.target.tagName)) return; e.preventDefault(); setDrag({ id: box.id, sx: e.clientX, sy: e.clientY, ox: box.x, oy: box.y }); setSelBox(box.id); setSelBoxes(new Set([box.id])); }} title="Drag to move box" />
+              <div className="cv-body">{renderLines(box.id, box.lines)}</div>
+              <div className="cv-resize" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setResize({ id: box.id, sx: e.clientX, ow: box.w }); }} title="Drag to resize" />
+            </div>
+          ))}
+          {page.boxes.length === 0 && <div className="cv-empty">Double-click anywhere to create a text box</div>}
+        </div>
       </div>
     </>
   );
