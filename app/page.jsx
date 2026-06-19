@@ -95,21 +95,7 @@ function IconBoardChip({ label, url, icon }) {
   );
 }
 
-// Mode button placed at the bottom of each card / section
-function ModeBtn({ modeId, label, activeMode, onModeChange }) {
-  const active = activeMode === modeId;
-  return (
-    <button
-      className={"rp-mode-btn" + (active ? " active" : "")}
-      onClick={() => onModeChange(active ? null : modeId)}
-      title={active ? "Deactivate mode" : `Switch RUSHMORE to ${label} mode`}
-    >
-      {active ? "\u25cf " : "\u25cb "}{label} mode
-    </button>
-  );
-}
-
-function ContextCard({ ctx, activeMode, onModeChange }) {
+function ContextCard({ ctx }) {
   const sp       = ctx.sharepoint || [];
   const ghBoards = ctx.github?.boards || [];
   const ghRepos  = ctx.github?.repos  || [];
@@ -117,7 +103,6 @@ function ContextCard({ ctx, activeMode, onModeChange }) {
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
-  const modeExists  = MODES.find(m => m.id === ctx.id);
 
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
@@ -135,14 +120,11 @@ function ContextCard({ ctx, activeMode, onModeChange }) {
       )}
       {otherClaude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-      {modeExists && (
-        <ModeBtn modeId={ctx.id} label={ctx.name} activeMode={activeMode} onModeChange={onModeChange} />
-      )}
     </div>
   );
 }
 
-function RiipenSection({ ctx, activeMode, onModeChange }) {
+function RiipenSection({ ctx }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
     if (!groups[l.group]) groups[l.group] = [];
@@ -167,7 +149,6 @@ function RiipenSection({ ctx, activeMode, onModeChange }) {
             {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
           </div>
         ))}
-        <ModeBtn modeId="riipen" label="Riipen" activeMode={activeMode} onModeChange={onModeChange} />
       </div>
     </section>
   );
@@ -176,9 +157,9 @@ function RiipenSection({ ctx, activeMode, onModeChange }) {
 const WORK_ORDER = ["geocomforter", "chronoslate", "geoalta", "nmgco"];
 
 export default function Home() {
-  const [view,        setView]       = useState("command");
-  const [msAuthed,    setMsAuthed]   = useState(false);
-  const [activeMode,  setActiveMode] = useState(null);
+  const [view,       setView]       = useState("command");
+  const [msAuthed,   setMsAuthed]   = useState(false);
+  const [activeMode, setActiveMode] = useState(null);
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -253,7 +234,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* RUSHMORE panel — inline in Command */}
           <section className="cmd-section">
             <div className="cmd-section-header">
               <span>RUSHMORE</span>
@@ -265,11 +245,11 @@ export default function Home() {
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK</span></div>
             <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} activeMode={activeMode} onModeChange={setActiveMode} />)}
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
             </div>
           </section>
 
-          {geocomforter && <RiipenSection ctx={geocomforter} activeMode={activeMode} onModeChange={setActiveMode} />}
+          {geocomforter && <RiipenSection ctx={geocomforter} />}
         </main>
       )}
 
