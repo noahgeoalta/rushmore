@@ -139,37 +139,33 @@ function loadArchived() {
 
 const BOOT_MSG = {
   role: "assistant",
-  content: "RUSHMORE online. General mode — ask me anything, or activate a project mode below.",
+  content: "RUSHMORE online. General mode \u2014 ask me anything, or activate a project mode.",
 };
 
-function bootMsg(mode) {
-  if (!mode) return BOOT_MSG;
-  return { role: "assistant", content: `${mode} mode active. Reading project instructions\u2026` };
-}
-
-// Mode definitions: label shown on button, GitHub owner/repo/path for context file
+// Mode definitions — color matches the project panel accent
 export const MODES = [
-  { id: "geocomforter", label: "GeoComforter", owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "README.md" },
-  { id: "chronoslate",  label: "ChronoSlate",  owner: "GeoAltaSolutions", repo: "ChronoSlate-QuestLog",  path: "README.md" },
-  { id: "geoalta",      label: "GeoAlta",      owner: "GeoAltaSolutions", repo: "GeoAlta-QuestLog",      path: "README.md" },
-  { id: "nmgco",        label: "NMGCO",        owner: "GeoAltaSolutions", repo: "NMGCO-QuestLog",        path: "README.md" },
-  { id: "riipen",       label: "Riipen",       owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "Riipen/README.md" },
+  { id: "geocomforter", label: "GeoComforter", owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "README.md",        color: "#3a7acc", bg: "#050d1a", border: "#0a1e3a" },
+  { id: "chronoslate",  label: "ChronoSlate",  owner: "GeoAltaSolutions", repo: "ChronoSlate-QuestLog",  path: "README.md",        color: "#c8a030", bg: "#080a14", border: "#1a1a2e" },
+  { id: "geoalta",      label: "GeoAlta",      owner: "GeoAltaSolutions", repo: "GeoAlta-QuestLog",      path: "README.md",        color: "#aa3333", bg: "#1a0505", border: "#3a0a0a" },
+  { id: "nmgco",        label: "NMGCO",        owner: "GeoAltaSolutions", repo: "NMGCO-QuestLog",        path: "README.md",        color: "#c87020", bg: "#160e00", border: "#3a2200" },
+  { id: "riipen",       label: "Riipen",       owner: "GeoAltaSolutions", repo: "GeoComforter-QuestLog", path: "Riipen/README.md", color: "#5a9aee", bg: "#061220", border: "#0f2a4a" },
 ];
 
 export default function RushmorePanel({ activeMode, onModeChange }) {
-  const [messages,      setMessages]  = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return [BOOT_MSG]; });
-  const [input,         setInput]     = useState("");
-  const [loading,       setLoading]   = useState(false);
-  const [voiceOut,      setVoiceOut]  = useState(true);
-  const [listening,     setListening] = useState(false);
-  const [speaking,      setSpeaking]  = useState(false);
-  const [usage,         setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
-  const [showHistory,   setShowHistory] = useState(false);
-  const [modeLoading,   setModeLoading] = useState(false);
-  const [modeContext,   setModeContext] = useState(null); // fetched md content
+  const [messages,    setMessages]  = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return [BOOT_MSG]; });
+  const [input,       setInput]     = useState("");
+  const [loading,     setLoading]   = useState(false);
+  const [voiceOut,    setVoiceOut]  = useState(true);
+  const [listening,   setListening] = useState(false);
+  const [speaking,    setSpeaking]  = useState(false);
+  const [usage,       setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
+  const [showHistory, setShowHistory] = useState(false);
+  const [modeLoading, setModeLoading] = useState(false);
+  const [modeContext, setModeContext] = useState(null);
 
   const voiceOutRef   = useRef(true);
   const continuousRef = useRef(false);
+  const recognitionRef = useRef(null);
   const messagesRef   = useRef(messages);
   const flashRef      = useRef(null);
   const dataArrRef    = useRef(null);
@@ -188,35 +184,29 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
     return () => v.removeEventListener("canplay", tryPlay);
   }, []);
 
-  // When activeMode changes (from parent), fetch context and reset chat
   useEffect(() => {
-    if (!activeMode) {
-      setModeContext(null);
-      return;
-    }
+    if (!activeMode) { setModeContext(null); return; }
     const def = MODES.find(m => m.id === activeMode);
     if (!def) return;
     setModeLoading(true);
     setModeContext(null);
-    // Archive current chat
     try {
       const arc = localStorage.getItem(STORAGE_KEY);
       if (arc) localStorage.setItem(`${STORAGE_KEY}-${Date.now()}`, arc);
       localStorage.removeItem(STORAGE_KEY);
     } catch (_) {}
-    const start = bootMsg(def.label);
-    setMessages([start]);
+    setMessages([{ role: "assistant", content: `${def.label} \u2014 loading project instructions\u2026` }]);
     setUsage({ inTok: 0, outTok: 0, calls: 0 });
 
     fetch(`/api/github-context?owner=${def.owner}&repo=${def.repo}&path=${encodeURIComponent(def.path)}`)
       .then(r => r.json())
       .then(d => {
         setModeContext(d.content || "");
-        setMessages([{ role: "assistant", content: `${def.label} mode active. I've loaded the project instructions from ${def.repo}. What do you need?` }]);
+        setMessages([{ role: "assistant", content: `${def.label} mode active. Project instructions loaded. What do you need?` }]);
       })
       .catch(() => {
         setModeContext("");
-        setMessages([{ role: "assistant", content: `${def.label} mode active. (Couldn't fetch context file — working from memory.)` }]);
+        setMessages([{ role: "assistant", content: `${def.label} mode active. (Couldn't fetch context \u2014 working from memory.)` }]);
       })
       .finally(() => setModeLoading(false));
   }, [activeMode]);
@@ -234,8 +224,6 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
     recognitionRef.current = rec;
     try { rec.start(); } catch (e) { console.warn(e); }
   }, []); // eslint-disable-line
-
-  const recognitionRef = useRef(null);
 
   const stopListening = useCallback(() => {
     continuousRef.current = false;
@@ -255,7 +243,6 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
       if (activeMode) { body.mode = activeMode; body.modeContext = modeContext || ""; }
       const res  = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
-      // Extract text from content blocks (web search returns multiple blocks)
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("\n") || data.error?.message || "[No response]";
       const updated = [...history, { role: "assistant", content: reply }];
       setMessages(updated);
@@ -271,12 +258,12 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
     } finally { setLoading(false); }
   };
 
-  const sendMessage = () => { const c = input.trim(); if (!c || loading) return; setInput(""); sendWith(messagesRef.current, c); };
-  const handleEdit  = (i, nc) => { const fi = messages.length - 1 - i; sendWith(messages.slice(0, fi), nc); };
+  const sendMessage  = () => { const c = input.trim(); if (!c || loading) return; setInput(""); sendWith(messagesRef.current, c); };
+  const handleEdit   = (i, nc) => { const fi = messages.length - 1 - i; sendWith(messages.slice(0, fi), nc); };
   const handleReplay = (c) => { if (speaking) return; setSpeaking(true); speakRaw(c, () => setSpeaking(false)); };
-  const handleKey   = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-  const toggleMic   = () => { if (continuousRef.current) { stopListening(); } else { continuousRef.current = true; startListening(); } };
-  const toggleVoice = () => { if (voiceOut) { setVoiceOut(false); stopSpeech(); } else setVoiceOut(true); voiceOutRef.current = !voiceOut; };
+  const handleKey    = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+  const toggleMic    = () => { if (continuousRef.current) { stopListening(); } else { continuousRef.current = true; startListening(); } };
+  const toggleVoice  = () => { const nv = !voiceOut; setVoiceOut(nv); voiceOutRef.current = nv; if (!nv) stopSpeech(); };
 
   const newChat = () => {
     stopSpeech(); stopListening(); onModeChange(null);
@@ -290,51 +277,72 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
   };
   const loadPast = (msgs) => { setMessages(msgs); setShowHistory(false); };
 
-  const cost = calcCost(usage.inTok, usage.outTok);
+  const cost     = calcCost(usage.inTok, usage.outTok);
   const totalTok = usage.inTok + usage.outTok;
   const reversed = [...messages].reverse();
-  const modeDef = MODES.find(m => m.id === activeMode);
+  const modeDef  = MODES.find(m => m.id === activeMode);
 
   return (
     <div className="rp-shell">
-      {/* ── Video column ── */}
+
+      {/* ── Left column: video + status + mode buttons ── */}
       <div className="rp-video-col">
         <div className="rp-video-box">
           <video ref={videoRef} src={VIDEO_SRC} autoPlay loop muted playsInline className="rp-video" />
           <div ref={flashRef} className="rp-flash" />
         </div>
-        {/* Status */}
+
         <div className="rp-status">
           <span className="ai-status-dot" />
           {modeLoading
             ? <span className="rp-mode-label">Loading\u2026</span>
             : modeDef
-              ? <span className="rp-mode-label" style={{ color: "var(--orange)" }}>{modeDef.label.toUpperCase()}</span>
+              ? <span className="rp-mode-label" style={{ color: modeDef.color }}>{modeDef.label.toUpperCase()}</span>
               : <span className="rp-mode-label">GENERAL</span>
           }
           {speaking  && <span className="ai-speaking-label">&#9654;</span>}
           {listening && <span className="ai-listening-label">&#9679;</span>}
         </div>
+
         {totalTok > 0 && (
           <div className="rp-usage">
             <span>{totalTok.toLocaleString()} tok</span>
             <span style={{ color: "var(--orange)" }}>${cost.toFixed(4)}</span>
           </div>
         )}
+
+        {/* Mode buttons — color-coded to project */}
+        <div className="rp-mode-btns">
+          {MODES.map(m => {
+            const active = activeMode === m.id;
+            return (
+              <button
+                key={m.id}
+                className={"rp-mode-pill" + (active ? " active" : "")}
+                style={{
+                  "--pill-color":  m.color,
+                  "--pill-bg":     active ? m.bg     : "transparent",
+                  "--pill-border": active ? m.color  : "#2a2a2a",
+                }}
+                onClick={() => onModeChange(active ? null : m.id)}
+                title={active ? `Deactivate ${m.label}` : `Switch to ${m.label}`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Chat column ── */}
+      {/* ── Right column: chat ── */}
       <div className="rp-chat-col">
-        {/* Toolbar */}
         <div className="rp-toolbar">
-          <div className="ai-voice-btns" style={{ flexDirection: "row", gap: 6 }}>
-            <button className={`ai-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`} onPointerDown={toggleMic} style={{ width: 28, height: 28, fontSize: 13 }}>
-              {listening ? "\u25cf" : continuousRef.current ? "\u25ce" : "\u25cb"}
-            </button>
-            <button className={`ai-voice-out-btn${voiceOut ? " active" : ""}`} onClick={toggleVoice}>
-              {voiceOut ? "\u25c9" : "\u25cb"}
-            </button>
-          </div>
+          <button className={`ai-mic-btn${listening ? " listening" : continuousRef.current ? " continuous" : ""}`} onPointerDown={toggleMic} style={{ width: 28, height: 28, fontSize: 13 }}>
+            {listening ? "\u25cf" : continuousRef.current ? "\u25ce" : "\u25cb"}
+          </button>
+          <button className={`ai-voice-out-btn${voiceOut ? " active" : ""}`} onClick={toggleVoice}>
+            {voiceOut ? "\u25c9" : "\u25cb"}
+          </button>
           <div style={{ flex: 1 }} />
           <button className="ai-ctrl-btn" onClick={() => setShowHistory(p => !p)}>HISTORY</button>
           <button className="ai-ctrl-btn" onClick={newChat}>+ NEW</button>
@@ -363,7 +371,6 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
           </div>
         )}
 
-        {/* Input */}
         <div className="rp-input-row">
           <textarea className="ai-textarea" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
             placeholder={modeLoading ? "Loading mode\u2026" : listening ? "Listening\u2026" : speaking ? "Speaking\u2026" : "Command RUSHMORE\u2026"}
@@ -371,7 +378,6 @@ export default function RushmorePanel({ activeMode, onModeChange }) {
           <button className="ai-send-btn" onClick={sendMessage} disabled={loading || modeLoading || !input.trim()}>SEND</button>
         </div>
 
-        {/* Feed */}
         <div className="rp-feed">
           {loading && <div className="ai-msg ai-msg-rushmore"><div className="ai-msg-label">RUSHMORE</div><div className="ai-msg-bubble"><TypingDots /></div></div>}
           {reversed.map((msg, i) => <Message key={i} msg={msg} index={i} onEdit={handleEdit} onReplay={handleReplay} speaking={speaking} />)}
