@@ -1,50 +1,37 @@
 export const runtime = "edge";
 
+// Images live in a public repo — use raw.githubusercontent.com directly.
+// No GitHub API, no token needed, no rate limits.
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const path = searchParams.get("path");
   if (!path) return new Response("Missing path", { status: 400 });
 
-  const token = process.env.GITHUB_TOKEN;
-  const owner = "noahgeoalta";
-  const repo  = "rushmore";
-  const branch = "main";
-
+  // Encode each path segment (handles spaces and special chars in filenames)
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${branch}`;
+  const url = `https://raw.githubusercontent.com/noahgeoalta/rushmore/main/${encodedPath}`;
 
-  const headers = {
-    Accept: "application/vnd.github.v3.raw",
-    "User-Agent": "rushmore-app",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const res = await fetch(url, {
+    headers: { "User-Agent": "rushmore-app" },
+  });
 
-  const res = await fetch(apiUrl, { headers });
   if (!res.ok) {
-    return new Response(`GitHub error: ${res.status} for path: ${path}`, { status: res.status });
+    return new Response(`Not found: ${path} (${res.status})`, { status: res.status });
   }
 
   const buf = await res.arrayBuffer();
-  const ext = path.split(".").pop()?.toLowerCase();
-  const types = {
-    png:  "image/png",
-    jpg:  "image/jpeg",
-    jpeg: "image/jpeg",
-    gif:  "image/gif",
-    svg:  "image/svg+xml",
-    webp: "image/webp",
-    ico:  "image/x-icon",
-    mp4:  "video/mp4",
-    webm: "video/webm",
-    mov:  "video/quicktime",
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const types: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+    gif: "image/gif", svg: "image/svg+xml", webp: "image/webp",
+    ico: "image/x-icon", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
   };
-  const contentType = types[ext] || "application/octet-stream";
 
   return new Response(buf, {
     status: 200,
     headers: {
-      "Content-Type": contentType,
-      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+      "Content-Type": types[ext] ?? "application/octet-stream",
+      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
     },
   });
 }
