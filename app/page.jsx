@@ -188,11 +188,22 @@ export default function Home() {
 
       {view === "command" && (
         <main className="cmd-main">
+
+          {/* 1. MICROSOFT */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>MICROSOFT</span></div>
             <MicrosoftPanel />
           </section>
 
+          {/* 2. WORK */}
+          <section className="cmd-section">
+            <div className="cmd-section-header"><span>WORK</span></div>
+            <div className="cmd-cards-row">
+              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+            </div>
+          </section>
+
+          {/* 3. PERSONAL */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
@@ -217,19 +228,15 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK</span></div>
-            <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
-            </div>
-          </section>
+          {/* 4. RIIPEN */}
+          {geocomforter && <RiipenSection ctx={geocomforter} />}
 
+          {/* 5. RUSHMORE */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>RUSHMORE</span></div>
             <RushmorePanel />
           </section>
 
-          {geocomforter && <RiipenSection ctx={geocomforter} />}
         </main>
       )}
 
