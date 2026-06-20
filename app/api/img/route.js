@@ -1,5 +1,3 @@
-// Redirect to raw.githubusercontent.com — no GitHub API calls, no rate limits, instant.
-// The repo is public so raw URLs work without auth.
 export const runtime = "edge";
 
 export async function GET(request) {
@@ -7,12 +5,20 @@ export async function GET(request) {
   const path = searchParams.get("path");
   if (!path) return new Response("Missing path", { status: 400 });
 
-  const rawUrl = `https://raw.githubusercontent.com/noahgeoalta/rushmore/main/${path}`;
+  const token  = process.env.GITHUB_TOKEN;
+  const owner  = "noahgeoalta";
+  const repo   = "rushmore";
 
-  // Fetch from raw GitHub and proxy through (preserves CORS and caching)
-  const res = await fetch(rawUrl);
+  // Use raw content URL with proper encoding for spaces/special chars
+  const encodedPath = path.split("/").map(segment => encodeURIComponent(segment)).join("/");
+  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/${encodedPath}`;
+
+  const headers = { "User-Agent": "rushmore-app" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(rawUrl, { headers });
   if (!res.ok) {
-    return new Response(`Image not found: ${path}`, { status: res.status });
+    return new Response(`Image not found: ${path} (${res.status})`, { status: res.status });
   }
 
   const buf = await res.arrayBuffer();
@@ -35,7 +41,6 @@ export async function GET(request) {
     status: 200,
     headers: {
       "Content-Type": contentType,
-      // Cache aggressively — images rarely change
       "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
     },
   });
