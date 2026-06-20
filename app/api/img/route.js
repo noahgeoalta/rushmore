@@ -20,8 +20,8 @@ export async function GET(request) {
   }
 
   const buf = await res.arrayBuffer();
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  const types: Record<string, string> = {
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  const types = {
     png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
     gif: "image/gif", svg: "image/svg+xml", webp: "image/webp",
     ico: "image/x-icon", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
@@ -30,7 +30,7 @@ export async function GET(request) {
   return new Response(buf, {
     status: 200,
     headers: {
-      "Content-Type": types[ext] ?? "application/octet-stream",
+      "Content-Type": types[ext] || "application/octet-stream",
       "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
     },
   });
