@@ -5,20 +5,23 @@ export async function GET(request) {
   const path = searchParams.get("path");
   if (!path) return new Response("Missing path", { status: 400 });
 
-  const token  = process.env.GITHUB_TOKEN;
-  const owner  = "noahgeoalta";
-  const repo   = "rushmore";
+  const token = process.env.GITHUB_TOKEN;
+  const owner = "noahgeoalta";
+  const repo  = "rushmore";
+  const branch = "main";
 
-  // Use raw content URL with proper encoding for spaces/special chars
-  const encodedPath = path.split("/").map(segment => encodeURIComponent(segment)).join("/");
-  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/${encodedPath}`;
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${branch}`;
 
-  const headers = { "User-Agent": "rushmore-app" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers = {
+    Accept: "application/vnd.github.v3.raw",
+    "User-Agent": "rushmore-app",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 
-  const res = await fetch(rawUrl, { headers });
+  const res = await fetch(apiUrl, { headers });
   if (!res.ok) {
-    return new Response(`Image not found: ${path} (${res.status})`, { status: res.status });
+    return new Response(`GitHub error: ${res.status} for path: ${path}`, { status: res.status });
   }
 
   const buf = await res.arrayBuffer();
@@ -41,7 +44,7 @@ export async function GET(request) {
     status: 200,
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
     },
   });
 }
