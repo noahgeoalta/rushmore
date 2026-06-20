@@ -1,22 +1,26 @@
 export const runtime = "edge";
 
-// Images live in a public repo — use raw.githubusercontent.com directly.
-// No GitHub API, no token needed, no rate limits.
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const path = searchParams.get("path");
   if (!path) return new Response("Missing path", { status: 400 });
 
-  // Encode each path segment (handles spaces and special chars in filenames)
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const url = `https://raw.githubusercontent.com/noahgeoalta/rushmore/main/${encodedPath}`;
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return new Response("GITHUB_TOKEN not set", { status: 500 });
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "rushmore-app" },
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const apiUrl = `https://api.github.com/repos/noahgeoalta/rushmore/contents/${encodedPath}?ref=main`;
+
+  const res = await fetch(apiUrl, {
+    headers: {
+      Accept: "application/vnd.github.v3.raw",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "rushmore-app",
+    },
   });
 
   if (!res.ok) {
-    return new Response(`Not found: ${path} (${res.status})`, { status: res.status });
+    return new Response(`GitHub error ${res.status} for: ${path}`, { status: res.status });
   }
 
   const buf = await res.arrayBuffer();
