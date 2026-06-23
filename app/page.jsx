@@ -7,7 +7,10 @@ import MicrosoftPanel from "@/components/MicrosoftPanel";
 import contextsData from "@/data/contexts.json";
 
 const contexts = contextsData.contexts;
-const img = (p) => `/api/img?path=${encodeURIComponent(p)}`;
+
+// Images served directly from public GitHub repo — no proxy, no bandwidth cost
+const RAW = "https://raw.githubusercontent.com/noahgeoalta/rushmore/main";
+const img = (p) => `${RAW}/${p.split("/").map(encodeURIComponent).join("/")}`;
 
 const IMG = {
   claude:      img("images/AI/Claude.png"),
@@ -189,13 +192,11 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* 1. MICROSOFT */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>MICROSOFT</span></div>
             <MicrosoftPanel />
           </section>
 
-          {/* 2. WORK */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>WORK</span></div>
             <div className="cmd-cards-row">
@@ -203,7 +204,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* 3. PERSONAL */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>PERSONAL</span></div>
             <div className="cmd-personal">
@@ -228,10 +228,8 @@ export default function Home() {
             </div>
           </section>
 
-          {/* 4. RIIPEN */}
           {geocomforter && <RiipenSection ctx={geocomforter} />}
 
-          {/* 5. RUSHMORE */}
           <section className="cmd-section">
             <div className="cmd-section-header"><span>RUSHMORE</span></div>
             <RushmorePanel />
