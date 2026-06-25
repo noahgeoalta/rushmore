@@ -87,10 +87,6 @@ function BoardChip({ url, tag }) {
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
 
-function IconBoardChip({ label, url, icon }) {
-  return <a href={url} target="_blank" rel="noreferrer" className="cmd-chip"><ImgIcon src={icon} size={15} />{label}</a>;
-}
-
 function SectionHeader({ label, open, onToggle }) {
   return (
     <div className="cmd-section-header cmd-section-header--clickable" onClick={onToggle}>
@@ -100,71 +96,106 @@ function SectionHeader({ label, open, onToggle }) {
   );
 }
 
-const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
-
-function ContextCard({ ctx }) {
-  const sp       = ctx.sharepoint || [];
-  const ghBoards = ctx.github?.boards || [];
-  const ghRepos  = ctx.github?.repos  || [];
-  const logo     = CTX_LOGO[ctx.id];
-  const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
-  const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
-  const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
-
-  function shortenClaude(label) {
-    let s = label.replace("Claude: ", "");
-    s = s.replace(/^(GeoAlta|GeoComforter|ChronoSlate|NMGCO)\s+/, "");
-    return s;
-  }
-
+// Small sub-header inside a card
+function CardSubHeader({ label, open, onToggle }) {
   return (
-    <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
-      <div className="cmd-card-header">
-        {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} /> : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
-      </div>
-      <div className="cmd-chip-group">
-        {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-        {(ghBoards.length > 0 || ghRepos.length > 0) && (
-          <div className="cmd-board-row">
-            {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
-            {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
-          </div>
-        )}
-        {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-        {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-      </div>
+    <div className="cmd-card-subheader" onClick={onToggle}>
+      <span>{label}</span>
+      <span className={"cmd-card-chevron" + (open ? " open" : "")}>▸</span>
     </div>
   );
 }
 
-function RiipenSection({ ctx, open, onToggle }) {
-  const groups = {};
-  for (const l of ctx.launchpad || []) {
-    if (!groups[l.group]) groups[l.group] = [];
-    groups[l.group].push(l);
-  }
-  const topLevel = groups["Riipen"] || [];
-  const overlord = (groups["Claude"] || []).find(l => l.label.includes("Riipen Overlord"));
-  const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
+// Personal sub-section with its own collapse
+function PersonalGroup({ icon, label, open, onToggle, children }) {
   return (
-    <section className="cmd-section">
-      <SectionHeader label="RIIPEN" open={open} onToggle={onToggle} />
+    <div className="cmd-personal-group">
+      <div className="cmd-personal-group-header" onClick={onToggle}>
+        <ImgIcon src={icon} size={14} />
+        <span>{label}</span>
+        <span className={"cmd-card-chevron" + (open ? " open" : "")}>▸</span>
+      </div>
+      {open && <div className="cmd-personal-group-body">{children}</div>}
+    </div>
+  );
+}
+
+const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
+
+function shortenClaude(label) {
+  let s = label.replace("Claude: ", "");
+  s = s.replace(/^(GeoAlta|GeoComforter|ChronoSlate|NMGCO)\s+/, "");
+  return s;
+}
+
+function ContextCard({ ctx }) {
+  const [open, setOpen] = useState(true);
+  const [riipenOpen, setRiipenOpen] = useState(false);
+
+  const sp       = ctx.sharepoint || [];
+  const ghBoards = ctx.github?.boards || [];
+  const ghRepos  = ctx.github?.repos  || [];
+  const logo     = CTX_LOGO[ctx.id];
+
+  const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
+  const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
+  const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
+  const overlord    = (ctx.launchpad || []).find(l => l.label.includes("Riipen Overlord"));
+
+  // Riipen sub-groups (only for geocomforter)
+  const riipenTop  = (ctx.launchpad || []).filter(l => l.group === "Riipen");
+  const teamKeys   = [...new Set((ctx.launchpad || []).filter(l => l.group?.startsWith("Riipen \u00b7")).map(l => l.group))];
+  const hasRiipen  = riipenTop.length > 0 || teamKeys.length > 0;
+
+  return (
+    <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
+      {/* Logo row — always visible, click to collapse */}
+      <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpen(v => !v)}>
+        {logo
+          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
+          : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
+        <span className={"cmd-card-chevron cmd-card-chevron--header" + (open ? " open" : "")}>▸</span>
+      </div>
+
       {open && (
-        <div className="cmd-riipen">
-          <div className="cmd-riipen-top">
-            {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
-            {overlord && <Chip label="Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
-          </div>
-          {teamKeys.map(key => (
-            <div key={key} className="cmd-riipen-row">
-              <ImgIcon src={IMG.rrc} size={14} />
-              <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
-              {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+        <div className="cmd-chip-group">
+          {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+          {(ghBoards.length > 0 || ghRepos.length > 0) && (
+            <div className="cmd-board-row">
+              {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
+              {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
             </div>
-          ))}
+          )}
+          {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+          {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+
+          {/* Riipen sub-section inside GeoComforter */}
+          {hasRiipen && (
+            <div className="cmd-riipen-embed">
+              <CardSubHeader label="RIIPEN" open={riipenOpen} onToggle={() => setRiipenOpen(v => !v)} />
+              {riipenOpen && (
+                <div className="cmd-riipen-embed-body">
+                  <div className="cmd-riipen-top">
+                    {riipenTop.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
+                    {overlord && <Chip label="Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
+                  </div>
+                  {teamKeys.map(key => {
+                    const items = (ctx.launchpad || []).filter(l => l.group === key);
+                    return (
+                      <div key={key} className="cmd-riipen-row">
+                        <ImgIcon src={IMG.rrc} size={13} />
+                        <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
+                        {items.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -172,35 +203,36 @@ export default function Home() {
   const [view, setView] = useState("command");
   const [openWork,     setOpenWork]     = useState(true);
   const [openPersonal, setOpenPersonal] = useState(true);
-  const [openRiipen,   setOpenRiipen]   = useState(true);
   const [openRushmore, setOpenRushmore] = useState(true);
+
+  // Personal sub-sections
+  const [openOrder,   setOpenOrder]   = useState(true);
+  const [openGame,    setOpenGame]    = useState(true);
+  const [openMisc,    setOpenMisc]    = useState(true);
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
-  const personal     = contexts.find(c => c.id === "personal");
-  const geocomforter = contexts.find(c => c.id === "geocomforter");
-  const workOrdered  = WORK_ORDER.map(id => contexts.find(c => c.id === id)).filter(Boolean);
+  const personal    = contexts.find(c => c.id === "personal");
+  const workOrdered = WORK_ORDER.map(id => contexts.find(c => c.id === id)).filter(Boolean);
 
-  const personalWeb    = (personal?.launchpad || []).filter(l => l.group === "Web");
   const personalClaude = (personal?.launchpad || []).filter(l => l.group === "Claude");
   const personalBoards = personal?.github?.boards || [];
   const personalRepos  = personal?.github?.repos  || [];
 
-  const ORDER1_LABELS = ["Claude: Doctrine and Order", "Claude: Helforge"];
-  const ORDER2_LABELS = ["Claude: TheGame Development", "Claude: Gaming"];
-  const ORDER1_BOARD  = personalBoards.find(b => b.label === "The Order Board");
-  const ORDER2_BOARD  = personalBoards.find(b => b.label === "TheGame Board");
-  const ORDER1_REPO   = personalRepos.find(r => r.label === "The Order Repo");
-  const ORDER2_REPO   = personalRepos.find(r => r.label === "TheGame Repo");
-  const RUSHMORE_REPO = personalRepos.find(r => r.label === "Rushmore Repo");
-  const RUSHMORE_CHAT = personalRepos.find(r => r.label === "Rushmore Chat");
-  const row1Claude = personalClaude.filter(l => ORDER1_LABELS.includes(l.label));
-  const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
-  const webIconMap = { "NoahTube": IMG.noahtube };
+  const doctrineAndOrder = personalClaude.find(l => l.label === "Claude: Doctrine and Order");
+  const helforge         = personalClaude.find(l => l.label === "Claude: Helforge");
+  const theGameDev       = personalClaude.find(l => l.label === "Claude: TheGame Development");
+  const gaming           = personalClaude.find(l => l.label === "Claude: Gaming");
 
-  function shortenPersonalClaude(label) {
-    return label.replace("Claude: ", "");
-  }
+  const orderBoard  = personalBoards.find(b => b.label === "The Order Board");
+  const gameBoard   = personalBoards.find(b => b.label === "TheGame Board");
+  const orderRepo   = personalRepos.find(r => r.label === "The Order Repo");
+  const gameRepo    = personalRepos.find(r => r.label === "TheGame Repo");
+  const rushmoreRepo = personalRepos.find(r => r.label === "Rushmore Repo");
+  const rushmoreChatDesktop = personalRepos.find(r => r.label === "Rushmore Chat");
+
+  const noahtube = (personal?.launchpad || []).find(l => l.label === "NoahTube");
+  const rbc      = (personal?.launchpad || []).find(l => l.label === "RBC");
 
   return (
     <div className="app-shell">
@@ -216,32 +248,41 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
+          {/* PERSONAL */}
           <section className="cmd-section">
             <SectionHeader label="PERSONAL" open={openPersonal} onToggle={() => setOpenPersonal(v => !v)} />
             {openPersonal && (
               <div className="cmd-personal">
-                <div className="cmd-row">
-                  {row1Claude.map(l => <Chip key={l.url} label={shortenPersonalClaude(l.label)} url={l.url} img={IMG.orderIcon} desktop={l.desktop} />)}
-                  {ORDER1_BOARD && <IconBoardChip label="Board" url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
-                  {ORDER1_REPO  && <Chip label="Repo" url={ORDER1_REPO.url} img={IMG.orderIcon} />}
-                </div>
-                <div className="cmd-row">
-                  {row2Claude.map(l => <Chip key={l.url} label={shortenPersonalClaude(l.label)} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
-                  {ORDER2_BOARD && <IconBoardChip label="Board" url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
-                  {ORDER2_REPO  && <Chip label="Repo" url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
-                  <Chip label="Rushmore Chat" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.orderIcon2} />
-                </div>
-                <div className="cmd-row">
-                  {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
+
+                <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
+                  {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.orderIcon} desktop={doctrineAndOrder.desktop} />}
+                  {orderBoard && <a href={orderBoard.url} target="_blank" rel="noreferrer" className="cmd-board-chip board">Board</a>}
+                  {orderRepo  && <Chip label="Repo" url={orderRepo.url} img={IMG.orderIcon} />}
+                  {helforge   && <Chip label="Helforge" url={helforge.url} img={IMG.orderIcon} desktop={helforge.desktop} />}
+                </PersonalGroup>
+
+                <PersonalGroup icon={IMG.orderIcon2} label="TheGame" open={openGame} onToggle={() => setOpenGame(v => !v)}>
+                  {theGameDev && <Chip label="TheGame Dev" url={theGameDev.url} img={IMG.orderIcon2} desktop={theGameDev.desktop} />}
+                  {gaming     && <Chip label="Gaming" url={gaming.url} img={IMG.orderIcon2} desktop={gaming.desktop} />}
+                  {gameBoard  && <a href={gameBoard.url} target="_blank" rel="noreferrer" className="cmd-board-chip board">Board</a>}
+                  {gameRepo   && <Chip label="Repo" url={gameRepo.url} img={IMG.orderIcon2} />}
+                </PersonalGroup>
+
+                <PersonalGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)}>
+                  {noahtube && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
+                  {rbc      && <Chip label="RBC" url={rbc.url} />}
+                  {rushmoreRepo && <Chip label="Rushmore Repo" url={rushmoreRepo.url} img={IMG.rushmorelogo} />}
+                  <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
+                  {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
                   <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
                   <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
-                  {RUSHMORE_REPO && <Chip label="Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
-                  {RUSHMORE_CHAT && <Chip label="Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
-                </div>
+                </PersonalGroup>
+
               </div>
             )}
           </section>
 
+          {/* WORK */}
           <section className="cmd-section">
             <SectionHeader label="WORK" open={openWork} onToggle={() => setOpenWork(v => !v)} />
             {openWork && (
@@ -251,10 +292,7 @@ export default function Home() {
             )}
           </section>
 
-          {geocomforter && (
-            <RiipenSection ctx={geocomforter} open={openRiipen} onToggle={() => setOpenRiipen(v => !v)} />
-          )}
-
+          {/* RUSHMORE */}
           <section className="cmd-section">
             <SectionHeader label="RUSHMORE" open={openRushmore} onToggle={() => setOpenRushmore(v => !v)} />
             {openRushmore && <RushmorePanel />}
