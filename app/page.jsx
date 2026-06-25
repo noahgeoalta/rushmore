@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Canvas from "@/components/Canvas";
 import RushmorePanel from "@/components/RushmorePanel";
-import MicrosoftPanel from "@/components/MicrosoftPanel";
 import contextsData from "@/data/contexts.json";
 
 const contexts = contextsData.contexts;
 
-// Images served directly from public GitHub repo — no proxy, no bandwidth cost
 const RAW = "https://raw.githubusercontent.com/noahgeoalta/rushmore/main";
 const img = (p) => `${RAW}/${p.split("/").map(encodeURIComponent).join("/")}`;
 
@@ -48,6 +46,14 @@ function spIcon(ctxId, label) {
   return null;
 }
 
+function spLabel(ctxId, label) {
+  if (ctxId === "geocomforter") {
+    if (label.toLowerCase().includes("business")) return "Business";
+    return "Development";
+  }
+  return "SP";
+}
+
 function resolveUrl(url, desktop) {
   if (desktop && url?.startsWith("https://claude.ai/")) return url.replace("https://", "claude://");
   return url;
@@ -71,18 +77,28 @@ function Chip({ label, url, img: imgSrc, symbol, desktop }) {
   );
 }
 
-function RepoChip({ label, url }) {
-  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>{label}</a>;
+function RepoChip({ url }) {
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>Repo</a>;
 }
 
 function BoardChip({ url, tag }) {
   const cls  = tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board";
-  const text = tag === "dev" ? "Development" : tag === "biz" ? "Business" : "Board";
+  const text = tag === "dev" ? "Dev Board" : tag === "biz" ? "Biz Board" : "Board";
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
 
 function IconBoardChip({ label, url, icon }) {
   return <a href={url} target="_blank" rel="noreferrer" className="cmd-chip"><ImgIcon src={icon} size={15} />{label}</a>;
+}
+
+// Collapsible section header
+function SectionHeader({ label, open, onToggle }) {
+  return (
+    <div className="cmd-section-header cmd-section-header--clickable" onClick={onToggle}>
+      <span>{label}</span>
+      <span className={"cmd-section-chevron" + (open ? " open" : ""}>▸</span>
+    </div>
+  );
 }
 
 const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
@@ -95,25 +111,35 @@ function ContextCard({ ctx }) {
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
+
+  // Shorten Claude label: strip project name prefix, keep the descriptor
+  function shortenClaude(label) {
+    // Remove "Claude: " prefix
+    let s = label.replace("Claude: ", "");
+    // Remove project name prefixes e.g. "GeoAlta " / "GeoComforter " / "ChronoSlate " / "NMGCO "
+    s = s.replace(/^(GeoAlta|GeoComforter|ChronoSlate|NMGCO)\s+/, "");
+    return s;
+  }
+
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header">
         {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} /> : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-      {questLog.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+      {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
       {(ghBoards.length > 0 || ghRepos.length > 0) && (
         <div className="cmd-board-row">
           {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
-          {ghRepos.map(r => <RepoChip key={r.url} label={r.label} url={r.url} />)}
+          {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
         </div>
       )}
-      {otherClaude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-      {sp.map(s => <Chip key={s.url} label={s.label} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+      {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
     </div>
   );
 }
 
-function RiipenSection({ ctx }) {
+function RiipenSection({ ctx, open, onToggle }) {
   const groups = {};
   for (const l of ctx.launchpad || []) {
     if (!groups[l.group]) groups[l.group] = [];
@@ -124,27 +150,34 @@ function RiipenSection({ ctx }) {
   const teamKeys = Object.keys(groups).filter(k => k.startsWith("Riipen \u00b7 "));
   return (
     <section className="cmd-section">
-      <div className="cmd-section-header"><span>RIIPEN</span></div>
-      <div className="cmd-riipen">
-        <div className="cmd-riipen-top">
-          {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
-          {overlord && <Chip label="Riipen Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
-        </div>
-        {teamKeys.map(key => (
-          <div key={key} className="cmd-riipen-row">
-            <ImgIcon src={IMG.rrc} size={14} />
-            <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
-            {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+      <SectionHeader label="RIIPEN" open={open} onToggle={onToggle} />
+      {open && (
+        <div className="cmd-riipen">
+          <div className="cmd-riipen-top">
+            {topLevel.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
+            {overlord && <Chip label="Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
           </div>
-        ))}
-      </div>
+          {teamKeys.map(key => (
+            <div key={key} className="cmd-riipen-row">
+              <ImgIcon src={IMG.rrc} size={14} />
+              <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
+              {groups[key].map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 export default function Home() {
-  const [view,     setView]     = useState("command");
-  const [msAuthed, setMsAuthed] = useState(false);
+  const [view, setView] = useState("command");
+  // Collapsible state — all open by default
+  const [openWork,     setOpenWork]     = useState(true);
+  const [openPersonal, setOpenPersonal] = useState(true);
+  const [openRiipen,   setOpenRiipen]   = useState(true);
+  const [openRushmore, setOpenRushmore] = useState(true);
+
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const personal     = contexts.find(c => c.id === "personal");
@@ -168,9 +201,10 @@ export default function Home() {
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
   const webIconMap = { "NoahTube": IMG.noahtube };
 
-  useEffect(() => {
-    fetch("/api/auth/status").then(r => r.json()).then(d => setMsAuthed(d.authed)).catch(() => {});
-  }, []);
+  // Shorten personal Claude labels
+  function shortenPersonalClaude(label) {
+    return label.replace("Claude: ", "");
+  }
 
   return (
     <div className="app-shell">
@@ -180,59 +214,54 @@ export default function Home() {
           <button className={"app-nav-btn" + (view === "command" ? " active" : "")} onClick={() => setView("command")}>Command</button>
           <button className={"app-nav-btn" + (view === "notes"   ? " active" : "")} onClick={() => setView("notes")}>Notes</button>
         </nav>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {msAuthed
-            ? <span style={{ fontSize: 11, color: "#5aaa5a", letterSpacing: "0.1em" }}>&#10003; MS CONNECTED</span>
-            : <a href="/api/auth/login" style={{ fontSize: 11, color: "var(--orange)", letterSpacing: "0.1em", textDecoration: "none" }}>CONNECT MICROSOFT</a>
-          }
-          <span className="app-date">{today}</span>
-        </div>
+        <span className="app-date" style={{ marginLeft: "auto" }}>{today}</span>
       </header>
 
       {view === "command" && (
         <main className="cmd-main">
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>MICROSOFT</span></div>
-            <MicrosoftPanel />
+            <SectionHeader label="WORK" open={openWork} onToggle={() => setOpenWork(v => !v)} />
+            {openWork && (
+              <div className="cmd-cards-row">
+                {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+              </div>
+            )}
           </section>
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>WORK</span></div>
-            <div className="cmd-cards-row">
-              {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
-            </div>
+            <SectionHeader label="PERSONAL" open={openPersonal} onToggle={() => setOpenPersonal(v => !v)} />
+            {openPersonal && (
+              <div className="cmd-personal">
+                <div className="cmd-row">
+                  {row1Claude.map(l => <Chip key={l.url} label={shortenPersonalClaude(l.label)} url={l.url} img={IMG.orderIcon} desktop={l.desktop} />)}
+                  {ORDER1_BOARD && <IconBoardChip label="Board" url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
+                  {ORDER1_REPO  && <Chip label="Repo" url={ORDER1_REPO.url} img={IMG.orderIcon} />}
+                </div>
+                <div className="cmd-row">
+                  {row2Claude.map(l => <Chip key={l.url} label={shortenPersonalClaude(l.label)} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
+                  {ORDER2_BOARD && <IconBoardChip label="Board" url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
+                  {ORDER2_REPO  && <Chip label="Repo" url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
+                  <Chip label="Rushmore Chat" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.orderIcon2} />
+                </div>
+                <div className="cmd-row">
+                  {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
+                  <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
+                  <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
+                  {RUSHMORE_REPO && <Chip label="Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
+                  {RUSHMORE_CHAT && <Chip label="Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
+                </div>
+              </div>
+            )}
           </section>
 
-          <section className="cmd-section">
-            <div className="cmd-section-header"><span>PERSONAL</span></div>
-            <div className="cmd-personal">
-              <div className="cmd-row">
-                {row1Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon} desktop={l.desktop} />)}
-                {ORDER1_BOARD && <IconBoardChip label={ORDER1_BOARD.label} url={ORDER1_BOARD.url} icon={IMG.orderIcon} />}
-                {ORDER1_REPO  && <Chip label={ORDER1_REPO.label} url={ORDER1_REPO.url} img={IMG.orderIcon} />}
-              </div>
-              <div className="cmd-row">
-                {row2Claude.map(l => <Chip key={l.url} label={l.label.replace("Claude: ", "")} url={l.url} img={IMG.orderIcon2} desktop={l.desktop} />)}
-                {ORDER2_BOARD && <IconBoardChip label={ORDER2_BOARD.label} url={ORDER2_BOARD.url} icon={IMG.orderIcon2} />}
-                {ORDER2_REPO  && <Chip label={ORDER2_REPO.label} url={ORDER2_REPO.url} img={IMG.orderIcon2} />}
-                <Chip label="Rushmore Chat" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.orderIcon2} />
-              </div>
-              <div className="cmd-row">
-                {personalWeb.map(l => <Chip key={l.url} label={l.label} url={l.url} img={webIconMap[l.label]} />)}
-                <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
-                <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
-                {RUSHMORE_REPO && <Chip label="Rushmore Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
-                {RUSHMORE_CHAT && <Chip label="Rushmore Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
-              </div>
-            </div>
-          </section>
-
-          {geocomforter && <RiipenSection ctx={geocomforter} />}
+          {geocomforter && (
+            <RiipenSection ctx={geocomforter} open={openRiipen} onToggle={() => setOpenRiipen(v => !v)} />
+          )}
 
           <section className="cmd-section">
-            <div className="cmd-section-header"><span>RUSHMORE</span></div>
-            <RushmorePanel />
+            <SectionHeader label="RUSHMORE" open={openRushmore} onToggle={() => setOpenRushmore(v => !v)} />
+            {openRushmore && <RushmorePanel />}
           </section>
 
         </main>
