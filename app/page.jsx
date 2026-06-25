@@ -118,19 +118,21 @@ function ContextCard({ ctx }) {
   }
 
   return (
-    <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
+    <div className="cmd-card">
       <div className="cmd-card-header">
         {logo ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} /> : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
-      {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-      {(ghBoards.length > 0 || ghRepos.length > 0) && (
-        <div className="cmd-board-row">
-          {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
-          {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
-        </div>
-      )}
-      {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-      {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      <div className="cmd-chip-group">
+        {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+        {(ghBoards.length > 0 || ghRepos.length > 0) && (
+          <div className="cmd-board-row">
+            {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
+            {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
+          </div>
+        )}
+        {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+        {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+      </div>
     </div>
   );
 }
@@ -215,15 +217,6 @@ export default function Home() {
         <main className="cmd-main">
 
           <section className="cmd-section">
-            <SectionHeader label="WORK" open={openWork} onToggle={() => setOpenWork(v => !v)} />
-            {openWork && (
-              <div className="cmd-cards-row">
-                {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
-              </div>
-            )}
-          </section>
-
-          <section className="cmd-section">
             <SectionHeader label="PERSONAL" open={openPersonal} onToggle={() => setOpenPersonal(v => !v)} />
             {openPersonal && (
               <div className="cmd-personal">
@@ -245,6 +238,15 @@ export default function Home() {
                   {RUSHMORE_REPO && <Chip label="Repo" url={RUSHMORE_REPO.url} img={IMG.rushmorelogo} />}
                   {RUSHMORE_CHAT && <Chip label="Chat" url={RUSHMORE_CHAT.url} img={IMG.claude} desktop={RUSHMORE_CHAT.desktop} />}
                 </div>
+              </div>
+            )}
+          </section>
+
+          <section className="cmd-section">
+            <SectionHeader label="WORK" open={openWork} onToggle={() => setOpenWork(v => !v)} />
+            {openWork && (
+              <div className="cmd-cards-row">
+                {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
               </div>
             )}
           </section>
