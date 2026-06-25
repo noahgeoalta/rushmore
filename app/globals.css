@@ -1,4 +1,4 @@
-/* v3 - video 44% */
+/* v4 - collapsible sections, no microsoft */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -24,6 +24,12 @@ a { color: inherit; text-decoration: none; }
 .cmd-section { margin-bottom: 30px; }
 .cmd-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--faint); text-transform: uppercase; }
 .cmd-section-header::after { content: ""; flex: 1; height: 1px; background: var(--edge); }
+.cmd-section-header--clickable { cursor: pointer; user-select: none; }
+.cmd-section-header--clickable:hover { color: var(--dim); }
+.cmd-section-header--clickable:hover::after { background: var(--edge2); }
+.cmd-section-chevron { font-size: 10px; color: var(--faint); transition: transform 0.15s, color 0.1s; display: inline-block; transform: rotate(0deg); flex-shrink: 0; }
+.cmd-section-chevron.open { transform: rotate(90deg); color: var(--orange); }
+.cmd-section-header--clickable:hover .cmd-section-chevron { color: var(--dim); }
 .cmd-personal { display: flex; flex-direction: column; gap: 10px; }
 .cmd-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
