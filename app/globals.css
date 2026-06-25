@@ -1,4 +1,4 @@
-/* v7 - notes-bar flush under app-bar */
+/* v8 - collapsible cards, riipen embed, personal sub-sections */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -22,6 +22,7 @@ a { color: inherit; text-decoration: none; }
 .app-date { margin-left: auto; color: var(--faint); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; white-space: nowrap; }
 .cmd-main { padding: 26px 30px 80px; display: flex; flex-direction: column; gap: 0; }
 .cmd-section { margin-bottom: 30px; }
+/* Top-level section headers */
 .cmd-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--faint); text-transform: uppercase; }
 .cmd-section-header::after { content: ""; flex: 1; height: 1px; background: var(--edge); }
 .cmd-section-header--clickable { cursor: pointer; user-select: none; }
@@ -30,15 +31,39 @@ a { color: inherit; text-decoration: none; }
 .cmd-section-chevron { font-size: 10px; color: var(--faint); transition: transform 0.15s, color 0.1s; display: inline-block; transform: rotate(0deg); flex-shrink: 0; }
 .cmd-section-chevron.open { transform: rotate(90deg); color: var(--orange); }
 .cmd-section-header--clickable:hover .cmd-section-chevron { color: var(--dim); }
-.cmd-personal { display: flex; flex-direction: column; gap: 10px; }
-.cmd-row { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Shared chevron for card-level toggles */
+.cmd-card-chevron { font-size: 9px; color: var(--faint); transition: transform 0.15s, color 0.1s; display: inline-block; transform: rotate(0deg); flex-shrink: 0; }
+.cmd-card-chevron.open { transform: rotate(90deg); color: var(--orange); }
+.cmd-card-chevron--header { margin-left: auto; }
+/* Work cards */
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
-.cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 14px 16px 16px; min-width: 180px; flex: 1 1 180px; max-width: 260px; display: flex; flex-direction: column; gap: 0; }
-.cmd-card-header { margin-bottom: 10px; padding-bottom: 9px; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
-.cmd-card-logo { height: 34px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; display: block; }
-.cmd-card-logo.logo-chronoslate { height: 46px; }
+.cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 12px 14px 14px; min-width: 180px; flex: 1 1 180px; max-width: 260px; display: flex; flex-direction: column; gap: 0; }
+.cmd-card-header { display: flex; align-items: center; margin-bottom: 0; padding-bottom: 9px; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
+.cmd-card-header--clickable { cursor: pointer; user-select: none; }
+.cmd-card-header--clickable:hover .cmd-card-chevron { color: var(--dim); }
+.cmd-card-logo { height: 32px; width: auto; max-width: calc(100% - 20px); object-fit: contain; object-position: left center; display: block; }
+.cmd-card-logo.logo-chronoslate { height: 44px; }
 .cmd-card-name { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
-.cmd-chip-group { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.cmd-chip-group { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; padding-top: 10px; }
+/* Riipen embed inside a card */
+.cmd-riipen-embed { width: 100%; margin-top: 4px; border-top: 1px solid var(--ctx-edge, var(--edge)); padding-top: 8px; }
+.cmd-card-subheader { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.18em; color: var(--faint); text-transform: uppercase; cursor: pointer; user-select: none; padding: 2px 0 6px; }
+.cmd-card-subheader:hover { color: var(--dim); }
+.cmd-card-subheader:hover .cmd-card-chevron { color: var(--dim); }
+.cmd-card-subheader span:first-child { flex: 1; }
+.cmd-riipen-embed-body { display: flex; flex-direction: column; gap: 8px; }
+.cmd-riipen-top { display: flex; flex-wrap: wrap; gap: 7px; }
+.cmd-riipen-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.cmd-riipen-team { font-size: 11px; font-weight: 600; color: var(--dim); min-width: 140px; flex-shrink: 0; }
+/* Personal */
+.cmd-personal { display: flex; flex-direction: column; gap: 8px; }
+.cmd-personal-group { background: var(--surface); border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; }
+.cmd-personal-group-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.08em; }
+.cmd-personal-group-header:hover { background: rgba(255,255,255,0.02); color: var(--text); }
+.cmd-personal-group-header:hover .cmd-card-chevron { color: var(--dim); }
+.cmd-personal-group-header span { flex: 1; }
+.cmd-personal-group-body { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 12px 10px; }
+/* Chips */
 .cmd-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--edge2); border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; transition: background 0.1s, border-color 0.1s; cursor: pointer; width: auto; }
 .cmd-chip:hover { background: rgba(255,255,255,0.08); border-color: #444; }
 .cmd-chip-icon { font-size: 13px; color: var(--dim); flex-shrink: 0; }
@@ -51,10 +76,7 @@ a { color: inherit; text-decoration: none; }
 .cmd-repo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; font-size: 12px; font-weight: 600; color: #666; white-space: nowrap; text-decoration: none; transition: background 0.1s, color 0.1s, border-color 0.1s; cursor: pointer; }
 .cmd-repo-chip:hover { background: #1e1e1e; border-color: #3a3a3a; color: #999; }
 .cmd-repo-icon { font-size: 13px; flex-shrink: 0; }
-.cmd-riipen { display: flex; flex-direction: column; gap: 9px; }
-.cmd-riipen-top { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
-.cmd-riipen-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cmd-riipen-team { font-size: 15px; font-weight: 600; color: var(--dim); min-width: 180px; flex-shrink: 0; }
+/* Rushmore panel */
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
 .rp-video-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; flex-shrink: 0; width: 166px; background: #080808; border-right: 1px solid var(--edge); }
 .rp-video-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
@@ -74,6 +96,7 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn { width: 26px; height: 22px; border-radius: 4px; border: 1px solid #2a2a2a; background: none; color: var(--faint); font-size: 13px; cursor: pointer; display: grid; place-items: center; transition: all 0.1s; touch-action: manipulation; flex-shrink: 0; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
+/* Notes */
 .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 0; z-index: 8; background: var(--bg); padding: 8px 16px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
@@ -202,8 +225,8 @@ a { color: inherit; text-decoration: none; }
   .cmd-repo-chip { font-size: 11px; padding: 5px 9px; }
   .cmd-cards-row { flex-direction: column; gap: 10px; }
   .cmd-card { max-width: 100%; min-width: 0; flex: none; width: 100%; }
-  .cmd-riipen-team { min-width: 100px; font-size: 13px; }
-  .cmd-riipen-row { gap: 6px; }
+  .cmd-riipen-team { min-width: 80px; font-size: 11px; }
+  .cmd-riipen-row { gap: 5px; }
   .rp-shell { flex-direction: column; border-radius: 8px; }
   .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; }
   .rp-video-box { width: 56px; height: 56px; aspect-ratio: unset; flex-shrink: 0; }
