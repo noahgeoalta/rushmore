@@ -1,4 +1,4 @@
-/* v6 - tighten notes bar gap */
+/* v7 - notes-bar flush under app-bar */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -75,7 +75,7 @@ a { color: inherit; text-decoration: none; }
 .rp-voice-btn:hover { border-color: #3a3a3a; color: var(--dim); }
 .rp-voice-btn.active { border-color: var(--blue-edge); color: var(--blue); background: var(--blue-bg); }
 .notes-main { padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-.notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 45px; z-index: 8; background: var(--bg); padding: 6px 16px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
+.notes-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-x: auto; position: sticky; top: 0; z-index: 8; background: var(--bg); padding: 8px 16px; border-bottom: 1px solid var(--edge); flex-shrink: 0; }
 .page-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--edge); border-radius: 5px; font: inherit; font-size: 14px; font-weight: 600; color: var(--dim); cursor: pointer; flex-shrink: 0; }
 .page-tab:hover { border-color: var(--edge2); color: var(--text); }
 .page-tab.active { background: var(--orange-bg); border-color: var(--orange-edge); color: var(--orange); }
