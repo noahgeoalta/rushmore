@@ -71,7 +71,7 @@ function Chip({ label, url, img: imgSrc, desktop }) {
     <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"} className="cmd-chip" title={isDesktop ? "Opens in Claude desktop app" : undefined}>
       {imgSrc && <ImgIcon src={imgSrc} size={15} />}
       {label}
-      {isDesktop && <span style={{ fontSize: 9, color: "var(--faint)", marginLeft: 2 }}>↗app</span>}
+      {isDesktop && <span style={{ fontSize: "0.55rem", color: "var(--faint)", marginLeft: 2 }}>↗app</span>}
     </a>
   );
 }
@@ -114,7 +114,7 @@ function RiipenTeam({ teamKey, items }) {
   );
 }
 
-// stretch=true makes the card fill remaining row space (Misc)
+// Personal group — stack layout (Order, TheGame)
 function PersonalGroup({ icon, label, open, onToggle, stretch, children }) {
   return (
     <div className={"cmd-card" + (stretch ? " cmd-card--stretch" : "")}>
@@ -123,6 +123,19 @@ function PersonalGroup({ icon, label, open, onToggle, stretch, children }) {
         <span className="cmd-personal-group-label">{label}</span>
       </div>
       {open && <div className="cmd-chip-group">{children}</div>}
+    </div>
+  );
+}
+
+// Misc group — wrapping row layout
+function MiscGroup({ icon, label, open, onToggle, children }) {
+  return (
+    <div className="cmd-card cmd-card--stretch">
+      <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
+        <ImgIcon src={icon} size={28} />
+        <span className="cmd-personal-group-label">{label}</span>
+      </div>
+      {open && <div className="cmd-chip-row">{children}</div>}
     </div>
   );
 }
@@ -240,7 +253,7 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* PERSONAL — Order+Game auto-width, Misc stretches to fill */}
+          {/* PERSONAL */}
           <div className="cmd-cards-row cmd-block">
             <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
@@ -256,15 +269,16 @@ export default function Home() {
               {gameRepo   && <RepoChip url={gameRepo.url} />}
             </PersonalGroup>
 
-            <PersonalGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)} stretch>
-              {noahtube     && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
-              {rbc          && <Chip label="RBC" url={rbc.url} />}
+            {/* Misc — wrapping row, fills remaining width */}
+            <MiscGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)}>
+              {noahtube && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
+              {rbc      && <Chip label="RBC" url={rbc.url} />}
               {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
               <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
               {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
               <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
               <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
-            </PersonalGroup>
+            </MiscGroup>
           </div>
 
           {/* WORK */}
@@ -272,8 +286,8 @@ export default function Home() {
             {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
           </div>
 
-          {/* RUSHMORE — plain block, no card wrapper */}
-          <div className="cmd-block">
+          {/* RUSHMORE — natural width */}
+          <div className="cmd-block cmd-rushmore-wrap">
             <RushmorePanel />
           </div>
 
