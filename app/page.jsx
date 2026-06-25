@@ -91,12 +91,11 @@ function IconBoardChip({ label, url, icon }) {
   return <a href={url} target="_blank" rel="noreferrer" className="cmd-chip"><ImgIcon src={icon} size={15} />{label}</a>;
 }
 
-// Collapsible section header
 function SectionHeader({ label, open, onToggle }) {
   return (
     <div className="cmd-section-header cmd-section-header--clickable" onClick={onToggle}>
       <span>{label}</span>
-      <span className={"cmd-section-chevron" + (open ? " open" : ""}>▸</span>
+      <span className={"cmd-section-chevron" + (open ? " open" : "")}>▸</span>
     </div>
   );
 }
@@ -112,11 +111,8 @@ function ContextCard({ ctx }) {
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
   const otherClaude = allClaude.filter(l => !l.label.includes("QuestLog"));
 
-  // Shorten Claude label: strip project name prefix, keep the descriptor
   function shortenClaude(label) {
-    // Remove "Claude: " prefix
     let s = label.replace("Claude: ", "");
-    // Remove project name prefixes e.g. "GeoAlta " / "GeoComforter " / "ChronoSlate " / "NMGCO "
     s = s.replace(/^(GeoAlta|GeoComforter|ChronoSlate|NMGCO)\s+/, "");
     return s;
   }
@@ -172,7 +168,6 @@ function RiipenSection({ ctx, open, onToggle }) {
 
 export default function Home() {
   const [view, setView] = useState("command");
-  // Collapsible state — all open by default
   const [openWork,     setOpenWork]     = useState(true);
   const [openPersonal, setOpenPersonal] = useState(true);
   const [openRiipen,   setOpenRiipen]   = useState(true);
@@ -201,7 +196,6 @@ export default function Home() {
   const row2Claude = personalClaude.filter(l => ORDER2_LABELS.includes(l.label));
   const webIconMap = { "NoahTube": IMG.noahtube };
 
-  // Shorten personal Claude labels
   function shortenPersonalClaude(label) {
     return label.replace("Claude: ", "");
   }
