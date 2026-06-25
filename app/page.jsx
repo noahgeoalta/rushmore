@@ -95,15 +95,35 @@ function CardSubHeader({ label, open, onToggle }) {
   );
 }
 
-function PersonalGroup({ icon, label, open, onToggle, children }) {
+// Collapsible Riipen team row
+function RiipenTeam({ teamKey, items }) {
+  const [open, setOpen] = useState(false);
+  const name = teamKey.replace("Riipen \u00b7 ", "");
   return (
-    <div className="cmd-personal-group">
-      <div className="cmd-personal-group-header" onClick={onToggle}>
-        <ImgIcon src={icon} size={28} />
-        <span>{label}</span>
+    <div className="cmd-riipen-team-block">
+      <div className="cmd-riipen-team-header" onClick={() => setOpen(v => !v)}>
+        <ImgIcon src={IMG.rrc} size={13} />
+        <span className="cmd-riipen-team">{name}</span>
         <span className={"cmd-card-chevron" + (open ? " open" : "")}>▸</span>
       </div>
-      {open && <div className="cmd-personal-group-body">{children}</div>}
+      {open && (
+        <div className="cmd-riipen-chips">
+          {items.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Personal group — auto-width card style
+function PersonalGroup({ icon, label, open, onToggle, children }) {
+  return (
+    <div className="cmd-card cmd-personal-group">
+      <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
+        <ImgIcon src={icon} size={28} />
+        <span className="cmd-personal-group-label">{label}</span>
+      </div>
+      {open && <div className="cmd-chip-group">{children}</div>}
     </div>
   );
 }
@@ -136,7 +156,6 @@ function ContextCard({ ctx }) {
 
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
-      {/* Logo — click to collapse, no chevron */}
       <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpen(v => !v)}>
         {logo
           ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} style={{ opacity: open ? 1 : 0.5 }} />
@@ -166,15 +185,7 @@ function ContextCard({ ctx }) {
                   </div>
                   {teamKeys.map(key => {
                     const items = (ctx.launchpad || []).filter(l => l.group === key);
-                    return (
-                      <div key={key} className="cmd-riipen-row">
-                        <ImgIcon src={IMG.rrc} size={13} />
-                        <span className="cmd-riipen-team">{key.replace("Riipen \u00b7 ", "")}</span>
-                        <div className="cmd-riipen-chips">
-                          {items.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
-                        </div>
-                      </div>
-                    );
+                    return <RiipenTeam key={key} teamKey={key} items={items} />;
                   })}
                 </div>
               )}
@@ -230,8 +241,8 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* PERSONAL — no header */}
-          <div className="cmd-personal cmd-block">
+          {/* PERSONAL — card-style, auto-width, wraps like work row */}
+          <div className="cmd-cards-row cmd-block">
             <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
               {orderBoard && <BoardChip url={orderBoard.url} tag="board" />}
@@ -257,14 +268,16 @@ export default function Home() {
             </PersonalGroup>
           </div>
 
-          {/* WORK — no header */}
+          {/* WORK */}
           <div className="cmd-cards-row cmd-block">
             {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
           </div>
 
-          {/* RUSHMORE — no header */}
-          <div className="cmd-block">
-            <RushmorePanel />
+          {/* RUSHMORE — card-style, auto-width */}
+          <div className="cmd-cards-row cmd-block">
+            <div className="cmd-card cmd-rushmore-card">
+              <RushmorePanel />
+            </div>
           </div>
 
         </main>
