@@ -1,4 +1,4 @@
-/* v4 - collapsible sections, no microsoft */
+/* v5 - personal first, chips auto-width */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -33,21 +33,24 @@ a { color: inherit; text-decoration: none; }
 .cmd-personal { display: flex; flex-direction: column; gap: 10px; }
 .cmd-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
-.cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 14px 16px 16px; min-width: 200px; flex: 1 1 200px; max-width: 270px; display: flex; flex-direction: column; gap: 9px; }
-.cmd-card-header { margin-bottom: 6px; padding-bottom: 9px; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
+/* Card: column layout for header + chip group */
+.cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 14px 16px 16px; min-width: 180px; flex: 1 1 180px; max-width: 260px; display: flex; flex-direction: column; gap: 0; }
+.cmd-card-header { margin-bottom: 10px; padding-bottom: 9px; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-logo { height: 34px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; display: block; }
 .cmd-card-logo.logo-chronoslate { height: 46px; }
 .cmd-card-name { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
-.cmd-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; background: rgba(255,255,255,0.04); border: 1px solid var(--edge2); border-radius: 6px; font-size: 15px; font-weight: 500; color: var(--text); white-space: nowrap; transition: background 0.1s, border-color 0.1s; cursor: pointer; }
+/* Chip group: wraps chips naturally at content width */
+.cmd-chip-group { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.cmd-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--edge2); border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; transition: background 0.1s, border-color 0.1s; cursor: pointer; width: auto; }
 .cmd-chip:hover { background: rgba(255,255,255,0.08); border-color: #444; }
 .cmd-chip-icon { font-size: 13px; color: var(--dim); flex-shrink: 0; }
 .cmd-board-row { display: flex; flex-wrap: wrap; gap: 7px; }
-.cmd-board-chip { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; text-decoration: none; transition: opacity 0.1s; }
+.cmd-board-chip { display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; text-decoration: none; transition: opacity 0.1s; }
 .cmd-board-chip:hover { opacity: 0.8; }
 .cmd-board-chip.board { background: #0f2010; color: #5aaa5a; border: 1px solid #1e401e; }
 .cmd-board-chip.dev   { background: #0d1f33; color: #5b9bd5; border: 1px solid #1a3a5c; }
 .cmd-board-chip.biz   { background: #2a1500; color: #c8883a; border: 1px solid #4a2e00; }
-.cmd-repo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; font-size: 14px; font-weight: 600; color: #666; white-space: nowrap; text-decoration: none; transition: background 0.1s, color 0.1s, border-color 0.1s; cursor: pointer; }
+.cmd-repo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; font-size: 12px; font-weight: 600; color: #666; white-space: nowrap; text-decoration: none; transition: background 0.1s, color 0.1s, border-color 0.1s; cursor: pointer; }
 .cmd-repo-chip:hover { background: #1e1e1e; border-color: #3a3a3a; color: #999; }
 .cmd-repo-icon { font-size: 13px; flex-shrink: 0; }
 .cmd-riipen { display: flex; flex-direction: column; gap: 9px; }
@@ -196,9 +199,9 @@ a { color: inherit; text-decoration: none; }
   .app-shell { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .cmd-main { padding: 14px 12px 24px; }
   .cmd-section-header { font-size: 11px; letter-spacing: 0.15em; }
-  .cmd-chip { font-size: 13px; padding: 6px 10px; gap: 5px; }
-  .cmd-board-chip { font-size: 12px; padding: 5px 10px; }
-  .cmd-repo-chip { font-size: 12px; padding: 5px 10px; }
+  .cmd-chip { font-size: 12px; padding: 5px 10px; gap: 5px; }
+  .cmd-board-chip { font-size: 11px; padding: 5px 9px; }
+  .cmd-repo-chip { font-size: 11px; padding: 5px 9px; }
   .cmd-cards-row { flex-direction: column; gap: 10px; }
   .cmd-card { max-width: 100%; min-width: 0; flex: none; width: 100%; }
   .cmd-riipen-team { min-width: 100px; font-size: 13px; }
