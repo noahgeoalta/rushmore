@@ -95,7 +95,6 @@ function CardSubHeader({ label, open, onToggle }) {
   );
 }
 
-// Collapsible Riipen team row
 function RiipenTeam({ teamKey, items }) {
   const [open, setOpen] = useState(false);
   const name = teamKey.replace("Riipen \u00b7 ", "");
@@ -115,10 +114,10 @@ function RiipenTeam({ teamKey, items }) {
   );
 }
 
-// Personal group — auto-width card style
-function PersonalGroup({ icon, label, open, onToggle, children }) {
+// stretch=true makes the card fill remaining row space (Misc)
+function PersonalGroup({ icon, label, open, onToggle, stretch, children }) {
   return (
-    <div className="cmd-card cmd-personal-group">
+    <div className={"cmd-card" + (stretch ? " cmd-card--stretch" : "")}>
       <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
         <ImgIcon src={icon} size={28} />
         <span className="cmd-personal-group-label">{label}</span>
@@ -241,7 +240,7 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* PERSONAL — card-style, auto-width, wraps like work row */}
+          {/* PERSONAL — Order+Game auto-width, Misc stretches to fill */}
           <div className="cmd-cards-row cmd-block">
             <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
@@ -257,7 +256,7 @@ export default function Home() {
               {gameRepo   && <RepoChip url={gameRepo.url} />}
             </PersonalGroup>
 
-            <PersonalGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)}>
+            <PersonalGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)} stretch>
               {noahtube     && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
               {rbc          && <Chip label="RBC" url={rbc.url} />}
               {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
@@ -273,11 +272,9 @@ export default function Home() {
             {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
           </div>
 
-          {/* RUSHMORE — card-style, auto-width */}
-          <div className="cmd-cards-row cmd-block">
-            <div className="cmd-card cmd-rushmore-card">
-              <RushmorePanel />
-            </div>
+          {/* RUSHMORE — plain block, no card wrapper */}
+          <div className="cmd-block">
+            <RushmorePanel />
           </div>
 
         </main>
