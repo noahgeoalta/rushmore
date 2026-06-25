@@ -1,4 +1,4 @@
-/* v12 - misc wraps rows, rushmore fit-content, rem-based sizing */
+/* v13 - misc auto-width, explicit line rows, rushmore fit-content */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -22,12 +22,10 @@ a { color: inherit; text-decoration: none; }
 /* Main layout */
 .cmd-main { padding: 1.4rem 1.8rem 5rem; display: flex; flex-direction: column; gap: 0; }
 .cmd-block { margin-bottom: 1.5rem; }
-/* Card rows */
+/* Card rows — cards are auto-width, wrap as needed */
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: flex-start; }
-/* Base card — shrinks to content */
+/* Base card — shrinks to fit content, never stretches */
 .cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 0.75rem 0.9rem 0.9rem; width: auto; min-width: 0; flex: 0 0 auto; display: flex; flex-direction: column; gap: 0; }
-/* Stretch modifier — Misc fills remaining row space */
-.cmd-card--stretch { flex: 1 1 0; }
 /* Logo/icon header */
 .cmd-card-header { display: flex; align-items: center; padding-bottom: 0.55rem; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-header--clickable { cursor: pointer; user-select: none; }
@@ -36,10 +34,10 @@ a { color: inherit; text-decoration: none; }
 .cmd-card-logo.logo-chronoslate { height: 2.6rem; }
 .cmd-card-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
-/* Chip column — work cards stack vertically */
+/* Chip column — stacks chips vertically (work cards, Order, TheGame) */
 .cmd-chip-group { display: flex; flex-direction: column; gap: 0.45rem; align-items: flex-start; padding-top: 0.65rem; }
-/* Chip row — Misc and other wrapping contexts */
-.cmd-chip-row { display: flex; flex-wrap: wrap; gap: 0.45rem; padding-top: 0.65rem; }
+/* Inline row — chips side by side on one line */
+.cmd-inline-row { display: flex; flex-wrap: nowrap; gap: 0.45rem; align-items: center; }
 /* Chevron */
 .cmd-card-chevron { font-size: 0.55rem; color: var(--faint); transition: transform 0.15s, color 0.1s; display: inline-block; transform: rotate(0deg); flex-shrink: 0; }
 .cmd-card-chevron.open { transform: rotate(90deg); color: var(--orange); }
@@ -57,7 +55,7 @@ a { color: inherit; text-decoration: none; }
 .cmd-riipen-team { font-size: 0.7rem; font-weight: 600; color: var(--dim); white-space: nowrap; flex: 1; }
 .cmd-riipen-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; padding-left: 1.2rem; }
 /* Chips */
-.cmd-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.38rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid var(--edge2); border-radius: 6px; font-size: 0.8rem; font-weight: 500; color: var(--text); white-space: nowrap; transition: background 0.1s, border-color 0.1s; cursor: pointer; width: auto; }
+.cmd-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.38rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid var(--edge2); border-radius: 6px; font-size: 0.8rem; font-weight: 500; color: var(--text); white-space: nowrap; transition: background 0.1s, border-color 0.1s; cursor: pointer; }
 .cmd-chip:hover { background: rgba(255,255,255,0.08); border-color: #444; }
 .cmd-board-row { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 .cmd-board-chip { display: inline-flex; align-items: center; padding: 0.32rem 0.7rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; text-decoration: none; transition: opacity 0.1s; }
@@ -68,7 +66,7 @@ a { color: inherit; text-decoration: none; }
 .cmd-repo-chip { display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.32rem 0.7rem; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: #666; white-space: nowrap; text-decoration: none; transition: background 0.1s, color 0.1s, border-color 0.1s; cursor: pointer; }
 .cmd-repo-chip:hover { background: #1e1e1e; border-color: #3a3a3a; color: #999; }
 .cmd-repo-icon { font-size: 0.8rem; flex-shrink: 0; }
-/* Rushmore panel — wraps to natural width */
+/* Rushmore — natural width, does not stretch */
 .cmd-rushmore-wrap { display: inline-block; width: fit-content; max-width: 100%; }
 .rp-shell { display: flex; gap: 0; background: #0a0a0a; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; width: fit-content; min-width: 520px; }
 .rp-video-col { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; flex-shrink: 0; width: 160px; background: #080808; border-right: 1px solid var(--edge); }
@@ -212,8 +210,8 @@ a { color: inherit; text-decoration: none; }
   .app-shell { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .cmd-main { padding: 0.9rem 0.75rem 1.5rem; }
   .cmd-cards-row { flex-direction: column; gap: 0.6rem; }
-  .cmd-card { width: 100%; min-width: 0; }
-  .cmd-card--stretch { flex: none; }
+  .cmd-card { width: 100%; }
+  .cmd-inline-row { flex-wrap: wrap; }
   .cmd-rushmore-wrap { width: 100%; }
   .rp-shell { width: 100%; min-width: 0; flex-direction: column; border-radius: 8px; }
   .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 0.6rem 0.75rem; gap: 0.6rem; }
