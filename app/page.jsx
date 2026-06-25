@@ -114,28 +114,15 @@ function RiipenTeam({ teamKey, items }) {
   );
 }
 
-// Personal group — stack layout (Order, TheGame)
-function PersonalGroup({ icon, label, open, onToggle, stretch, children }) {
+// Stack layout (Order, TheGame)
+function PersonalGroup({ icon, label, open, onToggle, children }) {
   return (
-    <div className={"cmd-card" + (stretch ? " cmd-card--stretch" : "")}>
+    <div className="cmd-card">
       <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
         <ImgIcon src={icon} size={28} />
         <span className="cmd-personal-group-label">{label}</span>
       </div>
       {open && <div className="cmd-chip-group">{children}</div>}
-    </div>
-  );
-}
-
-// Misc group — wrapping row layout
-function MiscGroup({ icon, label, open, onToggle, children }) {
-  return (
-    <div className="cmd-card cmd-card--stretch">
-      <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
-        <ImgIcon src={icon} size={28} />
-        <span className="cmd-personal-group-label">{label}</span>
-      </div>
-      {open && <div className="cmd-chip-row">{children}</div>}
     </div>
   );
 }
@@ -269,16 +256,33 @@ export default function Home() {
               {gameRepo   && <RepoChip url={gameRepo.url} />}
             </PersonalGroup>
 
-            {/* Misc — wrapping row, fills remaining width */}
-            <MiscGroup icon={IMG.rushmorelogo} label="Misc" open={openMisc} onToggle={() => setOpenMisc(v => !v)}>
-              {noahtube && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
-              {rbc      && <Chip label="RBC" url={rbc.url} />}
-              {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
-              <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
-              {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
-              <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
-              <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
-            </MiscGroup>
+            {/* Misc — explicit lines, auto-width card */}
+            <div className="cmd-card">
+              <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
+                <ImgIcon src={IMG.rushmorelogo} size={28} />
+                <span className="cmd-personal-group-label">Misc</span>
+              </div>
+              {openMisc && (
+                <div className="cmd-chip-group">
+                  {/* Line 1 */}
+                  <div className="cmd-inline-row">
+                    {noahtube && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
+                    {rbc      && <Chip label="RBC" url={rbc.url} />}
+                  </div>
+                  {/* Line 2 */}
+                  <div className="cmd-inline-row">
+                    {rushmoreRepo        && <RepoChip url={rushmoreRepo.url} />}
+                    <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
+                    {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
+                  </div>
+                  {/* Line 3 */}
+                  <div className="cmd-inline-row">
+                    <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
+                    <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* WORK */}
@@ -286,7 +290,7 @@ export default function Home() {
             {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
           </div>
 
-          {/* RUSHMORE — natural width */}
+          {/* RUSHMORE */}
           <div className="cmd-block cmd-rushmore-wrap">
             <RushmorePanel />
           </div>
