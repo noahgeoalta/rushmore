@@ -114,7 +114,6 @@ function RiipenTeam({ teamKey, items }) {
   );
 }
 
-// Stack layout (Order, TheGame)
 function PersonalGroup({ icon, label, open, onToggle, children }) {
   return (
     <div className="cmd-card">
@@ -198,9 +197,10 @@ function ContextCard({ ctx }) {
 
 export default function Home() {
   const [view, setView] = useState("command");
-  const [openOrder, setOpenOrder] = useState(true);
-  const [openGame,  setOpenGame]  = useState(true);
-  const [openMisc,  setOpenMisc]  = useState(true);
+  const [openOrder,     setOpenOrder]     = useState(true);
+  const [openGame,      setOpenGame]      = useState(true);
+  const [openMisc,      setOpenMisc]      = useState(true);
+  const [openFieldriven, setOpenFieldriven] = useState(true);
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
@@ -240,8 +240,9 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* PERSONAL */}
+          {/* PERSONAL + FIELDRIVEN ROW */}
           <div className="cmd-cards-row cmd-block">
+
             <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
               {orderBoard && <BoardChip url={orderBoard.url} tag="board" />}
@@ -256,7 +257,24 @@ export default function Home() {
               {gameRepo   && <RepoChip url={gameRepo.url} />}
             </PersonalGroup>
 
-            {/* Misc — explicit lines, auto-width card */}
+            {/* Fieldriven */}
+            <div className="cmd-card">
+              <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenFieldriven(v => !v)}>
+                <span className="cmd-card-name" style={{ fontSize: "0.85rem", letterSpacing: "0.08em" }}>FIELDRIVEN</span>
+              </div>
+              {openFieldriven && (
+                <div className="cmd-chip-group">
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} />
+                  <div className="cmd-board-row">
+                    <BoardChip url="https://github.com/users/noahgeoalta/projects/7" tag="dev" />
+                    <BoardChip url="https://github.com/users/noahgeoalta/projects/8" tag="biz" />
+                    <RepoChip url="https://github.com/GeoAltaSolutions/Fieldriven" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Misc */}
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
                 <ImgIcon src={IMG.rushmorelogo} size={28} />
@@ -264,18 +282,15 @@ export default function Home() {
               </div>
               {openMisc && (
                 <div className="cmd-chip-group">
-                  {/* Line 1 */}
                   <div className="cmd-inline-row">
                     {noahtube && <Chip label="NoahTube" url={noahtube.url} img={IMG.noahtube} />}
                     {rbc      && <Chip label="RBC" url={rbc.url} />}
                   </div>
-                  {/* Line 2 */}
                   <div className="cmd-inline-row">
                     {rushmoreRepo        && <RepoChip url={rushmoreRepo.url} />}
                     <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
                     {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
                   </div>
-                  {/* Line 3 */}
                   <div className="cmd-inline-row">
                     <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
                     <Chip label="Copilot" url="https://copilot.microsoft.com" img={IMG.copilot} />
@@ -283,6 +298,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+
           </div>
 
           {/* WORK */}
