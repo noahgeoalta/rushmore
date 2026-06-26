@@ -265,7 +265,7 @@ export default function Home() {
               </div>
               {openFieldriven && (
                 <div className="cmd-chip-group">
-                  <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} />
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} desktop={true} />
                   <div className="cmd-board-row">
                     <BoardChip url="https://github.com/users/noahgeoalta/projects/7" tag="dev" />
                     <BoardChip url="https://github.com/users/noahgeoalta/projects/8" tag="biz" />
