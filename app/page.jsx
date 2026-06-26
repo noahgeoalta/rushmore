@@ -246,7 +246,11 @@ export default function Home() {
           {/* PERSONAL row 1 */}
           <div className="cmd-cards-row cmd-block--tight">
             <PersonalGroup icon={IMG.orderIcon} label="Doctrine and Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
-              {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
+              {/* Browser + app versions side by side */}
+              <div className="cmd-inline-row">
+                {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
+                <Chip label="Doctrine and Order" url="https://claude.ai/project/019f062c-8126-7251-8b32-beb5f8b56d62" img={IMG.claude} desktop={true} />
+              </div>
               <div className="cmd-board-row">
                 <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>
                 <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
@@ -295,8 +299,8 @@ export default function Home() {
                     {rbc      && <Chip label="RBC" url={rbc.url} />}
                   </div>
                   <div className="cmd-inline-row">
-                    {rushmoreRepo        && <RepoChip url={rushmoreRepo.url} />}
-                    <Chip label="Rushmore (browser)" url="https://claude.ai/share/38116d04-9be3-40be-a8f8-23f88e44d4a4" img={IMG.claude} />
+                    {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
+                    <Chip label="Rushmore (browser)" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.claude} />
                     {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
                   </div>
                   <div className="cmd-inline-row">
