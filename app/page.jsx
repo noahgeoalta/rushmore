@@ -221,9 +221,7 @@ export default function Home() {
   const theGameDev        = personalClaude.find(l => l.label === "Claude: TheGame Development");
   const gaming            = personalClaude.find(l => l.label === "Claude: Gaming");
 
-  const orderBoard          = personalBoards.find(b => b.label === "The Order Board");
   const gameBoard           = personalBoards.find(b => b.label === "TheGame Board");
-  const orderRepo           = personalRepos.find(r => r.label === "The Order Repo");
   const gameRepo            = personalRepos.find(r => r.label === "TheGame Repo");
   const rushmoreRepo        = personalRepos.find(r => r.label === "Rushmore Repo");
   const rushmoreChatDesktop = personalRepos.find(r => r.label === "Rushmore Chat");
@@ -247,11 +245,13 @@ export default function Home() {
 
           <div className="cmd-cards-row cmd-block">
 
-            <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
+            {/* Doctrine and Order */}
+            <PersonalGroup icon={IMG.orderIcon} label="Doctrine and Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
-              {orderBoard && <BoardChip url={orderBoard.url} tag="board" />}
-              <div className="cmd-inline-row">
-                {orderRepo && <RepoChip url={orderRepo.url} />}
+              <div className="cmd-board-row">
+                <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>
+                <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
+                <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
                 <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
               </div>
               {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
