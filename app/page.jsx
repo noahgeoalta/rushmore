@@ -243,9 +243,8 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          <div className="cmd-cards-row cmd-block">
-
-            {/* Doctrine and Order */}
+          {/* PERSONAL — row 1: Doctrine + TheGame + Fieldriven */}
+          <div className="cmd-cards-row cmd-block--tight">
             <PersonalGroup icon={IMG.orderIcon} label="Doctrine and Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
               <div className="cmd-board-row">
@@ -264,12 +263,9 @@ export default function Home() {
               {gameRepo   && <RepoChip url={gameRepo.url} />}
             </PersonalGroup>
 
-            {/* Fieldriven */}
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenFieldriven(v => !v)}>
-                <span className="fieldriven-label">
-                  <span className="fd-f">F</span>ieldriven
-                </span>
+                <span className="fieldriven-label"><span className="fd-f">F</span>ieldriven</span>
               </div>
               {openFieldriven && (
                 <div className="cmd-chip-group">
@@ -282,8 +278,10 @@ export default function Home() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Misc */}
+          {/* PERSONAL — row 2: Misc alone, auto-width */}
+          <div className="cmd-cards-row cmd-block">
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
                 <ImgIcon src={IMG.rushmorelogo} size={28} />
@@ -307,13 +305,14 @@ export default function Home() {
                 </div>
               )}
             </div>
-
           </div>
 
+          {/* WORK */}
           <div className="cmd-cards-row cmd-block">
             {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
           </div>
 
+          {/* RUSHMORE */}
           <div className="cmd-block cmd-rushmore-wrap">
             <RushmorePanel />
           </div>
