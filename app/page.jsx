@@ -76,8 +76,8 @@ function Chip({ label, url, img: imgSrc, desktop }) {
   );
 }
 
-function RepoChip({ url }) {
-  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>Repo</a>;
+function RepoChip({ url, label }) {
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>{label || "Repo"}</a>;
 }
 
 function BoardChip({ url, tag }) {
@@ -243,7 +243,7 @@ export default function Home() {
       {view === "command" && (
         <main className="cmd-main">
 
-          {/* PERSONAL — row 1: Doctrine + TheGame + Fieldriven */}
+          {/* PERSONAL row 1 */}
           <div className="cmd-cards-row cmd-block--tight">
             <PersonalGroup icon={IMG.orderIcon} label="Doctrine and Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
@@ -252,6 +252,7 @@ export default function Home() {
                 <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
                 <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
                 <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
+                <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
               </div>
               {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
             </PersonalGroup>
@@ -280,7 +281,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* PERSONAL — row 2: Misc alone, auto-width */}
+          {/* PERSONAL row 2: Misc */}
           <div className="cmd-cards-row cmd-block">
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
