@@ -86,6 +86,10 @@ function BoardChip({ url, tag }) {
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
 
+function OrgChip({ label, url }) {
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊙</span>{label}</a>;
+}
+
 function CardSubHeader({ label, open, onToggle }) {
   return (
     <div className="cmd-card-subheader" onClick={onToggle}>
@@ -167,6 +171,7 @@ function ContextCard({ ctx }) {
             <div className="cmd-board-row">
               {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
               {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
+              {ctx.id === "geoalta" && <OrgChip label="GeoAlta" url="https://github.com/GeoAltaSolutions" />}
             </div>
           )}
           {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
@@ -245,8 +250,11 @@ export default function Home() {
             <PersonalGroup icon={IMG.orderIcon} label="The Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
               {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
               {orderBoard && <BoardChip url={orderBoard.url} tag="board" />}
-              {orderRepo  && <RepoChip url={orderRepo.url} />}
-              {helforge   && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
+              <div className="cmd-inline-row">
+                {orderRepo && <RepoChip url={orderRepo.url} />}
+                <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
+              </div>
+              {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
             </PersonalGroup>
 
             <PersonalGroup icon={IMG.orderIcon2} label="TheGame" open={openGame} onToggle={() => setOpenGame(v => !v)}>
