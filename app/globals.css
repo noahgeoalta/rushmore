@@ -1,4 +1,4 @@
-/* v14 - Fieldriven label font */
+/* v15 - two personal rows, tight spacing between them */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@700&display=swap');
 
 :root {
@@ -22,6 +22,7 @@ a { color: inherit; text-decoration: none; }
 /* Main layout */
 .cmd-main { padding: 1.4rem 1.8rem 5rem; display: flex; flex-direction: column; gap: 0; }
 .cmd-block { margin-bottom: 1.5rem; }
+.cmd-block--tight { margin-bottom: 0.5rem; }
 /* Card rows */
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: flex-start; }
 /* Base card */
@@ -34,7 +35,7 @@ a { color: inherit; text-decoration: none; }
 .cmd-card-logo.logo-chronoslate { height: 2.6rem; }
 .cmd-card-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
-/* Fieldriven label — Rajdhani, capital F only styled */
+/* Fieldriven label */
 .fieldriven-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.12em; color: var(--text); line-height: 1; }
 .fieldriven-label .fd-f { font-size: 1.45rem; color: var(--orange); line-height: 1; }
 /* Chip column */
