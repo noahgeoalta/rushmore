@@ -118,18 +118,6 @@ function RiipenTeam({ teamKey, items }) {
   );
 }
 
-function PersonalGroup({ icon, label, open, onToggle, children }) {
-  return (
-    <div className="cmd-card">
-      <div className="cmd-card-header cmd-card-header--clickable" onClick={onToggle}>
-        <ImgIcon src={icon} size={28} />
-        <span className="cmd-personal-group-label">{label}</span>
-      </div>
-      {open && <div className="cmd-chip-group">{children}</div>}
-    </div>
-  );
-}
-
 const WORK_ORDER = ["geoalta", "geocomforter", "chronoslate", "nmgco"];
 
 function shortenClaude(label) {
@@ -160,7 +148,7 @@ function ContextCard({ ctx }) {
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
       <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpen(v => !v)}>
         {logo
-          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} style={{ opacity: open ? 1 : 0.5 }} />
+          ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
           : <span className="cmd-card-name">{ctx.name.toUpperCase()}</span>}
       </div>
 
@@ -245,29 +233,48 @@ export default function Home() {
 
           {/* PERSONAL row 1 */}
           <div className="cmd-cards-row cmd-block--tight">
-            <PersonalGroup icon={IMG.orderIcon} label="Doctrine and Order" open={openOrder} onToggle={() => setOpenOrder(v => !v)}>
-              {/* Browser + app versions side by side */}
-              <div className="cmd-inline-row">
-                {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
-                <Chip label="Doctrine and Order" url="https://claude.ai/project/019f062c-8126-7251-8b32-beb5f8b56d62" img={IMG.claude} desktop={true} />
-              </div>
-              <div className="cmd-board-row">
-                <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>
-                <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
-                <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
-                <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
-                <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
-              </div>
-              {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
-            </PersonalGroup>
 
-            <PersonalGroup icon={IMG.orderIcon2} label="TheGame" open={openGame} onToggle={() => setOpenGame(v => !v)}>
-              {theGameDev && <Chip label="TheGame Dev" url={theGameDev.url} img={IMG.claude} desktop={theGameDev.desktop} />}
-              {gaming     && <Chip label="Gaming" url={gaming.url} img={IMG.claude} desktop={gaming.desktop} />}
-              {gameBoard  && <BoardChip url={gameBoard.url} tag="board" />}
-              {gameRepo   && <RepoChip url={gameRepo.url} />}
-            </PersonalGroup>
+            {/* Doctrine and Order — Cinzel */}
+            <div className="cmd-card">
+              <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenOrder(v => !v)}>
+                <ImgIcon src={IMG.orderIcon} size={28} />
+                <span className="doctrine-label">Doctrine and Order</span>
+              </div>
+              {openOrder && (
+                <div className="cmd-chip-group">
+                  <div className="cmd-inline-row">
+                    {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
+                    <Chip label="Doctrine and Order" url="https://claude.ai/project/019f062c-8126-7251-8b32-beb5f8b56d62" img={IMG.claude} desktop={true} />
+                  </div>
+                  <div className="cmd-board-row">
+                    <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>
+                    <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
+                    <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
+                    <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
+                    <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
+                  </div>
+                  {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
+                </div>
+              )}
+            </div>
 
+            {/* TheGame — Orbitron */}
+            <div className="cmd-card">
+              <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenGame(v => !v)}>
+                <ImgIcon src={IMG.orderIcon2} size={28} />
+                <span className="thegame-label">TheGame</span>
+              </div>
+              {openGame && (
+                <div className="cmd-chip-group">
+                  {theGameDev && <Chip label="TheGame Dev" url={theGameDev.url} img={IMG.claude} desktop={theGameDev.desktop} />}
+                  {gaming     && <Chip label="Gaming" url={gaming.url} img={IMG.claude} desktop={gaming.desktop} />}
+                  {gameBoard  && <BoardChip url={gameBoard.url} tag="board" />}
+                  {gameRepo   && <RepoChip url={gameRepo.url} />}
+                </div>
+              )}
+            </div>
+
+            {/* Fieldriven — Rajdhani */}
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenFieldriven(v => !v)}>
                 <span className="fieldriven-label"><span className="fd-f">F</span>ieldriven</span>
@@ -285,12 +292,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* PERSONAL row 2: Misc */}
+          {/* PERSONAL row 2: Misc — Exo 2 */}
           <div className="cmd-cards-row cmd-block">
             <div className="cmd-card">
               <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
                 <ImgIcon src={IMG.rushmorelogo} size={28} />
-                <span className="cmd-personal-group-label">Misc</span>
+                <span className="misc-label">Misc</span>
               </div>
               {openMisc && (
                 <div className="cmd-chip-group">
