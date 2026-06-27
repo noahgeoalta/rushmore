@@ -146,6 +146,7 @@ function ContextCard({ ctx }) {
 
   return (
     <div className="cmd-card" style={{ "--ctx-accent": ctx.accent, "--ctx-bg": ctx.panelBg, "--ctx-edge": ctx.panelEdge }}>
+      {/* No opacity fade on logo */}
       <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpen(v => !v)}>
         {logo
           ? <img src={logo} alt={ctx.name} className={`cmd-card-logo${ctx.id === "chronoslate" ? " logo-chronoslate" : ""}`} />
