@@ -30,23 +30,20 @@ a { color: inherit; text-decoration: none; }
 /* Logo/icon header */
 .cmd-card-header { display: flex; align-items: center; padding-bottom: 0.55rem; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-header--clickable { cursor: pointer; user-select: none; }
-/* No opacity change on logo — removed hover/collapsed fade */
+/* No opacity fade on logo */
 .cmd-card-logo { height: 2rem; width: auto; max-width: 200px; object-fit: contain; object-position: left center; display: block; }
 .cmd-card-logo.logo-chronoslate { height: 2.6rem; }
 .cmd-card-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
 
 /* ── Section title fonts ── */
-/* Doctrine and Order — Cinzel: Roman, sharp, authoritative */
+/* Doctrine and Order — Cinzel: Roman serif, sharp, authoritative */
 .doctrine-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.08em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
-
-/* TheGame — Orbitron: sci-fi, geometric */
+/* TheGame — Orbitron: sci-fi geometric */
 .thegame-label { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
-
 /* Fieldriven — Rajdhani: sharp military-tech */
 .fieldriven-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.12em; color: var(--text); line-height: 1; }
 .fieldriven-label .fd-f { font-size: 1.45rem; color: var(--orange); line-height: 1; }
-
 /* Misc — Exo 2: modern, slightly technical */
 .misc-label { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 0.9rem; letter-spacing: 0.1em; color: var(--dim); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
 
@@ -64,7 +61,6 @@ a { color: inherit; text-decoration: none; }
 .cmd-card-subheader span:first-child { flex: 1; }
 .cmd-riipen-embed-body { display: flex; flex-direction: column; gap: 0.5rem; }
 .cmd-riipen-top { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.1rem; }
-/* Collapsible Riipen team */
 .cmd-riipen-team-block { display: flex; flex-direction: column; gap: 0.4rem; }
 .cmd-riipen-team-header { display: flex; align-items: center; gap: 0.45rem; cursor: pointer; user-select: none; padding: 0.15rem 0; }
 .cmd-riipen-team-header:hover .cmd-riipen-team { color: var(--text); }
