@@ -6,9 +6,9 @@ import "./ms-panel.css";
 export const metadata = {
   title: "RUSHMORE",
   icons: {
-    icon: "/api/img?path=images%2FRushmore%2Fskull.ico",
-    shortcut: "/api/img?path=images%2FRushmore%2Fskull.ico",
-    apple: "/api/img?path=images%2FRushmore%2Fskull.ico",
+    icon: "https://raw.githubusercontent.com/noahgeoalta/rushmore/main/images/Rushmore/skull.ico",
+    shortcut: "https://raw.githubusercontent.com/noahgeoalta/rushmore/main/images/Rushmore/skull.ico",
+    apple: "https://raw.githubusercontent.com/noahgeoalta/rushmore/main/images/Rushmore/skull.ico",
   },
 };
 
