@@ -224,15 +224,13 @@ function PastChatsPanel({ onLoad, onClose }) {
   );
 }
 
-const BOOT_MSG = { role: "assistant", content: "RUSHMORE online \u2014 ask me anything. Search, research, recent events, quick answers." };
-
-export const MODES = []; // No project modes — general only
+export const MODES = [];
 
 export default function RushmorePanel() {
-  const [messages,    setMessages]  = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return [BOOT_MSG]; });
+  const [messages,    setMessages]  = useState(() => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) return p; } } catch (_) {} return []; });
   const [input,       setInput]     = useState("");
   const [loading,     setLoading]   = useState(false);
-  const [voiceOut,    setVoiceOut]  = useState(false); // voice OFF by default
+  const [voiceOut,    setVoiceOut]  = useState(false);
   const [listening,   setListening] = useState(false);
   const [speaking,    setSpeaking]  = useState(false);
   const [usage,       setUsage]     = useState({ inTok: 0, outTok: 0, calls: 0 });
@@ -305,8 +303,8 @@ export default function RushmorePanel() {
   const handleKey    = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const toggleMic    = () => { if (continuousRef.current) { stopListening(); } else { continuousRef.current = true; startListening(); } };
   const toggleVoice  = () => { const nv = !voiceOut; setVoiceOut(nv); voiceOutRef.current = nv; if (!nv) stopSpeech(); };
-  const newChat  = () => { stopSpeech(); stopListening(); archiveCurrent(); setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
-  const clearAll = () => { stopSpeech(); stopListening(); setVoiceOut(false); voiceOutRef.current = false; setMessages([BOOT_MSG]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); try { localStorage.removeItem(STORAGE_KEY); } catch (_) {} };
+  const newChat  = () => { stopSpeech(); stopListening(); archiveCurrent(); setMessages([]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); };
+  const clearAll = () => { stopSpeech(); stopListening(); setVoiceOut(false); voiceOutRef.current = false; setMessages([]); setUsage({ inTok: 0, outTok: 0, calls: 0 }); try { localStorage.removeItem(STORAGE_KEY); } catch (_) {} };
   const loadPast = (msgs) => { setMessages(msgs); setShowHistory(false); };
 
   const cost     = calcCost(usage.inTok, usage.outTok);
