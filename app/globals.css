@@ -1,5 +1,5 @@
-/* v18 - bigger wider page tabs on notes view */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@700&family=Cinzel:wght@700&family=Orbitron:wght@700&family=Exo+2:wght@600&display=swap');
+/* v19 - updated section title fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Uncial+Antiqua&family=IM+Fell+English:ital@0;1&family=Barlow+Condensed:wght@700;800&family=Exo+2:wght@600&display=swap');
 
 :root {
   --bg: #111111; --surface: #191919; --edge: #262626; --edge2: #2e2e2e;
@@ -36,10 +36,10 @@ a { color: inherit; text-decoration: none; }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
 
 /* Section title fonts */
-.doctrine-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.08em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
-.thegame-label { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
-.fieldriven-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.12em; color: var(--text); line-height: 1; }
-.fieldriven-label .fd-f { font-size: 1.45rem; color: var(--orange); line-height: 1; }
+.doctrine-label { font-family: 'Uncial Antiqua', cursive; font-weight: 400; font-size: 0.9rem; letter-spacing: 0.04em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
+.thegame-label { font-family: 'IM Fell English', serif; font-weight: 400; font-style: italic; font-size: 0.95rem; letter-spacing: 0.02em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
+.fieldriven-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.14em; color: var(--text); line-height: 1; text-transform: uppercase; }
+.fieldriven-label .fd-f { font-size: 1.35rem; color: var(--orange); line-height: 1; }
 .misc-label { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 0.9rem; letter-spacing: 0.1em; color: var(--dim); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
 
 /* Chip column */
