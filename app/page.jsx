@@ -224,8 +224,15 @@ export default function Home() {
 
       <main className="cmd-main">
 
-        {/* Doctrine and Order — own row */}
-        <div className="cmd-cards-row cmd-block--tight">
+        {/* ROW 1 — Work cards */}
+        <div className="cmd-cards-row cmd-block">
+          {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
+        </div>
+
+        {/* ROW 2 — Personal cards all on one line */}
+        <div className="cmd-cards-row cmd-block">
+
+          {/* Doctrine and Order */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenOrder(v => !v)}>
               <ImgIcon src={IMG.orderIcon} size={28} />
@@ -248,10 +255,8 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* TheGame — own row */}
-        <div className="cmd-cards-row cmd-block--tight">
+          {/* TheGame */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenGame(v => !v)}>
               <ImgIcon src={IMG.orderIcon2} size={28} />
@@ -266,10 +271,8 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Fieldriven — own row */}
-        <div className="cmd-cards-row cmd-block--tight">
+          {/* Fieldriven */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenFieldriven(v => !v)}>
               <span className="fieldriven-label"><span className="fd-f">F</span>ieldriven</span>
@@ -285,10 +288,8 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Misc — own row */}
-        <div className="cmd-cards-row cmd-block">
+          {/* Misc */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
               <ImgIcon src={IMG.rushmorelogo} size={28} />
@@ -312,11 +313,7 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* WORK */}
-        <div className="cmd-cards-row cmd-block">
-          {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
         </div>
 
         {/* RUSHMORE */}
