@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import RushmorePanel from "@/components/RushmorePanel";
 import contextsData from "@/data/contexts.json";
 
 const contexts = contextsData.contexts;
@@ -314,11 +313,6 @@ export default function Home() {
             )}
           </div>
 
-        </div>
-
-        {/* RUSHMORE */}
-        <div className="cmd-block cmd-rushmore-wrap">
-          <RushmorePanel />
         </div>
 
       </main>
