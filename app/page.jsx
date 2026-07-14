@@ -125,7 +125,7 @@ function shortenClaude(label) {
 }
 
 function ContextCard({ ctx }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [riipenOpen, setRiipenOpen] = useState(false);
 
   const sp       = ctx.sharepoint || [];
@@ -187,10 +187,10 @@ function ContextCard({ ctx }) {
 }
 
 export default function Home() {
-  const [openOrder,      setOpenOrder]      = useState(true);
-  const [openGame,       setOpenGame]       = useState(true);
-  const [openMisc,       setOpenMisc]       = useState(true);
-  const [openFieldriven, setOpenFieldriven] = useState(true);
+  const [openOrder,      setOpenOrder]      = useState(false);
+  const [openGame,       setOpenGame]       = useState(false);
+  const [openMisc,       setOpenMisc]       = useState(false);
+  const [openFieldriven, setOpenFieldriven] = useState(false);
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
@@ -228,7 +228,7 @@ export default function Home() {
           {workOrdered.map(ctx => <ContextCard key={ctx.id} ctx={ctx} />)}
         </div>
 
-        {/* ROW 2 — Personal cards all on one line */}
+        {/* ROW 2 — Personal cards */}
         <div className="cmd-cards-row cmd-block">
 
           {/* Doctrine and Order */}
