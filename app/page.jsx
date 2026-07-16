@@ -161,7 +161,24 @@ function ContextCard({ ctx }) {
             </div>
           )}
           {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-          {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+
+          {ctx.id === "chronoslate" ? (
+            <div className="cmd-inline-row">
+              {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+              <a
+                href="http://100.106.66.8:5174/login"
+                target="_blank"
+                rel="noreferrer"
+                className="cmd-chip"
+                title="ChronoSlate App"
+                style={{ padding: "0.38rem 0.5rem" }}
+              >
+                <ImgIcon src={IMG.chronoslateSP} size={15} />
+              </a>
+            </div>
+          ) : (
+            sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)
+          )}
 
           {hasRiipen && (
             <div className="cmd-riipen-embed">
