@@ -115,7 +115,8 @@
         ]
       },
       "launchpad": [
-        { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude", "desktop": true }
+        { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude", "desktop": true },
+        { "label": "Website", "url": "https://chronoslate.com", "group": "Web" }
       ]
     },
     {
