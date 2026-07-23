@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import RushmorePanel from "@/components/RushmorePanel";
 import contextsData from "@/data/contexts.json";
 
 const contexts = contextsData.contexts;
@@ -128,10 +129,11 @@ function ContextCard({ ctx }) {
   const [open, setOpen] = useState(false);
   const [riipenOpen, setRiipenOpen] = useState(false);
 
-  const sp       = ctx.sharepoint || [];
-  const ghBoards = ctx.github?.boards || [];
-  const ghRepos  = ctx.github?.repos  || [];
-  const logo     = CTX_LOGO[ctx.id];
+  const sp        = ctx.sharepoint || [];
+  const ghBoards  = ctx.github?.boards || [];
+  const ghRepos   = ctx.github?.repos  || [];
+  const logo      = CTX_LOGO[ctx.id];
+  const webLinks  = (ctx.launchpad || []).filter(l => l.group === "Web");
 
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
@@ -161,24 +163,8 @@ function ContextCard({ ctx }) {
             </div>
           )}
           {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
-
-          {ctx.id === "chronoslate" ? (
-            <div className="cmd-inline-row">
-              {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-              <a
-                href="http://100.106.66.8:5174/login"
-                target="_blank"
-                rel="noreferrer"
-                className="cmd-chip"
-                title="ChronoSlate App"
-                style={{ padding: "0.38rem 0.5rem" }}
-              >
-                <ImgIcon src={IMG.chronoslateSP} size={15} />
-              </a>
-            </div>
-          ) : (
-            sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)
-          )}
+          {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
+          {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
 
           {hasRiipen && (
             <div className="cmd-riipen-embed">
@@ -330,6 +316,11 @@ export default function Home() {
             )}
           </div>
 
+        </div>
+
+        {/* RUSHMORE */}
+        <div className="cmd-block cmd-rushmore-wrap">
+          <RushmorePanel />
         </div>
 
       </main>
