@@ -163,7 +163,7 @@ function ContextCard({ ctx }) {
           )}
           {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
           {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-          {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+          {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} img={spIcon(ctx.id, l.label)} />)}
 
           {hasRiipen && (
             <div className="cmd-riipen-embed">
