@@ -243,18 +243,18 @@ export default function Home() {
               <div className="cmd-chip-group">
                 {/* Row 1: QuestLog browser + app */}
                 <div className="cmd-inline-row">
-                  <Chip label="QuestLog [browser]" url="https://claude.ai/project/019f9f52-27d7-744e-b9f4-e01c3e791f52" img={IMG.claude} />
-                  <Chip label="QuestLog [app]" url="https://claude.ai/project/019f9fc7-f382-70ca-84da-8bad025a9eac" img={IMG.claude} desktop={true} />
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f9f52-27d7-744e-b9f4-e01c3e791f52" img={IMG.claude} />
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f9fc7-f382-70ca-84da-8bad025a9eac" img={IMG.claude} desktop={true} />
                 </div>
                 {/* Row 2: QuestLog Repo + TheDarkCitadel org */}
                 <div className="cmd-board-row">
                   <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
                   <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
                 </div>
-                {/* Row 3: QuestLog App browser + app */}
+                {/* Row 3: App Creator browser + app */}
                 <div className="cmd-inline-row">
-                  <Chip label="QuestLog App [browser]" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} />
-                  <Chip label="QuestLog App [app]" url="https://claude.ai/project/019f9fea-522f-755b-90de-e9cca36562ff" img={IMG.claude} desktop={true} />
+                  <Chip label="App Creator" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} />
+                  <Chip label="App Creator" url="https://claude.ai/project/019f9fea-522f-755b-90de-e9cca36562ff" img={IMG.claude} desktop={true} />
                 </div>
                 {/* Row 4: Board + QuestLog App repo */}
                 <div className="cmd-board-row">
