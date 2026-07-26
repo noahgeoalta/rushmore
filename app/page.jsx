@@ -256,10 +256,11 @@ export default function Home() {
                   <Chip label="App Creator" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} />
                   <Chip label="App Creator" url="https://claude.ai/project/019f9fea-522f-755b-90de-e9cca36562ff" img={IMG.claude} desktop={true} />
                 </div>
-                {/* Row 4: Board + QuestLog App repo */}
+                {/* Row 4: Board + QuestLog App repo + App Deploy repo */}
                 <div className="cmd-board-row">
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/10" tag="board" />
                   <RepoChip url="https://github.com/TheDarkCitadel/QuestLog-App" label="QuestLog App" />
+                  <RepoChip url="https://github.com/TheDarkCitadel/QuestLog-App-Deploy" label="App Deploy" />
                 </div>
               </div>
             )}
