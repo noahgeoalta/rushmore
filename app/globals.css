@@ -36,7 +36,7 @@ a { color: inherit; text-decoration: none; }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
 
 /* Section title fonts */
-.dark-citadel-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.12em; color: #9a7fc0; line-height: 1; text-transform: uppercase; }
+.dark-citadel-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.12em; color: var(--orange); line-height: 1; text-transform: uppercase; }
 .doctrine-label { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.05rem; letter-spacing: 0.06em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
 .thegame-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 1rem; letter-spacing: 0.1em; color: var(--text); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
 .fieldriven-label { font-family: 'Titillium Web', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: 0.18em; color: var(--text); line-height: 1; text-transform: uppercase; }
