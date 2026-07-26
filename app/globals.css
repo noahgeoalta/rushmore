@@ -1,4 +1,4 @@
-/* v21 - Dark Citadel section added, Cinzel font added */
+/* v22 - Uniform card header heights across both rows */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Titillium+Web:wght@600;700&family=Exo+2:wght@600&display=swap');
 
 :root {
@@ -27,15 +27,15 @@ a { color: inherit; text-decoration: none; }
 .cmd-cards-row { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: flex-start; }
 /* Base card */
 .cmd-card { background: var(--ctx-bg, var(--surface)); border: 1px solid var(--ctx-edge, var(--edge)); border-radius: 10px; padding: 0.75rem 0.9rem 0.9rem; width: auto; min-width: 0; max-width: none; flex: 0 0 auto; display: flex; flex-direction: column; gap: 0; }
-/* Logo/icon header */
-.cmd-card-header { display: flex; align-items: center; padding-bottom: 0.55rem; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
+/* Logo/icon header — min-height locks all cards to the same collapsed height */
+.cmd-card-header { display: flex; align-items: center; min-height: 2rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-header--clickable { cursor: pointer; user-select: none; }
 .cmd-card-logo { height: 2rem; width: auto; max-width: 200px; object-fit: contain; object-position: left center; display: block; }
-.cmd-card-logo.logo-chronoslate { height: 2.6rem; }
+.cmd-card-logo.logo-chronoslate { height: 2rem; }
 .cmd-card-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
 
-/* Section title fonts */
+/* Section title fonts — all line-height: 1, icon size kept to 20px so nothing overflows 2rem */
 .dark-citadel-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.12em; color: var(--orange); line-height: 1; text-transform: uppercase; }
 .doctrine-label { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.05rem; letter-spacing: 0.06em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
 .thegame-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 1rem; letter-spacing: 0.1em; color: var(--text); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
