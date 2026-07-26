@@ -268,7 +268,7 @@ export default function Home() {
           {/* Doctrine and Order */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenOrder(v => !v)}>
-              <ImgIcon src={IMG.orderIcon} size={28} />
+              <ImgIcon src={IMG.orderIcon} size={20} />
               <span className="doctrine-label">Doctrine and Order</span>
             </div>
             {openOrder && (
@@ -290,7 +290,7 @@ export default function Home() {
           {/* TheGame */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenGame(v => !v)}>
-              <ImgIcon src={IMG.orderIcon2} size={28} />
+              <ImgIcon src={IMG.orderIcon2} size={20} />
               <span className="thegame-label">TheGame</span>
             </div>
             {openGame && (
@@ -323,7 +323,7 @@ export default function Home() {
           {/* Misc */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
-              <ImgIcon src={IMG.rushmorelogo} size={28} />
+              <ImgIcon src={IMG.rushmorelogo} size={20} />
               <span className="misc-label">Misc</span>
             </div>
             {openMisc && (
