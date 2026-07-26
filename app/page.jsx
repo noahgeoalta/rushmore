@@ -189,10 +189,11 @@ function ContextCard({ ctx }) {
 }
 
 export default function Home() {
-  const [openOrder,      setOpenOrder]      = useState(false);
-  const [openGame,       setOpenGame]       = useState(false);
-  const [openMisc,       setOpenMisc]       = useState(false);
-  const [openFieldriven, setOpenFieldriven] = useState(false);
+  const [openDarkCitadel, setOpenDarkCitadel] = useState(false);
+  const [openOrder,       setOpenOrder]        = useState(false);
+  const [openGame,        setOpenGame]         = useState(false);
+  const [openMisc,        setOpenMisc]         = useState(false);
+  const [openFieldriven,  setOpenFieldriven]   = useState(false);
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
@@ -233,6 +234,25 @@ export default function Home() {
         {/* ROW 2 — Personal cards */}
         <div className="cmd-cards-row cmd-block">
 
+          {/* Dark Citadel */}
+          <div className="cmd-card">
+            <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenDarkCitadel(v => !v)}>
+              <span className="dark-citadel-label">Dark Citadel</span>
+            </div>
+            {openDarkCitadel && (
+              <div className="cmd-chip-group">
+                <Chip label="Dark Citadel (browser)" url="https://claude.ai/project/019f9f52-27d7-744e-b9f4-e01c3e791f52" img={IMG.claude} />
+                <Chip label="Dark Citadel (app)" url="https://claude.ai/project/019f9fc7-f382-70ca-84da-8bad025a9eac" img={IMG.claude} desktop={true} />
+                <div className="cmd-board-row">
+                  <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/10" tag="board" />
+                  <RepoChip url="https://github.com/TheDarkCitadel/QuestLog-App" label="QuestLog App" />
+                  <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
+                  <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Doctrine and Order */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenOrder(v => !v)}>
@@ -249,8 +269,6 @@ export default function Home() {
                   <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>
                   <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
                   <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
-                  <OrgChip label="TheDarkCitadel" url="https://github.com/TheDarkCitadel" />
-                  <RepoChip url="https://github.com/TheDarkCitadel/TheDarkCitadel-QuestLog" label="QuestLog Repo" />
                 </div>
                 {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
               </div>
