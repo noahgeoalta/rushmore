@@ -62,11 +62,13 @@ function ImgIcon({ src, size = 15 }) {
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
 
-function Chip({ label, url, img: imgSrc, desktop }) {
+function Chip({ label, url, img: imgSrc, desktop, claudeWeb }) {
   const href = resolveUrl(url, desktop);
   const isDesktop = desktop && href?.startsWith("claude://");
+  // claudeWeb = true means non-desktop Claude chip → orange solid style
+  const cls = ["cmd-chip", claudeWeb ? "cmd-chip--claude-web" : ""].filter(Boolean).join(" ");
   return (
-    <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"} className="cmd-chip" title={isDesktop ? "Opens in Claude desktop app" : undefined}>
+    <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"} className={cls} title={isDesktop ? "Opens in Claude desktop app" : undefined}>
       {imgSrc && <ImgIcon src={imgSrc} size={15} />}
       {label}
       {isDesktop && <span style={{ fontSize: "0.55rem", color: "var(--faint)", marginLeft: 2 }}>↗app</span>}
@@ -153,7 +155,7 @@ function ContextCard({ ctx }) {
 
       {open && (
         <div className="cmd-chip-group">
-          {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+          {questLog.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} claudeWeb={!l.desktop} />)}
           {(ghBoards.length > 0 || ghRepos.length > 0) && (
             <div className="cmd-board-row">
               {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
@@ -161,7 +163,7 @@ function ContextCard({ ctx }) {
               {ctx.id === "geoalta" && <OrgChip label="GeoAlta" url="https://github.com/GeoAltaSolutions" />}
             </div>
           )}
-          {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} />)}
+          {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} claudeWeb={!l.desktop} />)}
           {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
           {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} img={spIcon(ctx.id, l.label)} />)}
 
@@ -172,7 +174,7 @@ function ContextCard({ ctx }) {
                 <div className="cmd-riipen-embed-body">
                   <div className="cmd-riipen-top">
                     {riipenTop.map(l => <Chip key={l.url} label={l.label} url={l.url} img={IMG.riipen} />)}
-                    {overlord && <Chip label="Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} />}
+                    {overlord && <Chip label="Overlord" url={overlord.url} img={IMG.claude} desktop={overlord.desktop} claudeWeb={!overlord.desktop} />}
                   </div>
                   {teamKeys.map(key => {
                     const items = (ctx.launchpad || []).filter(l => l.group === key);
@@ -243,7 +245,7 @@ export default function Home() {
               <div className="cmd-chip-group">
                 {/* Row 1: QuestLog browser + app */}
                 <div className="cmd-inline-row">
-                  <Chip label="QuestLog" url="https://claude.ai/project/019f9f52-27d7-744e-b9f4-e01c3e791f52" img={IMG.claude} />
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f9f52-27d7-744e-b9f4-e01c3e791f52" img={IMG.claude} claudeWeb={true} />
                   <Chip label="QuestLog" url="https://claude.ai/project/019f9fc7-f382-70ca-84da-8bad025a9eac" img={IMG.claude} desktop={true} />
                 </div>
                 {/* Row 2: QuestLog Repo + TheDarkCitadel org */}
@@ -253,7 +255,7 @@ export default function Home() {
                 </div>
                 {/* Row 3: App Creator browser + app */}
                 <div className="cmd-inline-row">
-                  <Chip label="App Creator" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} />
+                  <Chip label="App Creator" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} claudeWeb={true} />
                   <Chip label="App Creator" url="https://claude.ai/project/019f9fea-522f-755b-90de-e9cca36562ff" img={IMG.claude} desktop={true} />
                 </div>
                 {/* Row 4: Board + QuestLog App repo + App Deploy repo */}
@@ -275,7 +277,7 @@ export default function Home() {
             {openOrder && (
               <div className="cmd-chip-group">
                 <div className="cmd-inline-row">
-                  {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} />}
+                  {doctrineAndOrder && <Chip label="Doctrine and Order" url={doctrineAndOrder.url} img={IMG.claude} desktop={doctrineAndOrder.desktop} claudeWeb={!doctrineAndOrder.desktop} />}
                   <Chip label="Doctrine and Order" url="https://claude.ai/project/019f062c-8126-7251-8b32-beb5f8b56d62" img={IMG.claude} desktop={true} />
                 </div>
                 <div className="cmd-board-row">
@@ -283,7 +285,7 @@ export default function Home() {
                   <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>
                   <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" />
                 </div>
-                {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} />}
+                {helforge && <Chip label="Helforge" url={helforge.url} img={IMG.claude} desktop={helforge.desktop} claudeWeb={!helforge.desktop} />}
               </div>
             )}
           </div>
@@ -296,8 +298,8 @@ export default function Home() {
             </div>
             {openGame && (
               <div className="cmd-chip-group">
-                {theGameDev && <Chip label="TheGame Dev" url={theGameDev.url} img={IMG.claude} desktop={theGameDev.desktop} />}
-                {gaming     && <Chip label="Gaming" url={gaming.url} img={IMG.claude} desktop={gaming.desktop} />}
+                {theGameDev && <Chip label="TheGame Dev" url={theGameDev.url} img={IMG.claude} desktop={theGameDev.desktop} claudeWeb={!theGameDev.desktop} />}
+                {gaming     && <Chip label="Gaming" url={gaming.url} img={IMG.claude} desktop={gaming.desktop} claudeWeb={!gaming.desktop} />}
                 {gameBoard  && <BoardChip url={gameBoard.url} tag="board" />}
                 {gameRepo   && <RepoChip url={gameRepo.url} />}
               </div>
@@ -311,7 +313,10 @@ export default function Home() {
             </div>
             {openFieldriven && (
               <div className="cmd-chip-group">
-                <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} desktop={true} />
+                <div className="cmd-inline-row">
+                  <Chip label="QuestLog" url="https://claude.ai/project/019fb4a7-59ee-76ac-b804-5498b0edd775" img={IMG.claude} claudeWeb={true} />
+                  <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} desktop={true} />
+                </div>
                 <div className="cmd-board-row">
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/5" tag="dev" />
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/6" tag="biz" />
@@ -335,7 +340,7 @@ export default function Home() {
                 </div>
                 <div className="cmd-inline-row">
                   {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
-                  <Chip label="Rushmore (browser)" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.claude} />
+                  <Chip label="Rushmore (browser)" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.claude} claudeWeb={true} />
                   {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
                 </div>
                 <div className="cmd-inline-row">
