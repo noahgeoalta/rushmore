@@ -133,7 +133,7 @@
         "account": "personal",
         "boards": [
           { "label": "The Order Board", "url": "https://github.com/users/noahgeoalta/projects/4", "tag": "board" },
-          { "label": "TheGame Board", "url": "https://github.com/users/noahgeoalta/projects/2", "tag": "board" }
+          { "label": "TheGame Board", "url": "https://github.com/users/noahgeoalta/projects/12", "tag": "board" }
         ],
         "repos": [
           { "label": "The Order Repo", "url": "https://github.com/noahgeoalta/The-Order" },
