@@ -165,7 +165,11 @@ function ContextCard({ ctx }) {
           )}
           {otherClaude.map(l => <Chip key={l.url} label={shortenClaude(l.label)} url={l.url} img={IMG.claude} desktop={l.desktop} claudeWeb={!l.desktop} />)}
           {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
-          {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} img={spIcon(ctx.id, l.label)} />)}
+          {webLinks.length > 0 && (
+            <div className="cmd-inline-row">
+              {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} img={spIcon(ctx.id, l.label)} />)}
+            </div>
+          )}
 
           {hasRiipen && (
             <div className="cmd-riipen-embed">
@@ -322,6 +326,7 @@ export default function Home() {
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/6" tag="biz" />
                   <RepoChip url="https://github.com/TheDarkCitadel/Fieldriven" />
                 </div>
+                <Chip label="Website" url="https://fieldriven.com" />
               </div>
             )}
           </div>
