@@ -15,7 +15,7 @@
       "github": {
         "account": "work",
         "boards": [
-          { "label": "GeoAlta Board", "url": "https://github.com/GeoAltaSolutions/GeoAlta-QuestLog/projects?query=is%3Aopen", "tag": "board" }
+          { "label": "GeoAlta Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/26", "tag": "board" }
         ],
         "repos": [
           { "label": "GeoAlta Repo", "url": "https://github.com/GeoAltaSolutions/GeoAlta-QuestLog" }
