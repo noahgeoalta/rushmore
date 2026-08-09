@@ -329,11 +329,10 @@ export default function Home() {
             )}
           </div>
 
-          {/* Misc */}
+          {/* Misc — logo is the title */}
           <div className="cmd-card" style={{ "--ctx-bg": "#0e0005", "--ctx-edge": "#2e000e" }}>
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
-              <ImgIcon src={IMG.rushmorelogo} size={20} />
-              <span className="misc-label">Misc</span>
+              <img src={IMG.rushmorelogo} alt="Rushmore" className="cmd-card-logo" />
             </div>
             {openMisc && (
               <div className="cmd-chip-group">
