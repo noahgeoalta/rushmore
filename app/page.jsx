@@ -240,7 +240,7 @@ export default function Home() {
         <div className="cmd-cards-row cmd-block">
 
           {/* Dark Citadel */}
-          <div className="cmd-card">
+          <div className="cmd-card" style={{ "--ctx-bg": "#070709", "--ctx-edge": "#1c1c24" }}>
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenDarkCitadel(v => !v)}>
               <span className="dark-citadel-label">Dark Citadel</span>
             </div>
@@ -271,7 +271,7 @@ export default function Home() {
           </div>
 
           {/* Doctrine and Order */}
-          <div className="cmd-card">
+          <div className="cmd-card" style={{ "--ctx-bg": "#0e0800", "--ctx-edge": "#2e1a00" }}>
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenOrder(v => !v)}>
               <ImgIcon src={IMG.orderIcon} size={20} />
               <span className="doctrine-label">Doctrine and Order</span>
@@ -292,7 +292,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* TheGame */}
+          {/* TheGame — no tint, keep default */}
           <div className="cmd-card">
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenGame(v => !v)}>
               <ImgIcon src={IMG.orderIcon2} size={20} />
@@ -309,9 +309,9 @@ export default function Home() {
           </div>
 
           {/* Fieldriven */}
-          <div className="cmd-card">
+          <div className="cmd-card" style={{ "--ctx-bg": "#060606", "--ctx-edge": "#141414" }}>
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenFieldriven(v => !v)}>
-              <span className="fieldriven-label"><span className="fd-f">F</span>ieldriven</span>
+              <span className="fieldriven-label">Fieldriven<span className="fd-dot">.</span></span>
             </div>
             {openFieldriven && (
               <div className="cmd-chip-group">
@@ -330,7 +330,7 @@ export default function Home() {
           </div>
 
           {/* Misc */}
-          <div className="cmd-card">
+          <div className="cmd-card" style={{ "--ctx-bg": "#0e0005", "--ctx-edge": "#2e000e" }}>
             <div className="cmd-card-header cmd-card-header--clickable" onClick={() => setOpenMisc(v => !v)}>
               <ImgIcon src={IMG.rushmorelogo} size={20} />
               <span className="misc-label">Misc</span>
