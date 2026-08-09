@@ -1,5 +1,5 @@
 /* v22 - Uniform card header heights across both rows */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Titillium+Web:wght@600;700&family=Exo+2:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@700&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Titillium+Web:wght@600;700&family=Exo+2:wght@600&display=swap');
 
 :root {
   --bg: #111111; --surface: #191919; --edge: #262626; --edge2: #2e2e2e;
@@ -40,8 +40,8 @@ a { color: inherit; text-decoration: none; }
 .dark-citadel-label { font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.12em; color: var(--orange); line-height: 1; text-transform: uppercase; }
 .doctrine-label { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.05rem; letter-spacing: 0.06em; color: var(--text); line-height: 1; margin-left: 0.5rem; }
 .thegame-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 1rem; letter-spacing: 0.1em; color: var(--text); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
-.fieldriven-label { font-family: 'Titillium Web', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: 0.18em; color: var(--text); line-height: 1; text-transform: uppercase; }
-.fieldriven-label .fd-f { color: var(--orange); }
+.fieldriven-label { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: -0.04em; color: #EFEFED; line-height: 1.0; }
+.fieldriven-label .fd-f { color: #E04E0A; }
 .misc-label { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 0.9rem; letter-spacing: 0.1em; color: var(--dim); line-height: 1; margin-left: 0.5rem; text-transform: uppercase; }
 
 /* Chip column */
@@ -227,7 +227,7 @@ a { color: inherit; text-decoration: none; }
   .cmd-card { width: 100%; }
   .cmd-board-row { flex-wrap: wrap; }
   .cmd-inline-row { flex-wrap: wrap; }
-  .cmd-rushmore-wrap { width: 100%; }
+  .cmd-rushmore-wrap { display: inline-block; width: fit-content; max-width: 100%; }
   .rp-shell { width: 100%; min-width: 0; flex-direction: column; border-radius: 8px; }
   .rp-video-col { width: 100%; border-right: none; border-bottom: 1px solid var(--edge); flex-direction: row; align-items: center; padding: 0.6rem 0.75rem; gap: 0.6rem; }
   .rp-video-box { width: 56px; height: 56px; aspect-ratio: unset; flex-shrink: 0; }
