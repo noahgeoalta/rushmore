@@ -1,4 +1,4 @@
-/* v23 - Clamp card header so logo cards match text-label card height */
+/* v24 - Logo image 10% smaller, header height unchanged */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@700&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Titillium+Web:wght@600;700&family=Exo+2:wght@600&display=swap');
 
 :root {
@@ -31,8 +31,8 @@ a { color: inherit; text-decoration: none; }
 /* Logo/icon header — height: 2rem + overflow: hidden locks all cards to the same collapsed height */
 .cmd-card-header { display: flex; align-items: center; height: 2rem; overflow: hidden; padding-bottom: 0.55rem; border-bottom: 1px solid var(--ctx-edge, var(--edge)); }
 .cmd-card-header--clickable { cursor: pointer; user-select: none; }
-.cmd-card-logo { height: 2rem; max-height: 2rem; width: auto; max-width: 200px; object-fit: contain; object-position: left center; display: block; flex-shrink: 0; }
-.cmd-card-logo.logo-chronoslate { height: 2rem; }
+.cmd-card-logo { height: 1.8rem; max-height: 1.8rem; width: auto; max-width: 200px; object-fit: contain; object-position: left center; display: block; flex-shrink: 0; }
+.cmd-card-logo.logo-chronoslate { height: 1.8rem; }
 .cmd-card-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ctx-accent, var(--dim)); }
 .cmd-personal-group-label { font-size: 0.8rem; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; flex: 1; margin-left: 0.5rem; }
 
