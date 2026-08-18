@@ -25,7 +25,10 @@
         { "label": "Claude: GeoAlta Priv", "url": "https://claude.ai/project/019d4049-52da-76a2-84a0-899b1afac517", "group": "Claude", "desktop": true },
         { "label": "Claude: GeoAlta Website", "url": "https://claude.ai/project/019c97fb-5fad-73ef-acb5-0ba5ad7a9d3c", "group": "Claude", "desktop": true },
         { "label": "Claude: Meeting Organizer", "url": "https://claude.ai/project/019e8555-1dfd-7065-8a5e-80994b92d1cb", "group": "Claude", "desktop": true },
-        { "label": "Claude: QuestLog Project Creator", "url": "https://claude.ai/project/019e3c62-974d-74d0-8034-b18fdefb3837", "group": "Claude", "desktop": true }
+        { "label": "Claude: QuestLog Project Creator", "url": "https://claude.ai/project/019e3c62-974d-74d0-8034-b18fdefb3837", "group": "Claude", "desktop": true },
+        { "label": "Azure", "url": "https://portal.azure.com/#home", "group": "Infra" },
+        { "label": "AI Foundry", "url": "https://ai.azure.com/nextgen/r/vb1Q03M6Q6KMhL-Mm5K0BA,rg-foundry,,geoalta-foundry,proj-questlog/home", "group": "Infra" },
+        { "label": "Cloudflare", "url": "https://dash.cloudflare.com/1ce2b7d62f05f5edd96e6f741ea277ea", "group": "Infra" }
       ]
     },
     {
@@ -111,12 +114,14 @@
           { "label": "Board", "url": "https://github.com/orgs/GeoAltaSolutions/projects/20", "tag": "biz" }
         ],
         "repos": [
-          { "label": "ChronoSlate Repo", "url": "https://github.com/GeoAltaSolutions/ChronoSlate-QuestLog" }
+          { "label": "ChronoSlate Repo", "url": "https://github.com/GeoAltaSolutions/ChronoSlate-QuestLog" },
+          { "label": "Website Repo", "url": "https://github.com/GeoAltaSolutions/chronoslate-website" }
         ]
       },
       "launchpad": [
         { "label": "Claude: ChronoSlate QuestLog", "url": "https://claude.ai/project/019e7b93-6b01-75e0-9319-59fd594f1fa2", "group": "Claude", "desktop": true },
         { "label": "Website", "url": "https://chronoslate.com", "group": "Web" },
+        { "label": "CF Pages", "url": "https://chronoslate-website.pages.dev", "group": "Web" },
         { "label": "UAT", "url": "http://100.106.66.8:5174/login", "group": "Web" }
       ]
     },
