@@ -61,7 +61,6 @@ function ImgIcon({ src, size = 15 }) {
   return <img src={src} alt="" width={size} height={size} style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }} />;
 }
 
-// Returns true if label matches query (empty query = always match)
 function hit(label, q) {
   if (!q) return true;
   return label.toLowerCase().includes(q.toLowerCase());
@@ -70,9 +69,8 @@ function hit(label, q) {
 function Chip({ label, url, img: imgSrc, desktop, claudeWeb, q }) {
   const href = resolveUrl(url, desktop);
   const isDesktop = desktop && href?.startsWith("claude://");
-  const isHit = hit(label, q);
-  if (q && !isHit) return null;
-  const cls = ["cmd-chip", claudeWeb ? "cmd-chip--claude-web" : "", q && isHit ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ");
+  if (q && !hit(label, q)) return null;
+  const cls = ["cmd-chip", claudeWeb ? "cmd-chip--claude-web" : ""].filter(Boolean).join(" ");
   return (
     <a href={href} target={isDesktop ? undefined : "_blank"} rel={isDesktop ? undefined : "noreferrer"} className={cls} title={isDesktop ? "Opens in Claude desktop app" : undefined}>
       {imgSrc && <ImgIcon src={imgSrc} size={15} />}
@@ -84,9 +82,8 @@ function Chip({ label, url, img: imgSrc, desktop, claudeWeb, q }) {
 
 function LocalChip({ label, q }) {
   if (q && !hit(label, q)) return null;
-  const cls = ["cmd-chip cmd-chip--local", q && hit(label, q) ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ");
   return (
-    <span className={cls} title="Only works when running locally">
+    <span className="cmd-chip cmd-chip--local" title="Only works when running locally">
       {label}
       <span style={{ fontSize: "0.55rem", color: "var(--faint)", marginLeft: 2 }}>local</span>
     </span>
@@ -95,26 +92,23 @@ function LocalChip({ label, q }) {
 
 function RepoChip({ url, label, q }) {
   if (q && !hit(label || "Repo", q)) return null;
-  const cls = ["cmd-repo-chip", q && hit(label || "Repo", q) ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ");
-  return <a href={url} target="_blank" rel="noreferrer" className={cls}><span className="cmd-repo-icon">⊞</span>{label || "Repo"}</a>;
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>{label || "Repo"}</a>;
 }
 
 function BoardChip({ url, tag, label, q }) {
   const text = tag === "dev" ? "Dev Board" : tag === "biz" ? "Biz Board" : "Board";
   const searchLabel = label || text;
   if (q && !hit(searchLabel, q) && !hit(text, q)) return null;
-  const isHit = q && (hit(searchLabel, q) || hit(text, q));
-  const cls = [tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board", isHit ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ");
+  const cls = tag === "dev" ? "cmd-board-chip dev" : tag === "biz" ? "cmd-board-chip biz" : "cmd-board-chip board";
   return <a href={url} target="_blank" rel="noreferrer" className={cls}>{text}</a>;
 }
 
 function OrgChip({ label, url, q }) {
   if (q && !hit(label, q)) return null;
-  const cls = ["cmd-repo-chip", q && hit(label, q) ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ");
-  return <a href={url} target="_blank" rel="noreferrer" className={cls}><span className="cmd-repo-icon">⊙</span>{label}</a>;
+  return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊙</span>{label}</a>;
 }
 
-// Collapsible sub-group — hides itself when q is active and no children rendered
+// Collapsible sub-group — hides entirely when q active and no matchTerms hit
 function CardGroup({ label, defaultOpen = true, q, matchTerms = [], children }) {
   const [open, setOpen] = useState(defaultOpen);
   const hasMatch = !q || matchTerms.some(t => hit(t, q));
@@ -134,7 +128,7 @@ function CardGroup({ label, defaultOpen = true, q, matchTerms = [], children }) 
 function RiipenTeam({ teamKey, items, q }) {
   const [open, setOpen] = useState(false);
   const name = teamKey.replace("Riipen · ", "").replace("Riipen \u00b7 ", "");
-  const hasMatch = items.some(l => hit(l.label, q));
+  const hasMatch = !q || items.some(l => hit(l.label, q));
   if (q && !hasMatch) return null;
   const isOpen = (q && hasMatch) || open;
   return (
@@ -164,9 +158,10 @@ function shortenClaude(label) {
 function ctxAllTerms(ctx) {
   const terms = [ctx.name];
   (ctx.launchpad || []).forEach(l => terms.push(l.label, shortenClaude(l.label)));
-  (ctx.github?.boards || []).forEach(b => terms.push(b.label || "Board", "Dev Board", "Biz Board"));
+  (ctx.github?.boards || []).forEach(() => terms.push("Board", "Dev Board", "Biz Board"));
   (ctx.github?.repos  || []).forEach(r => terms.push(r.label || "Repo"));
   (ctx.sharepoint || []).forEach(s => terms.push(s.label, spLabel(ctx.id, s.label)));
+  (ctx.launchpad || []).filter(l => l.group === "Infra").forEach(l => terms.push(l.label));
   return terms;
 }
 
@@ -208,7 +203,7 @@ function ContextCard({ ctx, q }) {
             </CardGroup>
           )}
           {(ghBoards.length > 0 || ghRepos.length > 0) && (
-            <CardGroup label="GitHub" q={q} matchTerms={[...ghBoards.map(b => b.label || "Board"), "Dev Board", "Biz Board", ...ghRepos.map(r => r.label || "Repo"), ctx.id === "geoalta" ? "GeoAlta" : ""]}>
+            <CardGroup label="GitHub" q={q} matchTerms={["Board", "Dev Board", "Biz Board", ...ghRepos.map(r => r.label || "Repo"), ctx.id === "geoalta" ? "GeoAlta" : ""]}>
               <div className="cmd-chip-wrap">
                 {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} label={b.label} q={q} />)}
                 {ghRepos.map(r => <RepoChip key={r.url} url={r.url} label={r.label} q={q} />)}
@@ -379,8 +374,8 @@ export default function Home() {
           </CardGroup>
           <CardGroup label="GitHub" q={q} matchTerms={["Doctrine", "Order", "Repo"]}>
             <div className="cmd-chip-wrap">
-              {(!q || hit("Doctrine", q)) && <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className={["cmd-board-chip biz", q && hit("Doctrine", q) ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ")}>Doctrine</a>}
-              {(!q || hit("Order", q)) && <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className={["cmd-board-chip", q && hit("Order", q) ? "cmd-chip--highlight" : ""].filter(Boolean).join(" ")} style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>}
+              {(!q || hit("Doctrine", q)) && <a href="https://github.com/orgs/TheDarkCitadel/projects/8/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip biz">Doctrine</a>}
+              {(!q || hit("Order", q)) && <a href="https://github.com/orgs/TheDarkCitadel/projects/9/views/1" target="_blank" rel="noreferrer" className="cmd-board-chip" style={{ background: "#1a0000", color: "#e05555", border: "1px solid #4a0000" }}>Order</a>}
               <RepoChip url="https://github.com/TheDarkCitadel/Doctrine-and-Order" label="Repo" q={q} />
             </div>
           </CardGroup>
@@ -412,7 +407,7 @@ export default function Home() {
           cardStyle={{ "--ctx-bg": "#060606", "--ctx-edge": "#141414" }}
           titleEl={<span className="fieldriven-label">Fieldriven<span className="fd-dot">.</span></span>}
           q={q}
-          terms={["Fieldriven", "QuestLog", "Board", "Repo", "Vercel", "Cloudflare", "Website", "Family Cart", "Firebase", "FamilyCart", "Raccoonnoisseur"]}
+          terms={["Fieldriven", "QuestLog", "Board", "Repo", "Vercel", "Cloudflare", "Website", "Family Cart", "Firebase", "FamilyCart", "Raccoonnoisseur", "Dev Board", "Biz Board"]}
         >
           <CardGroup label="Claude" q={q} matchTerms={["QuestLog"]}>
             <div className="cmd-chip-wrap">
@@ -458,7 +453,7 @@ export default function Home() {
           cardStyle={{ "--ctx-bg": "#0e0005", "--ctx-edge": "#2e000e" }}
           titleEl={<img src={IMG.rushmorelogo} alt="Rushmore" className="cmd-card-logo" />}
           q={q}
-          terms={["NoahTube", "RBC", "Rushmore", "Repo", "Vercel", "Cloudflare", "ChatGPT", "Copilot"]}
+          terms={["NoahTube", "RBC", "Rushmore", "Repo", "Vercel", "Cloudflare", "ChatGPT", "Copilot", "Rushmore Chat"]}
         >
           <CardGroup label="Personal" q={q} matchTerms={["NoahTube", "RBC"]}>
             <div className="cmd-chip-wrap">
@@ -466,7 +461,7 @@ export default function Home() {
               {rbc      && <Chip label="RBC" url={rbc.url} q={q} />}
             </div>
           </CardGroup>
-          <CardGroup label="Rushmore" q={q} matchTerms={["Rushmore", "Repo", "Rushmore Chat"]}>
+          <CardGroup label="Rushmore" q={q} matchTerms={["Rushmore", "Repo", "Rushmore Chat", "Rushmore (browser)"]}>
             <div className="cmd-chip-wrap">
               {rushmoreRepo        && <RepoChip url={rushmoreRepo.url} label="Repo" q={q} />}
               <Chip label="Rushmore (browser)" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.claude} claudeWeb={true} q={q} />
