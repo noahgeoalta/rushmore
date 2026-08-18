@@ -75,6 +75,15 @@ function Chip({ label, url, img: imgSrc, desktop, claudeWeb }) {
   );
 }
 
+function LocalChip({ label }) {
+  return (
+    <span className="cmd-chip" style={{ opacity: 0.5, cursor: "default" }} title="Only works when running locally">
+      {label}
+      <span style={{ fontSize: "0.55rem", color: "var(--faint)", marginLeft: 2 }}>local</span>
+    </span>
+  );
+}
+
 function RepoChip({ url, label }) {
   return <a href={url} target="_blank" rel="noreferrer" className="cmd-repo-chip"><span className="cmd-repo-icon">⊞</span>{label || "Repo"}</a>;
 }
@@ -134,6 +143,7 @@ function ContextCard({ ctx }) {
   const ghRepos   = ctx.github?.repos  || [];
   const logo      = CTX_LOGO[ctx.id];
   const webLinks  = (ctx.launchpad || []).filter(l => l.group === "Web");
+  const infraLinks = (ctx.launchpad || []).filter(l => l.group === "Infra");
 
   const allClaude   = (ctx.launchpad || []).filter(l => l.group === "Claude" && !l.label.includes("Riipen Overlord"));
   const questLog    = allClaude.filter(l => l.label.includes("QuestLog"));
@@ -158,7 +168,7 @@ function ContextCard({ ctx }) {
           {(ghBoards.length > 0 || ghRepos.length > 0) && (
             <div className="cmd-board-row">
               {ghBoards.map(b => <BoardChip key={b.url} url={b.url} tag={b.tag} />)}
-              {ghRepos.map(r => <RepoChip key={r.url} url={r.url} />)}
+              {ghRepos.map(r => <RepoChip key={r.url} url={r.url} label={r.label} />)}
               {ctx.id === "geoalta" && <OrgChip label="GeoAlta" url="https://github.com/GeoAltaSolutions" />}
             </div>
           )}
@@ -166,7 +176,12 @@ function ContextCard({ ctx }) {
           {sp.map(s => <Chip key={s.url} label={spLabel(ctx.id, s.label)} url={s.url} img={spIcon(ctx.id, s.label)} />)}
           {webLinks.length > 0 && (
             <div className="cmd-inline-row">
-              {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} img={spIcon(ctx.id, l.label)} />)}
+              {webLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
+            </div>
+          )}
+          {infraLinks.length > 0 && (
+            <div className="cmd-board-row">
+              {infraLinks.map(l => <Chip key={l.url} label={l.label} url={l.url} />)}
             </div>
           )}
 
@@ -261,10 +276,11 @@ export default function Home() {
                   <Chip label="App Creator" url="https://claude.ai/project/019f9fe9-fae6-7447-855b-7703be93bbf8" img={IMG.claude} claudeWeb={true} />
                   <Chip label="App Creator" url="https://claude.ai/project/019f9fea-522f-755b-90de-e9cca36562ff" img={IMG.claude} desktop={true} />
                 </div>
-                {/* Row 4: Board + QuestLog App repo */}
+                {/* Row 4: Board + QuestLog App repo + local app */}
                 <div className="cmd-board-row">
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/10" tag="board" />
                   <RepoChip url="https://github.com/TheDarkCitadel/QuestLog-App" label="QuestLog App" />
+                  <LocalChip label="QuestLog App" />
                 </div>
               </div>
             )}
@@ -315,16 +331,35 @@ export default function Home() {
             </div>
             {openFieldriven && (
               <div className="cmd-chip-group">
+                {/* QuestLog */}
                 <div className="cmd-inline-row">
                   <Chip label="QuestLog" url="https://claude.ai/project/019fb4a7-59ee-76ac-b804-5498b0edd775" img={IMG.claude} claudeWeb={true} />
                   <Chip label="QuestLog" url="https://claude.ai/project/019f0125-b8a9-71ac-9aa9-61045830c6d0" img={IMG.claude} desktop={true} />
                 </div>
+                {/* Boards + Fieldriven repo */}
                 <div className="cmd-board-row">
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/5" tag="dev" />
                   <BoardChip url="https://github.com/orgs/TheDarkCitadel/projects/6" tag="biz" />
                   <RepoChip url="https://github.com/TheDarkCitadel/Fieldriven" />
                 </div>
+                {/* Infra row: Vercel + Cloudflare */}
+                <div className="cmd-board-row">
+                  <Chip label="Vercel" url="https://vercel.com/rushmore-hq" />
+                  <Chip label="Cloudflare" url="https://dash.cloudflare.com/1ce2b7d62f05f5edd96e6f741ea277ea" />
+                </div>
+                {/* Fieldriven website */}
                 <Chip label="Website" url="https://fieldriven.com" />
+                {/* Family Cart */}
+                <div className="cmd-board-row">
+                  <Chip label="Family Cart" url="https://familycart-a8c35.web.app" />
+                  <RepoChip url="https://github.com/noahgeoalta/familycart" label="FamilyCart" />
+                  <Chip label="Firebase" url="https://console.firebase.google.com" />
+                </div>
+                {/* Raccoonnoisseur */}
+                <div className="cmd-board-row">
+                  <Chip label="Raccoonnoisseur" url="https://noahgeoalta.github.io/racoonnoisseur/" />
+                  <RepoChip url="https://github.com/noahgeoalta/racoonnoisseur" label="Raccoonnoisseur" />
+                </div>
               </div>
             )}
           </div>
@@ -344,6 +379,10 @@ export default function Home() {
                   {rushmoreRepo && <RepoChip url={rushmoreRepo.url} />}
                   <Chip label="Rushmore (browser)" url="https://claude.ai/project/019ebd14-4757-74d7-81a1-245b698da20d" img={IMG.claude} claudeWeb={true} />
                   {rushmoreChatDesktop && <Chip label="Rushmore Chat" url={rushmoreChatDesktop.url} img={IMG.claude} desktop={rushmoreChatDesktop.desktop} />}
+                </div>
+                <div className="cmd-board-row">
+                  <Chip label="Vercel" url="https://vercel.com/rushmore-hq" />
+                  <Chip label="Cloudflare" url="https://dash.cloudflare.com/1ce2b7d62f05f5edd96e6f741ea277ea" />
                 </div>
                 <div className="cmd-inline-row">
                   <Chip label="ChatGPT" url="https://chatgpt.com" img={IMG.chatgpt} />
